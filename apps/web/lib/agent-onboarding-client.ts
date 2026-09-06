@@ -172,8 +172,32 @@ export function submitAnswer(text: string): Promise<AgentState> {
   })
 }
 
+/**
+ * Advance the assembly by **one** stage, and return the state it reached.
+ *
+ * Not one call. The server runs persona, then Brain, then context — one per
+ * request, committing each — so this is called until `phase` is `'ready'`.
+ * `ASSEMBLY_LABEL` names what each call is doing; `assemblyDone` is the stop
+ * condition, so the loop's terminating check lives next to the labels rather
+ * than being spelled out at the call site.
+ *
+ * Which stage runs is the server's decision, read from the phase on the
+ * session row. This function deliberately sends nothing: a client that could
+ * name the stage could skip one.
+ */
 export function finish(): Promise<AgentState> {
   return call<AgentState>('/api/onboarding/agent/finish', { method: 'POST' })
+}
+
+/** What the next `finish()` call will be doing, keyed by the phase it starts from. */
+export const ASSEMBLY_LABEL: Record<string, string> = {
+  discovery: 'Building your Persona…',
+  persona: 'Building your Company Brain…',
+  assembling: 'Personalising your workspace…',
+}
+
+export function assemblyDone(state: AgentState): boolean {
+  return state.phase === 'ready' || state.completed
 }
 
 export const SCOPE_LABEL: Record<number, string> = {

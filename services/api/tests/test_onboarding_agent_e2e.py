@@ -29,6 +29,7 @@ from uuid import UUID, uuid4
 
 import pytest
 import sqlalchemy as sa
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.providers import ScriptedProvider
@@ -308,6 +309,28 @@ async def _cleanup(db: AsyncSession, user: UUID, ws: UUID) -> None:
     await db.commit()
 
 
+async def _assemble(routes: Any, scope: ScopedSession) -> Any:
+    """Drive the assembly to completion. Three calls, one stage each.
+
+    `/finish` advances the phase by one step per request so that each stage
+    commits on its own — see the route. A test that called it once would assert
+    against a session sitting in `persona`, which is not a failure but a third
+    of the work.
+
+    Bounded and asserted rather than `while True`: a route that stopped
+    advancing would otherwise hang the suite instead of failing it.
+    """
+    state = await routes.finish(scope)
+    for _ in range(3):
+        if state.phase == "ready":
+            return state
+        before = state.phase
+        state = await routes.finish(scope)
+        assert state.phase != before, f"/finish did not advance from {before}"
+    assert state.phase == "ready", f"assembly stalled in {state.phase}"
+    return state
+
+
 async def _turns(db: AsyncSession, ws: UUID) -> list[dict[str, Any]]:
     await db.execute(sa.text("SELECT set_config('nexus.workspace_id', :w, true)"), {"w": str(ws)})
     rows = await db.execute(
@@ -367,7 +390,7 @@ async def test_the_whole_journey_completes_and_persists(
             )
             assert state.answered >= 2
 
-            state = await routes.finish(scope)
+            state = await _assemble(routes, scope)
             assert state.phase == "ready"
             assert state.context["preamble"].startswith("Nakhla Trading")
 
@@ -537,7 +560,7 @@ async def test_a_brain_value_with_no_provenance_is_dropped(
             await routes.open_discovery(
                 routes.DiscoveryIn(answer="I run the company and I am worried about cash"), scope
             )
-            state = await routes.finish(scope)
+            state = await _assemble(routes, scope)
 
             keys = {f["key"] for f in state.context.get("facts", [])}
             assert "brain.goals" not in keys, "an unsourced value was stored"
@@ -701,5 +724,76 @@ async def test_an_unstated_job_is_absent_rather_than_blank(app_db: None) -> None
             assert out.viewer.name == "Parul Bhoite"
             assert out.viewer.designation is None
             assert out.viewer.department is None
+        finally:
+            await _cleanup(db, user, ws)
+
+
+@requires_db
+async def test_a_failed_stage_keeps_the_stages_before_it(
+    app_db: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The whole reason `/finish` runs one stage per request.
+
+    All three model calls used to happen inside one handler, and
+    `scoped_connection` opens a single transaction around a handler — so the
+    persona and Brain writes were rolled back by a failure in the third call,
+    or by the process dying, and the retry paid for them again. That happened
+    in a browser: a 503 from the proxy, clicked twice, six model calls, no rows.
+
+    Here the Brain builder is unscripted, so stage two raises inside the runner.
+    The assertion is not that it failed — it is that `persona_draft` from stage
+    one is **on the row afterwards**, and that the phase is sitting at the stage
+    that broke rather than back at the beginning.
+    """
+    import app.routes.onboarding_agent as routes
+
+    # The Brain builder is scripted with output that does not match its schema,
+    # so the runner retries and raises `SkillOutputInvalidError` — a
+    # `SkillFailedError`, which the route turns into the 502 asserted below.
+    # Deliberately not "leave the skill unscripted": that path raises
+    # `AssertionError` out of the provider, which is a broken test rather than
+    # the product's own failure mode.
+    provider = _provider(**{"company-brain-builder": json.dumps({"values": "not a list"})})
+    _wire(monkeypatch, provider)
+
+    async with get_sessionmaker()() as db:
+        user, ws = await _workspace(db)
+        scope = _scope(user, ws)
+        try:
+            await routes.start(scope)
+            await routes.read(scope)
+            await routes.confirm_brief(routes.BriefIn(corrections={}), scope)
+            await routes.open_discovery(routes.DiscoveryIn(answer="I run the company"), scope)
+
+            # Stage one commits.
+            state = await routes.finish(scope)
+            assert state.phase == "persona"
+            assert state.persona["fields"], "stage one produced no persona"
+
+            # Stage two fails.
+            with pytest.raises(HTTPException) as raised:
+                await routes.finish(scope)
+            assert raised.value.status_code == 502
+
+            await db.execute(
+                sa.text("SELECT set_config('nexus.workspace_id', :w, true)"), {"w": str(ws)}
+            )
+            row = (
+                await db.execute(
+                    sa.text(
+                        "SELECT phase, status, persona_draft FROM onboarding_session"
+                        " WHERE workspace_id = :w"
+                    ),
+                    {"w": str(ws)},
+                )
+            ).mappings().one()
+
+            # The point: stage one survived a stage-two failure.
+            assert row["phase"] == "persona"
+            assert row["status"] == "active"
+            draft = row["persona_draft"]
+            if isinstance(draft, str):
+                draft = json.loads(draft)
+            assert draft["fields"], "the committed persona was rolled back with stage two"
         finally:
             await _cleanup(db, user, ws)

@@ -7,8 +7,10 @@ import {
   type AgentState,
   ModelUnavailableError,
   type NextQuestion,
+  ASSEMBLY_LABEL,
   SCOPE_LABEL,
   type Viewer,
+  assemblyDone,
   confirmBrief,
   finish,
   nextQuestion,
@@ -323,8 +325,30 @@ export function AgentOnboarding() {
                   type="button"
                   disabled={busy !== null}
                   onClick={() =>
-                    void guard('Building your Company Brain…', async () => {
-                      setState(await finish())
+                    void guard(ASSEMBLY_LABEL[state.phase] ?? 'Building…', async () => {
+                      // Three requests, not one. Each runs a single stage and
+                      // commits it, so a failure part-way leaves the finished
+                      // stages on the row and this loop resumes at the one that
+                      // broke — the server picks the stage from the phase, so
+                      // simply clicking again is the retry.
+                      //
+                      // `setState` per stage rather than once at the end: the
+                      // right-hand panel fills in as the Persona and then the
+                      // Brain land, which is the only honest progress signal
+                      // available for a wait this long.
+                      let next = await finish()
+                      setState(next)
+                      // Bounded, and guarded on the phase actually moving. The
+                      // stop condition is `assemblyDone`, but a server that
+                      // returned the same phase twice would otherwise spin
+                      // here forever paying for a model call each time.
+                      for (let attempt = 0; attempt < 3 && !assemblyDone(next); attempt += 1) {
+                        const before = next.phase
+                        setBusy(ASSEMBLY_LABEL[before] ?? 'Building…')
+                        next = await finish()
+                        setState(next)
+                        if (next.phase === before) break
+                      }
                     })
                   }
                   className="mt-3 rounded-full bg-ink px-5 py-2 text-sm font-medium text-bone-50 disabled:opacity-50"

@@ -646,26 +646,92 @@ async def submit_answer(payload: AnswerIn, scope: CurrentScope) -> StateOut:
 
 @router.post("/finish", response_model=StateOut, dependencies=[Depends(require_csrf)])
 async def finish(scope: CurrentScope) -> StateOut:
-    """Assemble the Persona, the Brain and the context every later agent reads."""
+    """Run **one** stage of the assembly and commit it. Call until `ready`.
+
+    Three model calls used to happen inside this one request — persona, brain,
+    context, at high, high and medium effort — and `scoped_connection` opens a
+    single transaction around the whole handler, so all three stages committed
+    together or not at all. Two to four minutes of work with nothing durable
+    until the end: a failure at the third call discarded the first two, and the
+    retry paid for them again. The client's 240s abort and a killed process
+    both land there, and both did.
+
+    So this now advances the phase by exactly one step and returns. Three
+    requests, three transactions, three commits. A stage that fails leaves
+    every stage before it on the row, and the next call resumes at the one that
+    failed rather than at the beginning.
+
+    **The client does not choose the stage.** It is read from the phase on the
+    row, under a `FOR UPDATE` lock taken before the read — the same rule as
+    `/answer`, where the target comes from the agent's own last turn. A client
+    that could name the stage could skip one, and a Brain assembled with no
+    persona is not a shorter journey but a different artefact. The lock is what
+    makes a double-click harmless: the second request waits, then reads the
+    phase the first one advanced and moves on to the next stage instead of
+    repeating the last.
+
+    Idempotent at the end: called on a session that is already `ready`, it
+    returns the state and spends nothing.
+    """
     _require_model()
     async with scoped_connection(scope) as db:
         stored = await _load(db, scope)
-        agent = OnboardingAgent(_context(scope, db, await _user_context(db, scope)))
-        state = _rehydrate(stored)
-        try:
-            result = await agent.finish(
-                state,
-                role_reach={"role": str(scope.role)},
-                deep_research=await _deep_research(db, scope),
+
+        # Locked before the phase is read, not after. `_load` above read a phase
+        # that a concurrent request may already have advanced; acting on it
+        # would run the same stage twice and pay for the model call twice.
+        locked = (
+            await db.execute(
+                sa.text(
+                    "SELECT phase, status FROM onboarding_session"
+                    " WHERE id = :sid FOR UPDATE"
+                ),
+                {"sid": stored.id},
             )
+        ).mappings().first()
+        if locked is None:  # pragma: no cover - _load just returned this row
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="session vanished")
+
+        phase = str(locked["phase"])
+        if str(locked["status"]) == store.SessionStatus.COMPLETED.value or phase == "ready":
+            done = await store.by_id(db, session_id=stored.id)
+            assert done is not None
+            return await _state(db, scope, done)
+
+        # The name the Brain is assembled under. `_rehydrate` defaults it to the
+        # empty string and the old single-call path never passed it, so
+        # `company-brain-builder` — which declares `company_name` in
+        # `requires_grounding` — was being handed "" on every run.
+        _, company_name = await _workspace_identity(db, scope)
+        agent = OnboardingAgent(_context(scope, db, await _user_context(db, scope)))
+        state = _rehydrate(stored, company_name)
+
+        try:
+            if phase == "persona":
+                await agent.build_brain(state, deep_research=await _deep_research(db, scope))
+            elif phase == "assembling":
+                # Read back off the row rather than carried in memory — which is
+                # exactly what lets this be its own request. `context` holds the
+                # Brain at this point; stage three overwrites it with the
+                # preamble, which is the artefact the journey exists to produce.
+                context = await agent.build_context(
+                    state,
+                    brain=dict(stored.context),
+                    persona=dict(stored.persona_draft),
+                    role_reach={"role": str(scope.role)},
+                )
+                await store.complete(db, session_id=stored.id, context=dict(context))
+            else:
+                await agent.build_persona(state)
         except SkillFailedError as exc:
             raise _unusable(exc) from exc
-        await store.complete(db, session_id=stored.id, context=dict(result["context"]))
-        # By id, not by `active`: the session is `completed` now, and `_load`
-        # would report no journey in progress on the request that finished it.
-        closed = await store.by_id(db, session_id=stored.id)
-        assert closed is not None
-        return await _state(db, scope, closed)
+
+        # By id, not by `active`: the last stage marks the session `completed`,
+        # and `_load` would report no journey in progress on the request that
+        # finished it.
+        latest = await store.by_id(db, session_id=stored.id)
+        assert latest is not None
+        return await _state(db, scope, latest)
 
 
 def _unusable(exc: SkillFailedError) -> HTTPException:
