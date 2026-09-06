@@ -108,8 +108,25 @@ async function post(path: string, body?: unknown): Promise<unknown> {
   return payload
 }
 
-export async function register(email: string, password: string): Promise<void> {
-  await post('/api/auth/register', { email, password })
+/**
+ * Create the account.
+ *
+ * `displayName` is what the agent calls the person for the rest of onboarding,
+ * so it is asked for here rather than derived from the email local part —
+ * "founder" is not a name, and greeting somebody by their inbox is worse than
+ * not greeting them.
+ */
+export async function register(
+  email: string,
+  password: string,
+  { displayName, phone }: { displayName?: string; phone?: string } = {},
+): Promise<void> {
+  await post('/api/auth/register', {
+    email,
+    password,
+    display_name: displayName?.trim() || null,
+    phone: phone?.trim() || null,
+  })
 }
 
 export async function login(email: string, password: string): Promise<SessionState> {
@@ -162,9 +179,13 @@ export async function fetchSession(): Promise<SessionState | null> {
 export type CompanyDetails = {
   name: string
   website_url: string
-  country: string
-  reporting_currency: string
-  headcount_band: string
+  /**
+   * What the person says they do. Presentation only — it shapes what the agent
+   * asks and what the dashboard leads with. Access comes from the membership
+   * role, which this form cannot set.
+   */
+  designation?: string | null
+  department?: string | null
 }
 
 export type RegisteredCompany = {

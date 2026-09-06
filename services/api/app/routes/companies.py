@@ -49,9 +49,22 @@ class RegisterCompanyRequest(BaseModel):
     # Mandatory (`doc/11` Q13). Not decoration: it is the first fact NEXUS holds
     # about the company and the input the research run is queued against.
     website_url: str = Field(min_length=3, max_length=2048)
-    country: str = Field(min_length=2, max_length=2)
-    reporting_currency: str = Field(min_length=3, max_length=3)
-    headcount_band: str = Field(min_length=1, max_length=32)
+    # `country`, `reporting_currency` and `headcount_band` were here and are
+    # gone. Nothing read the columns they wrote — no SELECT in this codebase
+    # names any of the three — and the currency is asked properly later, by the
+    # question catalogue as a constrained choice that arrives with a scope.
+    # Asking for a fact at the front door because there is a column for it is
+    # backwards; the column exists to hold an answer something needs.
+    #
+    # `website_url` stays because it is genuinely read: `research/worker_loop`
+    # selects it to queue the crawl.
+    # What the founder says they do. Presentation only: these steer what the
+    # agent asks and what the dashboard leads with, and reach nothing. The
+    # authorising fields are `membership.role` and `membership.departments`,
+    # and neither is settable from this request — the creator is `owner` by
+    # construction and an invitee's role is set by whoever invited them.
+    designation: str | None = Field(default=None, max_length=120)
+    department: str | None = Field(default=None, max_length=120)
     # `doc/11` Q8's escape hatch. Two genuinely different businesses can share a
     # domain — an agency and its trading arm, a group with one website — so a
     # second registration is possible and must be **explicitly confirmed**.
@@ -82,9 +95,8 @@ async def register_company(payload: RegisterCompanyRequest, session: CurrentSess
                 details=CompanyDetails(
                     name=payload.name.strip(),
                     website_url=payload.website_url,
-                    country=payload.country.upper(),
-                    reporting_currency=payload.reporting_currency.upper(),
-                    headcount_band=payload.headcount_band,
+                    designation=payload.designation,
+                    department=payload.department,
                 ),
                 allow_duplicate=payload.confirm_separate_company,
             )

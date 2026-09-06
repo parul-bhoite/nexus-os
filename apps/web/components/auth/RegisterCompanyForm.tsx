@@ -37,9 +37,8 @@ export function RegisterCompanyForm() {
   const router = useRouter()
   const [name, setName] = useState('')
   const [websiteUrl, setWebsiteUrl] = useState('')
-  const [country, setCountry] = useState('OM')
-  const [currency, setCurrency] = useState('OMR')
-  const [headcount, setHeadcount] = useState('1-10')
+  const [designation, setDesignation] = useState('')
+  const [department, setDepartment] = useState('')
   const [state, setState] = useState<State>({ status: 'idle' })
 
   const busy = state.status === 'submitting'
@@ -54,13 +53,14 @@ export function RegisterCompanyForm() {
         {
           name: name.trim(),
           website_url: websiteUrl.trim(),
-          country,
-          reporting_currency: currency,
-          headcount_band: headcount,
+          designation: designation.trim() || null,
+          department: department.trim() || null,
         },
         { confirmSeparateCompany },
       )
-      router.replace('/onboarding')
+      // The guided onboarding. It reads the domain from the workspace that was
+      // just created, so nothing needs threading through the URL.
+      router.replace('/onboarding/agent')
     } catch (error) {
       // The domain is already held by a company that has proved it. Not an
       // error to apologise for — it is usually the right answer arriving early,
@@ -162,16 +162,48 @@ export function RegisterCompanyForm() {
         placeholder="yourcompany.om"
         hint="Where NEXUS starts learning about you. You can add more URLs later."
       />
+      {/* Country, reporting currency and headcount used to be asked here.
+          Nothing read any of them — three columns written at registration and
+          named by no SELECT in the codebase — and the currency is asked properly
+          later: the question catalogue has it as a constrained choice carrying a
+          scope and a stated `why`, and the summary skill infers it from the
+          domain and offers it as an assumption to confirm. Three mechanisms for
+          one fact, and this was the weakest: free text with a length check, so
+          `ZZ` and `ZZZ` stored fine, pre-filled with Oman for everybody.
+
+          A wrong default on a field nothing reads is worse than no field. It
+          costs the founder a correction on their first screen, and the moment
+          something does start reading the column it inherits whatever they
+          could not be bothered to fix. Ask once, where the answer lands
+          classified and can cite the sentence it came from. */}
+
+      {/* What you do, not what you may see.
+          These two steer the conversation that follows — which questions are
+          worth your time, and what your dashboard leads with. They are
+          deliberately not permissions: what you can read is set by your
+          membership of this workspace, and typing "CFO" here does not open the
+          ledger. Saying so on the form matters more than saying it in a
+          docstring, because this is the field somebody would try it in. */}
       <div className="grid gap-5 sm:grid-cols-2">
-        <Field label="Country" value={country} onChange={setCountry} disabled={busy} />
         <Field
-          label="Reporting currency"
-          value={currency}
-          onChange={setCurrency}
+          label="Your role"
+          value={designation}
+          onChange={setDesignation}
           disabled={busy}
+          placeholder="Founder, Head of Sales…"
+        />
+        <Field
+          label="Department"
+          value={department}
+          onChange={setDepartment}
+          disabled={busy}
+          placeholder="Executive, Finance…"
         />
       </div>
-      <Field label="Headcount" value={headcount} onChange={setHeadcount} disabled={busy} />
+      <p className="-mt-2 text-sm text-ink-500">
+        Used to decide what NEXUS asks you and shows you first. It does not change what you
+        are allowed to see — that comes from your membership of this workspace.
+      </p>
 
       {/* "In Settings" is now a link, because there is now a Settings
           (finding F3). This sentence, its twin on the page's intro and the

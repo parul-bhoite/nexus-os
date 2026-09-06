@@ -25,6 +25,7 @@ from app.auth.workspaces import find_verified_workspace_for_domain
 from app.connectors.domain_check import normalise_domain
 from app.domain import audit
 from app.domain.membership import assert_no_live_membership
+from app.domain.research import SourceKind
 from app.logging import get_logger
 from app.retrieval.scoped import apply_workspace_scope
 
@@ -47,9 +48,15 @@ class CompanyDetails:
 
     name: str
     website_url: str
-    country: str
-    reporting_currency: str
-    headcount_band: str
+    designation: str | None = None
+    department: str | None = None
+
+
+def _blank_to_none(value: str | None) -> str | None:
+    """A skipped optional field is absent, not present-and-empty."""
+    if value is None:
+        return None
+    return value.strip() or None
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,19 +156,20 @@ async def create_company(
 
     await db.execute(
         text(
+            # `country`, `reporting_currency` and `headcount_band` are no longer
+            # written. The columns stay — all three are nullable, and migration
+            # 0014 already records that a NULL there reads as "not asked yet",
+            # which is now true of every workspace rather than only the ones
+            # predating it. Nothing selects them, so nothing changes downstream.
             "INSERT INTO workspace"
-            " (id, workspace_id, tenant_id, name, domain, country,"
-            "  reporting_currency, headcount_band, website_url, trial_ends_at)"
-            " VALUES (:id, :id, :t, :n, :d, :c, :cur, :hb, :url, :trial)"
+            " (id, workspace_id, tenant_id, name, domain, website_url, trial_ends_at)"
+            " VALUES (:id, :id, :t, :n, :d, :url, :trial)"
         ),
         {
             "id": str(workspace_id),
             "t": str(tenant_id),
             "n": details.name,
             "d": domain,
-            "c": details.country,
-            "cur": details.reporting_currency,
-            "hb": details.headcount_band,
             "url": details.website_url.strip(),
             "trial": datetime.now(UTC) + TRIAL,
         },
@@ -169,10 +177,20 @@ async def create_company(
 
     await db.execute(
         text(
-            "INSERT INTO membership (workspace_id, user_id, role, departments)"
-            " VALUES (:w, :u, 'owner', ARRAY['executive']::text[])"
+            # `role` and `departments` are the authorising pair and are set
+            # here, by construction, because whoever creates a workspace owns
+            # it. `designation` and `stated_department` are what they typed —
+            # written to the same row and read by nothing that decides access.
+            "INSERT INTO membership"
+            " (workspace_id, user_id, role, departments, designation, stated_department)"
+            " VALUES (:w, :u, 'owner', ARRAY['executive']::text[], :desig, :dept)"
         ),
-        {"w": str(workspace_id), "u": str(user_id)},
+        {
+            "w": str(workspace_id),
+            "u": str(user_id),
+            "desig": _blank_to_none(details.designation),
+            "dept": _blank_to_none(details.department),
+        },
     )
 
     # Enqueued, not fired. P11 builds the engine; recording the request means it
@@ -190,6 +208,26 @@ async def create_company(
             ).scalar_one()
         )
     )
+
+    # Every source, queued, up front.
+    #
+    # Without these the run row sat in the queue and no worker ever claimed a
+    # source, so the "background research" a founder was promised at signup
+    # never happened — `research_run` had a row and `research_source` had none.
+    # `POST /research/runs` seeded them and company creation did not, which is
+    # why a manually triggered run worked and the automatic one silently did not.
+    #
+    # The four with no implementation resolve to `skipped`, which is a state the
+    # progress screen renders honestly as "we have not built this yet" rather
+    # than as a failure of the company's website.
+    for kind in SourceKind:
+        await db.execute(
+            text(
+                "INSERT INTO research_source (workspace_id, run_id, kind, state)"
+                " VALUES (:w, :r, :k, 'queued')"
+            ),
+            {"w": str(workspace_id), "r": str(research_run_id), "k": kind.value},
+        )
 
     await audit.record(
         db,

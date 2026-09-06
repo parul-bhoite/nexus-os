@@ -117,9 +117,6 @@ async def test_workspace_is_created_without_a_verified_claim(app_db: None) -> No
                 details=CompanyDetails(
                     name="Acme Trading",
                     website_url=f"https://acme-{user.hex[:8]}.om",
-                    country="OM",
-                    reporting_currency="OMR",
-                    headcount_band="11-50",
                 ),
             )
             await db.commit()
@@ -166,9 +163,6 @@ async def test_the_owner_membership_is_created_in_the_same_transaction(app_db: N
                 details=CompanyDetails(
                     name="Solo Co",
                     website_url=f"https://solo-{user.hex[:8]}.om",
-                    country="OM",
-                    reporting_currency="OMR",
-                    headcount_band="1-10",
                 ),
             )
             await db.commit()
@@ -205,9 +199,6 @@ async def test_registration_enqueues_a_research_run(app_db: None) -> None:
                 details=CompanyDetails(
                     name="Crawl Co",
                     website_url=f"https://crawl-{user.hex[:8]}.om",
-                    country="OM",
-                    reporting_currency="OMR",
-                    headcount_band="1-10",
                 ),
             )
             await db.commit()
@@ -249,9 +240,6 @@ async def test_unverified_workspace_cannot_invite(app_db: None) -> None:
                 details=CompanyDetails(
                     name="Unverified Co",
                     website_url=f"https://unv-{user.hex[:8]}.om",
-                    country="OM",
-                    reporting_currency="OMR",
-                    headcount_band="1-10",
                 ),
             )
             await db.commit()
@@ -285,9 +273,6 @@ async def test_a_verified_workspace_may_invite(app_db: None) -> None:
                 details=CompanyDetails(
                     name="Verified Co",
                     website_url=f"https://ver-{user.hex[:8]}.om",
-                    country="OM",
-                    reporting_currency="OMR",
-                    headcount_band="1-10",
                 ),
             )
             await db.execute(
@@ -351,9 +336,6 @@ async def test_duplicate_verified_domain_offers_a_join_request_not_a_workspace(
                 details=CompanyDetails(
                     name="First In",
                     website_url=shared,
-                    country="OM",
-                    reporting_currency="OMR",
-                    headcount_band="1-10",
                 ),
             )
             first_ws = created.workspace_id
@@ -374,9 +356,6 @@ async def test_duplicate_verified_domain_offers_a_join_request_not_a_workspace(
                     details=CompanyDetails(
                         name="Second In",
                         website_url=shared,
-                        country="OM",
-                        reporting_currency="OMR",
-                        headcount_band="1-10",
                     ),
                 )
             # The error names the workspace to join, or the caller has nothing
@@ -406,17 +385,16 @@ async def test_an_unverified_duplicate_does_not_block_registration(app_db: None)
         a = b = None
         try:
             shared = f"https://open-{first.hex[:8]}.om"
-            details = dict(country="OM", reporting_currency="OMR", headcount_band="1-10")
             a = await create_company(
                 db,
                 user_id=first,
-                details=CompanyDetails(name="A", website_url=shared, **details),
+                details=CompanyDetails(name="A", website_url=shared),
             )
             await db.commit()
             b = await create_company(
                 db,
                 user_id=second,
-                details=CompanyDetails(name="B", website_url=shared, **details),
+                details=CompanyDetails(name="B", website_url=shared),
             )
             await db.commit()
 

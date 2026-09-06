@@ -21,9 +21,14 @@ export async function POST(request: Request) {
     body: {
       name: body.name,
       website_url: body.website_url,
-      country: body.country,
-      reporting_currency: body.reporting_currency,
-      headcount_band: body.headcount_band,
+      // Presentation only, and forwarded by name like everything else here.
+      // Left out of this list they are dropped silently: the form collects
+      // them, the API accepts them, and the column stays null with nothing
+      // anywhere saying why. That is the cost of the allowlist and the reason
+      // it is worth it — the same rule stops `confirm_separate_company`
+      // arriving by accident.
+      designation: body.designation ?? null,
+      department: body.department ?? null,
       confirm_separate_company: body.confirm_separate_company === true,
     },
     unavailable: 'Cannot reach the account service right now.',
