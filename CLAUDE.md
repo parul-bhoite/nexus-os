@@ -2,30 +2,107 @@
 
 ## Shell — read this before writing any command for the user
 
-The user runs **Windows PowerShell 5.1**. Commands are copied and pasted, so a
-bash-ism is a broken command, not a style issue. This has already cost two
-failed pastes.
+The user runs **macOS with zsh**. Commands are copied and pasted, so write
+POSIX shell and nothing else. The PowerShell 5.1 rules that used to live here
+are archived at the bottom of this section — the repo still carries a
+Windows-only `scripts/` tree, and the machine cannot run any of it.
+
+Ordinary POSIX is correct: `&&`, `||`, `export VAR=x`, `VAR=x cmd`,
+`rm -rf`, real `curl` with real flags. Four things still worth stating:
+
+| Watch for | Because |
+|---|---|
+| `cd X && cmd` | Works, but the prompt is already at the repo root — prefer a bare `cmd`, or an absolute path |
+| Backslash paths (`scripts\ci.ps1`) | Every path in this file below the Commands section is still Windows-shaped. Translate to `/` before pasting one into a command |
+| A `.env` line in a shell block | Still never runnable. Say "add this line to `.env`" |
+| `python3` vs the venv | Bare `python3` is Homebrew's 3.14 with no project dependencies. The API's interpreter is `services/api/.venv/bin/python` |
+
+### Nothing in `scripts/` runs on this machine
+
+Every script is `.ps1`, there is **no `.sh` equivalent**, and `pwsh` is not
+installed. So the standing advice to "hand over a script rather than a command"
+is currently dead: there is no `scripts/ci.sh` to hand over. Until there is,
+give the underlying command.
+
+`docker` and `psql` are also absent, which removes two more things this file
+recommends:
+
+- **`scripts/db-ci.ps1` cannot build the throwaway gate database.** No Docker.
+  Tests run against **Neon**, from `.env` — the slow path, ~5 minutes for the
+  onboarding suite, because every statement is a round trip to `us-east-2`.
+  That is expected here, not a hang. It also means the drift warning in the
+  Neon section applies to every local run, not just to CI.
+- **No `psql`.** For a one-off query, use the venv's SQLAlchemy against
+  `tests/dburl.database_url()`, and remember `nexus_app` is `NOBYPASSRLS`: a
+  query with no `nexus.workspace_id` set returns **zero rows rather than an
+  error**, which reads as an empty table. Set it first, or the answer is a
+  silent lie.
+
+### What to write instead
+
+```bash
+npm run dev --prefix apps/web
+```
+
+```bash
+services/api/.venv/bin/python -m uvicorn app.main:app --port 8001 --app-dir services/api --reload
+```
+
+```bash
+services/api/.venv/bin/python -m pytest services/api/tests -q --no-cov
+```
+
+```bash
+apps/web/node_modules/.bin/tsc --noEmit -p apps/web/tsconfig.json
+```
+
+```bash
+apps/web/node_modules/.bin/vitest run --root apps/web
+```
+
+All three were got wrong on the first attempt while writing this section, so
+they are spelled out rather than shortened:
+
+- **`services/api/tests`, not `tests/`.** pytest is run from the repo root but
+  the suite lives under the service. `tests/` there is "file or directory not
+  found", collecting nothing and exiting 1 — which looks like a failing run
+  rather than a mistyped path.
+- **`apps/web/node_modules/.bin/tsc`, not `npx tsc`.** From the root, npx does
+  not find the workspace's TypeScript and offers to fetch a different one
+  ("This is not the tsc command you are looking for"). `npx` is fine *inside*
+  `apps/web`; from the root, call the binary.
+- **`--no-cov` on a partial pytest run.** `pyproject.toml` sets a 75% coverage
+  gate, so running one file fails on coverage after every test in it passed.
+  Leave it off only when running the whole suite.
+
+Prefer the Browser pane's `preview_start` over either server command — the root
+`.claude/launch.json` already defines `nexus-web` (:3001) and `nexus-api`
+(:8001), and running a dev server through Bash instead is what leaves an
+orphaned process holding the port.
+
+### Archived: the PowerShell 5.1 rules
+
+Kept because `scripts/` is still PowerShell and someone will run this on the
+Windows machine again. Do not apply these on macOS.
+
+<details>
+<summary>PowerShell 5.1 — bash-isms that broke pastes</summary>
 
 | Never write | Write instead |
 |---|---|
-| `cd X && cmd` | `cd X; cmd` — or just `cmd`, since the prompt is already at the repo root |
-| `curl -s URL` | `Invoke-RestMethod URL` (`curl` is an alias for `Invoke-WebRequest`; bash flags fail) |
+| `cd X && cmd` | `cd X; cmd` |
+| `curl -s URL` | `Invoke-RestMethod URL` (`curl` aliases `Invoke-WebRequest`; bash flags fail) |
 | `VAR=x cmd` | `$env:VAR = 'x'; cmd` |
 | `export VAR=x` | `$env:VAR = 'x'` |
 | `rm -rf X` | `Remove-Item -Recurse -Force X` |
-| A `.env` line in a shell block | Say "add this line to `.env`" — never in a runnable block |
-
-**Prefer handing over a script over a command.** `scripts\verify.ps1`,
-`scripts\ci.ps1`, `scripts\db-init.ps1` exist so the user never composes
-anything. If a new instruction needs more than one line, it belongs in a script.
-
-Two PowerShell 5.1 traps already hit in this repo:
 
 - **Native stderr becomes a terminating error.** `alembic` and `psql` log INFO
   and NOTICE to stderr; with `$ErrorActionPreference='Stop'` that aborts a
   succeeding command. Set `Continue` around the call and branch on
   `$LASTEXITCODE`.
 - `&&`, `||`, ternary and `??` do not exist.
+
+</details>
 
 ## The documents, and which one to trust
 
@@ -122,11 +199,24 @@ the test that found this. The schema was recorded before the reset in
 13's central table and `question`/`question_choice` are Phase 7's catalogue, so
 read it before designing either.
 
-**Neon is behind again — at `0009`, against a head of `0011`.** Phase 1 added
-`0010` and Phase 2 added `0011`, and neither has been applied there. `alembic
-upgrade head` fixes it, but **`0011` drops `preview_session`**, so it destroys
-data and is yours to run rather than an agent's. Until then, seven tests fail
-locally against Neon and pass in CI.
+**Neon is at `0025`, which is head** (5 September 2026). `0024` added
+`onboarding_session` and `onboarding_turn`; `0025` adds `app_user.phone`,
+`membership.designation` and `membership.stated_department`. Both purely additive
+— no `DROP` in either — previewed with `--sql` and verified rather than assumed.
+
+**Three columns on `membership` mean three different things, and only two of them
+authorise anything.** `role` and `departments` (plural, `text[]`) are the
+authorising pair and are set by the inviter. `stated_department` (singular) and
+`designation` are what the user typed about themselves at signup; they steer what
+the agent asks and what the dashboard leads with, and reach nothing. Never wire
+either into a permission check — and note that `persona.department` as a *field
+key* fails `assert_persona_is_not_authorisation` at import, by design.
+
+The rule that produced the earlier warnings here still stands and is the reason
+to check the preview before running anything: **read `alembic upgrade <cur>:head
+--sql` first.** The `0011` incident — a migration that dropped `preview_session`
+and therefore destroyed data — is what makes a destructive step the user's to run
+rather than an agent's. An additive one, previewed and verified, is not.
 
 **Still prefer `scripts\db-ci.ps1` for the gate.** The container is ~25 seconds
 against Neon's ~5 minutes, and it is rebuilt from `bootstrap.sql` every run, so
@@ -172,6 +262,11 @@ would make every isolation test pass while proving nothing.
 connects as it.
 
 ## Commands
+
+**None of these run on the current machine** — it is macOS with no `pwsh`, no
+Docker and no `psql`. They are kept for the Windows machine. See the Shell
+section at the top for what to run here instead; the paths below are Windows-
+shaped and the `.ps1` files have no `.sh` equivalents.
 
 ```powershell
 .\scripts\setup.ps1      # one-time: venv, npm, .env
