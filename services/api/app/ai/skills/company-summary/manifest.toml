@@ -1,0 +1,10 @@
+name = "company-summary"
+version = "2"
+description = "Turn research observations into a brief a founder can correct line by line."
+model = "claude-sonnet-5"
+effort = "low"
+max_output_tokens = 2048
+cache_system = true
+requires_grounding = ["research", "company_name", "brain_fields"]
+writes = []
+tags = ["onboarding", "presentation"]

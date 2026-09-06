@@ -1,0 +1,84 @@
+{
+  "type": "object",
+  "properties": {
+    "statements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "read",
+              "inferred"
+            ]
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "text",
+          "confidence"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "needs_you": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string"
+          },
+          "why_only_you": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "topic",
+          "why_only_you"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "evidence"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "opening_line": {
+      "type": "string",
+      "description": "One or two sentences in the second person summarising the business. No salutation and no name \u2014 the screen has already greeted the reader."
+    }
+  },
+  "required": [
+    "statements",
+    "needs_you",
+    "assumptions",
+    "opening_line"
+  ],
+  "additionalProperties": false
+}
