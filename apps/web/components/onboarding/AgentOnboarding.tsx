@@ -182,7 +182,7 @@ export function AgentOnboarding() {
   )
 
   if (blocked) return <Blocked message={blocked} />
-  if (!state) return <Centered>{bootLabel}</Centered>
+  if (!state) return <Booting label={bootLabel} />
 
   // The fetch has landed but the read has not. This used to take over the whole
   // screen, which threw away the one thing the wait already had: a greeting
@@ -350,7 +350,13 @@ export function AgentOnboarding() {
         </main>
 
         <aside className="flex flex-col gap-3 lg:sticky lg:top-24">
-          <KnowledgePanel state={state} />
+          {/* Two headed cards saying "0 facts", "Filling in as we read" and
+              "Filled in as we talk" is a receipt for a conversation that has
+              not happened — it puts the panel's furniture on screen a full
+              half-minute before it has anything to hold, and a zero next to
+              "facts" reads as a real and bad result rather than as "not yet".
+              The skeleton says the same thing without asserting a count. */}
+          {hasRecord(state) ? <KnowledgePanel state={state} /> : <PanelSkeleton />}
         </aside>
       </div>
     </div>
@@ -666,6 +672,62 @@ function Composer({
  * both sides of the screen at once, against the same three facts, which is one
  * chip too many for a claim and two panes saying the same thing.
  */
+/**
+ * Whether the right pane has anything real to show yet.
+ *
+ * Facts *or* statements *or* persona fields — any one of them means the panel
+ * has content and the skeleton is done. It stays false for the whole read,
+ * which is exactly the window the skeleton exists to cover.
+ */
+function hasRecord(state: AgentState): boolean {
+  return (
+    (state.context.facts ?? []).length > 0 ||
+    (state.brief.statements ?? []).length > 0 ||
+    (state.persona.fields ?? []).length > 0
+  )
+}
+
+/**
+ * The right pane while there is nothing in it.
+ *
+ * Shaped like what replaces it — a card, a heading bar, three rows — so the
+ * swap is a fill rather than a reflow. No text and no numbers: the panel's job
+ * is to be the receipt, and a receipt that lists placeholder rows before
+ * anything was recorded is the one thing it must never do.
+ *
+ * `role="status"` with a visually-hidden sentence, because `globals.css`
+ * collapses looping animations to one iteration under `prefers-reduced-motion`.
+ * With the pulse stopped this is a few grey bars; the sr-only line is what
+ * still says why.
+ */
+function PanelSkeleton() {
+  return (
+    <section
+      role="status"
+      aria-live="polite"
+      className="rounded-2xl border border-bone-300 bg-bone-50 p-4"
+    >
+      <span className="sr-only">Reading your website. The panel fills in as facts are found.</span>
+      <div aria-hidden className="animate-pulse">
+        <div className="flex items-baseline justify-between">
+          <div className="h-3.5 w-32 rounded bg-bone-300" />
+          <div className="h-2.5 w-12 rounded bg-bone-200" />
+        </div>
+        <div className="mt-2 h-2 w-24 rounded bg-bone-200" />
+        <div className="mt-4 flex flex-col gap-4">
+          {[0, 1, 2].map((row) => (
+            <div key={row} className="flex flex-col gap-1.5">
+              <div className="h-2.5 w-28 rounded bg-bone-300" />
+              <div className="h-2 w-full rounded bg-bone-200" />
+              <div className="h-2 w-4/5 rounded bg-bone-200" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function KnowledgePanel({ state }: { state: AgentState }) {
   const facts = state.context.facts ?? []
   const gaps = state.context.known_gaps ?? []
@@ -825,9 +887,42 @@ function ReadingBubble({
   )
 }
 
-function Centered({ children }: { children: React.ReactNode }) {
+/**
+ * The first screen, before there is any state to draw.
+ *
+ * It was one line of centred grey text on white, which for a wait this long
+ * (a fetch and two model calls) is indistinguishable from a page that has
+ * finished loading and has nothing on it. The dots say the process is alive;
+ * the sentence says what it is doing and roughly how long — `useSlowLabel`
+ * rewrites it once the wait runs past the usual.
+ *
+ * **The sentence stays.** `globals.css` collapses every animation to a single
+ * iteration under `prefers-reduced-motion`, so the dots stop for anyone with
+ * that set. A loader that is the *only* signal would go silent for exactly the
+ * people least able to guess; motion is decoration here, never the message.
+ *
+ * `role="status"` rather than a bare div: the label changes mid-wait, and a
+ * screen reader should hear that it changed without the focus moving.
+ */
+function Booting({ label }: { label: string }) {
   return (
-    <div className="grid min-h-screen place-items-center text-sm text-ink-400">{children}</div>
+    <div className="grid min-h-screen place-items-center px-6">
+      <div role="status" aria-live="polite" className="flex flex-col items-center gap-4">
+        <span className="flex items-center gap-1.5" aria-hidden>
+          {[0, 1, 2].map((index) => (
+            <span
+              key={index}
+              className="h-2 w-2 animate-pulse rounded-full bg-steel-400"
+              // Staggered so the three read as one travelling pulse rather than
+              // three things blinking in unison. Inline because the delay is
+              // per-index and Tailwind has no arbitrary-delay-by-loop utility.
+              style={{ animationDelay: `${index * 160}ms`, animationDuration: '1.1s' }}
+            />
+          ))}
+        </span>
+        <p className="max-w-md text-center text-sm text-ink-400">{label}</p>
+      </div>
+    </div>
   )
 }
 
