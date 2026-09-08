@@ -1,0 +1,94 @@
+{
+  "type": "object",
+  "properties": {
+    "values": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "source_kind": {
+            "type": "string",
+            "enum": [
+              "user_confirmed",
+              "connected_system",
+              "document",
+              "crawl",
+              "inference"
+            ]
+          },
+          "provenance": {
+            "type": "string"
+          },
+          "superseded": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "source_kind",
+          "provenance"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "evidence"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "unavailable": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string"
+          },
+          "unlocked_by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "topic",
+          "unlocked_by"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "generated_by": {
+      "type": "string",
+      "enum": [
+        "answers",
+        "model"
+      ]
+    }
+  },
+  "required": [
+    "values",
+    "assumptions",
+    "unavailable",
+    "generated_by"
+  ],
+  "additionalProperties": false
+}

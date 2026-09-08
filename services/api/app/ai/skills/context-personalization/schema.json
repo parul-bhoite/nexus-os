@@ -1,0 +1,59 @@
+{
+  "type": "object",
+  "properties": {
+    "preamble": {
+      "type": "string"
+    },
+    "facts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "scope"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "known_gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string"
+          },
+          "unlocked_by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "topic",
+          "unlocked_by"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "personalization_note": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "preamble",
+    "facts",
+    "known_gaps"
+  ],
+  "additionalProperties": false
+}

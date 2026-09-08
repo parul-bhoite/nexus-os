@@ -18,6 +18,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from functools import lru_cache
 
+import sqlalchemy as sa
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -28,6 +29,9 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.pool import NullPool
 
 from app.config import Settings, get_settings
+from app.logging import get_logger
+
+log = get_logger(__name__)
 
 
 @lru_cache
@@ -60,13 +64,22 @@ def get_engine() -> AsyncEngine:
 
     kwargs: dict[str, object] = {
         "echo": False,
-        # Managed Postgres closes idle connections and can cold-start, so a
-        # pooled connection may be dead by the time it is reused.
-        "pool_pre_ping": True,
-        "pool_size": 5,
-        "max_overflow": 5,
+        # All four come from settings now, and the reasoning for each value is
+        # in `Settings` beside it. They were hardcoded here, which put four
+        # numbers whose cost is entirely a function of network distance in the
+        # one file that cannot know how far away the database is.
+        #
+        # The headline: `pool_pre_ping` is a ping per checkout, so it costs one
+        # round trip per request — about 2ms against a co-located database and
+        # a measured ~1.27s against the Neon instance in `.env`. It stays on by
+        # default because the safe default is on; `NEXUS_DB_POOL_PRE_PING=false`
+        # is the escape hatch for a remote database, and
+        # `db_pool_recycle_seconds` is what keeps that survivable.
+        "pool_pre_ping": settings.db_pool_pre_ping,
+        "pool_size": settings.db_pool_size,
+        "max_overflow": settings.db_pool_max_overflow,
         # Recycle before a provider's idle timeout rather than after it.
-        "pool_recycle": 300,
+        "pool_recycle": settings.db_pool_recycle_seconds,
         # How long a request waits for a connection before failing. The default
         # is 30 seconds, which is longer than a caller will wait.
         "pool_timeout": settings.db_pool_timeout_seconds,
@@ -97,6 +110,11 @@ def get_engine() -> AsyncEngine:
         kwargs.pop("max_overflow", None)
         kwargs.pop("pool_recycle", None)
         kwargs.pop("pool_timeout", None)
+        # And the ping, which is pure waste here. `NullPool` opens a fresh
+        # connection for every checkout, so pre-pinging asks "is this brand-new
+        # connection alive" — a round trip whose answer is known, on a path
+        # where round trips are the thing that hurts.
+        kwargs.pop("pool_pre_ping", None)
         # Both caches, and both in `connect_args`. `statement_cache_size` is
         # asyncpg's own; `prepared_statement_cache_size` is SQLAlchemy's, and
         # its adapter pops it from the *connect* keywords rather than accepting
@@ -116,6 +134,59 @@ def get_engine() -> AsyncEngine:
     engine = create_async_engine(url, **kwargs)
     _apply_session_timeouts(engine, settings)
     return engine
+
+
+async def warm_pool() -> int:
+    """Open the pool's connections up front. Returns how many came up.
+
+    **A connection costs 7.1 seconds to establish against a remote database**,
+    measured — TLS, plus whatever waking a serverless compute involves. Without
+    this the first requests after a deploy each pay it one at a time, so the
+    slowest requests this application ever serves are the ones a person makes
+    immediately after it starts. Which is also when somebody is most likely to
+    be watching.
+
+    Opened concurrently, so the whole pool costs about as long as one
+    connection rather than `pool_size` times as long.
+
+    **Never raises.** A database that is down must not stop the process from
+    starting: `/health` has to come up to *report* that the database is down,
+    and a container that refuses to boot reports nothing at all. It returns the
+    count and logs the failure, and the pool fills lazily as before.
+
+    Not called when no URL is configured — `get_engine` requires one, and the
+    application is required to run without a database for tests and tooling.
+    """
+    import anyio
+
+    settings = get_settings()
+    if not settings.database_url.get_secret_value():
+        return 0
+    if settings.db_transaction_pooler:
+        # `NullPool` holds nothing between checkouts, so there is no pool to
+        # fill — the connections opened here would be closed again immediately
+        # and the first request would still pay full price. The pooler in front
+        # is what is meant to be keeping connections warm.
+        return 0
+
+    engine = get_engine()
+    opened = 0
+
+    async def one() -> None:
+        nonlocal opened
+        try:
+            async with engine.connect() as conn:
+                await conn.execute(sa.text("SELECT 1"))
+            opened += 1
+        except Exception as exc:
+            log.warning("db.warm_pool.failed", error=str(exc))
+
+    async with anyio.create_task_group() as tg:
+        for _ in range(max(0, settings.db_pool_size)):
+            tg.start_soon(one)
+
+    log.info("db.warm_pool", opened=opened, pool_size=settings.db_pool_size)
+    return opened
 
 
 def _apply_session_timeouts(engine: AsyncEngine, settings: Settings) -> None:

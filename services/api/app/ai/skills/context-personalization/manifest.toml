@@ -1,0 +1,23 @@
+name = "context-personalization"
+version = "3"
+description = "Join Brain and Persona into the grounded preamble every later agent receives."
+model = "claude-sonnet-5"
+effort = "medium"
+# 8192, not 2048. **The third skill to fail this way**, so the reason is
+# written where the number is rather than in one place three files away.
+#
+# On this model the reasoning budget and the answer come out of the *same*
+# allowance. A non-trivial effort with a small allowance spends it thinking and
+# is cut off before it finishes writing, which arrives as
+# `stop_reason=max_tokens` and then — because the runner retries an identical
+# request — fails the same way twice and 502s.
+#
+# `persona-builder` did it at high/2048 and blocked every journey at the persona
+# stage. This one did it at medium/2048 and blocked them at the last stage, with
+# the whole interview already collected. `test_a_thinking_skill_has_room_to_think`
+# is the guard that now catches the pattern instead of the next audit.
+max_output_tokens = 8192
+cache_system = true
+requires_grounding = ["brain", "persona", "role_reach"]
+writes = []
+tags = ["onboarding", "context", "reusable"]

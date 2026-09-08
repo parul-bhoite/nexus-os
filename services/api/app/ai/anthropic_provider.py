@@ -105,12 +105,12 @@ class AnthropicProvider:
             raise LlmUnavailableError(f"skill '{request.skill}' is switched off")
 
         client = self._client_or_raise()
-        system = _system_with_grounding(request)
+        model = request.model or self._model
         messages = [{"role": m.role, "content": m.content} for m in request.messages]
 
         started = time.monotonic()
         try:
-            response = await self._send(client, request, system, messages)
+            response = await self._send(client, request, model, messages)
         except Exception as exc:
             raise _map_error(exc) from exc
         latency_ms = int((time.monotonic() - started) * 1000)
@@ -129,8 +129,9 @@ class AnthropicProvider:
             "ai.completion",
             skill=request.skill,
             provider=self.name,
-            model=self._model,
+            model=model,
             input_tokens=usage.input_tokens,
+            cache_read_tokens=int(getattr(response.usage, "cache_read_input_tokens", 0) or 0),
             output_tokens=usage.output_tokens,
             latency_ms=latency_ms,
             stop_reason=stop_reason,
@@ -138,7 +139,7 @@ class AnthropicProvider:
 
         return Completion(
             text=text,
-            model=str(getattr(response, "model", self._model)),
+            model=str(getattr(response, "model", model)),
             provider=self.name,
             usage=usage,
             stop_reason=stop_reason,
@@ -150,7 +151,7 @@ class AnthropicProvider:
         self,
         client: Any,
         request: CompletionRequest,
-        system: str,
+        model: str,
         messages: list[dict[str, str]],
     ) -> Any:
         """One retry, transient failures only.
@@ -160,29 +161,124 @@ class AnthropicProvider:
         Unavailable. A request that fails twice should surface as unavailable
         rather than be retried until the budget is gone.
         """
+        kwargs = _request_kwargs(request, model, messages)
         attempts = 0
         while True:
             attempts += 1
             try:
-                return await client.messages.create(
-                    model=self._model,
-                    system=system,
-                    messages=messages,
-                    max_tokens=request.max_output_tokens,
-                    temperature=request.temperature,
-                    timeout=request.timeout_seconds,
-                )
+                return await client.messages.create(**kwargs)
             except Exception as exc:
                 if attempts >= 2 or not _is_retryable(exc):
                     raise
                 log.info("ai.retry", skill=request.skill, provider=self.name)
 
 
+# ── What each tier will accept ────────────────────────────────
+#
+# Not style preferences: sending a parameter a model has removed is a 400, and
+# it surfaces as "this skill is broken" rather than "the manifest picked the
+# wrong tier". Prefix matching — the ids are stable prefixes, and a dated
+# snapshot of the same model behaves the same way.
+
+_REJECTS_SAMPLING = (
+    "claude-opus-5",
+    "claude-opus-4-8",
+    "claude-opus-4-7",
+    "claude-sonnet-5",
+    "claude-fable-5",
+    "claude-mythos-5",
+)
+"""Sampling parameters were removed on these; sending `temperature` is a 400.
+
+This file previously sent `temperature=` unconditionally, so every skill would
+have failed the moment the configured model moved to a current tier.
+"""
+
+_REJECTS_EFFORT = ("claude-haiku-4-5", "claude-sonnet-4-5")
+"""`output_config.effort` errors on these. Haiku is a deliberate tier for the
+cheap mechanical skills, so this is a live path rather than a hypothetical."""
+
+
+def _accepts_sampling(model: str) -> bool:
+    return not model.startswith(_REJECTS_SAMPLING)
+
+
+def _accepts_effort(model: str) -> bool:
+    return not model.startswith(_REJECTS_EFFORT)
+
+
+def _request_kwargs(
+    request: CompletionRequest,
+    model: str,
+    messages: list[dict[str, str]],
+) -> dict[str, Any]:
+    """Assemble one Messages request, omitting whatever this tier rejects."""
+    kwargs: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": request.max_output_tokens,
+        "timeout": request.timeout_seconds,
+    }
+    kwargs["system"] = _system_blocks(request)
+
+    if _accepts_sampling(model):
+        kwargs["temperature"] = request.temperature
+
+    output_config: dict[str, Any] = {}
+    if request.effort and _accepts_effort(model):
+        output_config["effort"] = request.effort
+    if request.response_schema is not None:
+        # Constrains the response at decode time. The caller still validates —
+        # a provider that validated would swallow the schema failure rate, and
+        # that rate is the drift signal worth watching.
+        output_config["format"] = {
+            "type": "json_schema",
+            "schema": dict(request.response_schema),
+        }
+    if output_config:
+        kwargs["output_config"] = output_config
+
+    return kwargs
+
+
 # ── Helpers ───────────────────────────────────────────────────
 
 
-def _system_with_grounding(request: CompletionRequest) -> str:
-    """Append the pre-computed facts, and forbid inventing more.
+def _system_blocks(request: CompletionRequest) -> Any:
+    """The system prompt, split so the cache breakpoint lands in the right place.
+
+    Caching is a **prefix match**: any byte change before the breakpoint
+    invalidates everything after it. A skill's prompt is identical on every call;
+    its grounding is different on every call. Marking them as one block would
+    write a fresh entry per request and read none — paying the write premium
+    forever for nothing.
+
+    So the stable prompt is its own block and carries the marker, and grounding
+    follows it unmarked. When `cache_system` is off, or there is no grounding to
+    separate, a plain string is sent — fewer moving parts for the common case.
+
+    Note the minimum cacheable prefix is model-dependent (512 tokens on Opus 5,
+    1024 on Sonnet 5) and a shorter prefix silently does not cache. At the
+    current skill-prompt sizes (~300-430 tokens) nothing here caches yet; the
+    split exists so that stays true rather than becoming a silent cost when a
+    prompt grows past the threshold.
+    """
+    grounding = _grounding_text(request)
+
+    if not request.cache_system:
+        return request.system if grounding is None else f"{request.system}\n\n{grounding}"
+
+    blocks: list[dict[str, Any]] = [
+        {"type": "text", "text": request.system, "cache_control": {"type": "ephemeral"}}
+    ]
+    if grounding is not None:
+        # Deliberately after the breakpoint: this is the volatile half.
+        blocks.append({"type": "text", "text": grounding})
+    return blocks
+
+
+def _grounding_text(request: CompletionRequest) -> str | None:
+    """The pre-computed facts, and the instruction forbidding more.
 
     The instruction is not a guarantee — prompt-level rules are weak, which doc
     06 §7.2 says plainly about L0 knowledge. It is the cheap half of the defence.
@@ -190,11 +286,10 @@ def _system_with_grounding(request: CompletionRequest) -> str:
     were not supplied here.
     """
     if not request.grounding:
-        return request.system
+        return None
 
     facts = "\n".join(f"- {key}: {value!r}" for key, value in sorted(request.grounding.items()))
     return (
-        f"{request.system}\n\n"
         "The following values were computed from the company's own data. "
         "Use them exactly as given. Do not calculate, estimate, round or infer "
         "any other figure — if a number you need is not listed here, say which "

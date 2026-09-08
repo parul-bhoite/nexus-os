@@ -1,0 +1,9 @@
+name = "question-generation"
+version = "6"
+description = "Choose and word the next question, naming the declared field it fills."
+model = "claude-haiku-4-5"
+max_output_tokens = 1024
+cache_system = true
+requires_grounding = ["available_fields", "already_known", "conversation_so_far"]
+writes = []
+tags = ["onboarding", "conversation"]

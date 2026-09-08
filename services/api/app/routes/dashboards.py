@@ -27,6 +27,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import text
 
+from app.ai.runtime.fields import FIELD_CATALOGUE
 from app.db import _unscoped_session
 from app.deps import CurrentScope
 from app.deps_scope import enforce_department
@@ -153,6 +154,22 @@ _ANSWERED_SQL = (
     f" WHERE department IS NOT NULL AND {BINDING_ONLY_SQL}"
 )
 
+# The other surface that answers the same questions. `fact` is where the agent
+# interview lands (`domain/onboarding_promotion`), keyed by catalogue key rather
+# than bank key; `FieldSpec.question_key` is the join, and it lives on the field
+# so there is no third table to keep in step.
+#
+# Only the current Brain version counts. A superseded fact is a previous answer
+# to a question that has since been answered again, and counting it would make
+# a re-run of onboarding look like progress it is not.
+_PROMOTED_SQL = (
+    "SELECT f.key FROM fact f"
+    " JOIN brain_version bv ON bv.id = f.brain_version_id"
+    " WHERE f.superseded_by_id IS NULL"
+    "   AND bv.version = (SELECT MAX(version) FROM brain_version"
+    "                     WHERE workspace_id = bv.workspace_id)"
+)
+
 
 async def running_departments(scope: CurrentScope) -> frozenset[Department]:
     """Which departments this company runs (Q22/Q63).
@@ -185,7 +202,18 @@ async def answered_questions(scope: CurrentScope) -> frozenset[tuple[str, str]]:
     async with _unscoped_session() as db:
         await apply_workspace_scope(db, str(scope.workspace_id))
         rows = (await db.execute(text(_ANSWERED_SQL))).all()
-    return frozenset((r.department, r.question_key) for r in rows)
+        promoted = (await db.execute(text(_PROMOTED_SQL))).scalars().all()
+
+    answered = {(r.department, r.question_key) for r in rows}
+    # An interview answer counts as answering its bank question. Without this
+    # the counter reads one of two writers and reports the other's work as
+    # outstanding — a founder who answered every operational threshold was
+    # still told five questions were open.
+    for key in promoted:
+        spec = FIELD_CATALOGUE.get(str(key))
+        if spec is not None and spec.question_key and spec.department:
+            answered.add((spec.department, spec.question_key))
+    return frozenset(answered)
 
 
 AnsweredQuestions = Annotated[frozenset[tuple[str, str]], Depends(answered_questions)]

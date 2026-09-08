@@ -1,0 +1,20 @@
+name = "company-brain-builder"
+version = "2"
+description = "Assemble the Company Brain from research, documents and confirmed answers."
+model = "claude-sonnet-5"
+effort = "high"
+# Per group now, not for the whole Brain. Three or four fields rather than
+# seven, so the same ceiling is generous instead of the thing being raced.
+max_output_tokens = 8192
+cache_system = true
+requires_grounding = ["research", "answers", "company_name", "domain", "brain_fields"]
+writes = [
+  "brain.profile",
+  "brain.products_services",
+  "brain.target_customers",
+  "brain.brand_voice",
+  "brain.goals",
+  "brain.competitors",
+  "brain.assumptions",
+]
+tags = ["onboarding", "brain"]

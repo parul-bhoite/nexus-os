@@ -45,19 +45,6 @@ export type Question = {
   value: unknown
 }
 
-export type Member = {
-  user_id: string
-  email: string
-  display_name: string | null
-  role: string
-}
-
-export type Catalogue = {
-  questions: Question[]
-  can_administer: boolean
-  members: Member[]
-}
-
 export type Invitation = {
   invitation_id: string
   email: string
@@ -134,19 +121,6 @@ export async function fetchState(): Promise<SpineState> {
   return (await call('/api/onboarding/state')) as SpineState
 }
 
-export async function fetchCatalogue(): Promise<Catalogue> {
-  return (await call('/api/onboarding/questions')) as Catalogue
-}
-
-export async function saveAnswers(
-  answers: { key: string; value: unknown }[],
-): Promise<{ saved: string[] }> {
-  return (await call('/api/onboarding/answers', {
-    method: 'POST',
-    body: JSON.stringify({ answers }),
-  })) as { saved: string[] }
-}
-
 export async function fetchInvitations(): Promise<Invitation[]> {
   const payload = (await call('/api/invitations')) as { invitations: Invitation[] }
   return payload.invitations
@@ -175,36 +149,13 @@ export async function acceptInvitation(token: string): Promise<AcceptResult> {
 }
 
 /**
- * What the scope on a question means, in words.
- *
- * The product's claim is that a form is not a laundering mechanism — an average
- * deal size typed at signup is a Sales fact, not a company fact. Saying so at
- * the point of capture is the only place that claim is visible to the person it
- * protects.
- */
-export function scopeLabel(scope: string, department: string | null): string {
-  switch (scope) {
-    case 'L1':
-      return 'Public — this is outward-facing material'
-    case 'L2':
-      return 'Everyone in your workspace'
-    case 'L3':
-      return department
-        ? `${departmentLabel(department)} only — managers and above`
-        : 'One department only'
-    default:
-      return 'Restricted'
-  }
-}
-
-/**
  * How to name a department when the API has not supplied a label.
  *
  * Finding F13: the same department read `hr` in the API, "Hr" wherever a client
  * title-cased the key, and "People" in the dashboard nav. The endpoints that
- * matter now serve a `label` and this is the fallback for the ones that carry
- * only a key — `scopeLabel` being the last of them. Kept in step with
- * `LABELS` in `app/domain/departments.py`, which is the source.
+ * matter now serve a `label`, and this is the fallback for the one caller left
+ * that carries only a key — `DirectorPage`. Kept in step with `LABELS` in
+ * `app/domain/departments.py`, which is the source.
  */
 const DEPARTMENT_LABELS: Record<string, string> = {
   marketing: 'Marketing',

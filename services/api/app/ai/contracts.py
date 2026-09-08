@@ -112,7 +112,38 @@ class CompletionRequest:
     max_output_tokens: int = 1024
     temperature: float = 0.0
     """Zero by default. These calls are business analysis, not creative writing,
-    and a reproducible answer is worth more than a varied one."""
+    and a reproducible answer is worth more than a varied one.
+
+    **Not sent to models that reject sampling parameters.** Claude Opus 4.7 and
+    later return a 400 for `temperature`, `top_p` or `top_k` at all; Sonnet 5
+    rejects a non-default value. The provider decides — see `_accepts_sampling`
+    in `anthropic_provider.py`. The field stays because older models and the
+    scripted double still honour it, and because deleting it would silently
+    change behaviour for anything pinned to a legacy tier.
+    """
+
+    model: str | None = None
+    """Which tier runs this call. `None` means the configured default.
+
+    Set from the skill manifest, never by a caller at the call site: a skill's
+    tier is part of its definition and has to move with it, or the eval that
+    approved a skill on one tier says nothing about the tier it actually runs on.
+    """
+
+    effort: str | None = None
+    """`low` | `medium` | `high` | `xhigh` | `max`. Depth of reasoning and spend.
+
+    Also from the manifest. Cheap mechanical skills run low; synthesis runs high.
+    """
+
+    cache_system: bool = False
+    """Ask the provider to cache the system prompt.
+
+    Worth setting for any skill whose system prompt is stable across calls — a
+    skill prompt is by definition the same bytes every time, which is exactly
+    the shape prompt caching rewards. The provider applies the marker; whether
+    it actually caches depends on the prompt clearing the model's minimum.
+    """
 
     response_schema: Mapping[str, object] | None = None
     """When set, the provider asks for JSON matching this shape. Validation is

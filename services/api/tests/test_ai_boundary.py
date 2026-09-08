@@ -160,11 +160,10 @@ def test_computed_values_are_put_in_the_prompt_with_an_explicit_prohibition() ->
     Checked here because it is the difference between a model *reporting* a
     number and a model *producing* one.
     """
-    from app.ai.anthropic_provider import _system_with_grounding
+    from app.ai.anthropic_provider import _system_blocks
 
-    system = _system_with_grounding(
-        request_for(grounding={"revenue_omr": 128_400, "margin_pct": 34})
-    )
+    system = _system_blocks(request_for(grounding={"revenue_omr": 128_400, "margin_pct": 34}))
+    assert isinstance(system, str)
 
     assert "128400" in system.replace(",", "")
     assert "34" in system
@@ -173,19 +172,35 @@ def test_computed_values_are_put_in_the_prompt_with_an_explicit_prohibition() ->
 
 
 def test_a_request_with_no_grounding_is_left_alone() -> None:
-    from app.ai.anthropic_provider import _system_with_grounding
+    from app.ai.anthropic_provider import _system_blocks
 
-    assert _system_with_grounding(request_for()) == "You are a test."
+    assert _system_blocks(request_for()) == "You are a test."
 
 
 def test_grounding_is_ordered_so_the_prompt_is_reproducible() -> None:
     """Two identical requests must produce byte-identical prompts, or the
     prompt version recorded in `generation` means nothing."""
-    from app.ai.anthropic_provider import _system_with_grounding
+    from app.ai.anthropic_provider import _system_blocks
 
-    a = _system_with_grounding(request_for(grounding={"b": 2, "a": 1}))
-    b = _system_with_grounding(request_for(grounding={"a": 1, "b": 2}))
+    a = _system_blocks(request_for(grounding={"b": 2, "a": 1}))
+    b = _system_blocks(request_for(grounding={"a": 1, "b": 2}))
     assert a == b
+
+
+def test_grounding_sits_after_the_cache_breakpoint_not_inside_it() -> None:
+    """The stable half is cached; the per-call half must not be.
+
+    Caching is a prefix match. One block holding both would write a new entry on
+    every request and read none — paying the premium forever for no hit.
+    """
+    from app.ai.anthropic_provider import _system_blocks
+
+    blocks = _system_blocks(request_for(grounding={"pages": 47}, cache_system=True))
+    assert isinstance(blocks, list) and len(blocks) == 2
+    assert blocks[0]["text"] == "You are a test."
+    assert blocks[0]["cache_control"] == {"type": "ephemeral"}
+    assert "47" in blocks[1]["text"]
+    assert "cache_control" not in blocks[1]
 
 
 # ── Vendor errors are mapped, never leaked ────────────────────

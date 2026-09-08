@@ -30,16 +30,54 @@ from app.auth.csrf import require_csrf
 from app.auth.workspaces import find_verified_workspace_for_domain
 from app.db import _unscoped_session
 from app.deps import CurrentScope, CurrentSession, require_executive_surface
+from app.domain.departments import label_for
 from app.domain.invitations import may_administer
 from app.domain.membership import UserAlreadyInAWorkspaceError
 from app.domain.registration import JoinRequestState
-from app.domain.scopes import Role
+from app.domain.scopes import Department, Role
 from app.domain.session import ScopedSession
 from app.logging import get_logger
 from app.retrieval.scoped import apply_user_scope, scoped_connection
 
 router = APIRouter(tags=["companies"])
 log = get_logger(__name__)
+
+
+class DepartmentChoiceOut(BaseModel):
+    """One department a person may say they sit in."""
+
+    value: str
+    label: str
+    """How to name it on screen. **Served rather than derived.**
+
+    Finding F13 is the whole reason this endpoint exists instead of a list in
+    the browser: the same department was `hr` in the API, "Hr" in an onboarding
+    checkbox and "People" in the dashboard nav, because each surface
+    title-cased the enum value itself. `DepartmentOut` in `spine.py` already
+    says this — but that endpoint is workspace-scoped, and the company form asks
+    the question *before* a workspace exists, so it cannot be the source here.
+    """
+
+
+@router.get("/departments", response_model=list[DepartmentChoiceOut])
+async def list_departments() -> list[DepartmentChoiceOut]:
+    """The department catalogue, for a form that has no workspace yet.
+
+    Unauthenticated, and deliberately so. It is a fixed list of seven English
+    nouns — the same seven the marketing site names — with no tenant data in it
+    and nothing to leak. Requiring a scope would be worse than pointless:
+    `/register-company` runs *between* signing up and having a workspace, which
+    is precisely the window in which no scope exists.
+
+    Includes `executive` ("Chief of Staff"). Selecting a workspace's departments
+    excludes it because it is derived rather than chosen (see
+    `domain/departments`), but a person can absolutely sit in the executive
+    function and should be able to say so. This answers "where do you work",
+    not "which dashboards exist".
+    """
+    return [
+        DepartmentChoiceOut(value=d.value, label=label_for(d)) for d in Department
+    ]
 
 ExecutiveScope = Annotated[ScopedSession, Depends(require_executive_surface)]
 
@@ -64,7 +102,24 @@ class RegisterCompanyRequest(BaseModel):
     # and neither is settable from this request — the creator is `owner` by
     # construction and an invitee's role is set by whoever invited them.
     designation: str | None = Field(default=None, max_length=120)
-    department: str | None = Field(default=None, max_length=120)
+    department: Department | None = None
+    """A `Department` member, not free text.
+
+    **An unrecognised value silently disabled the whole department scoping.**
+    `askable_fields` treats anything it does not recognise as "no department
+    said" and offers all 31 fields — deliberately, so a typo cannot empty the
+    catalogue — which means a bad value here reproduces the exact round-1
+    behaviour the narrowing was built to remove, with no error anywhere.
+
+    An audit hit it by sending the *label* `"Operations"` where the key
+    `operations` was wanted, and a Head of Operations was then led with Finance
+    questions. `hr` / "Hr" / "People" is the same drift recorded as finding F13.
+    The form sends the key today; this is what stops the next consumer, cached
+    bundle or seeded row from reintroducing it.
+
+    Pydantic rejects anything else with a 422 naming the field, which is the
+    loud failure the silent one deserves.
+    """
     # `doc/11` Q8's escape hatch. Two genuinely different businesses can share a
     # domain — an agency and its trading arm, a group with one website — so a
     # second registration is possible and must be **explicitly confirmed**.
@@ -96,7 +151,9 @@ async def register_company(payload: RegisterCompanyRequest, session: CurrentSess
                     name=payload.name.strip(),
                     website_url=payload.website_url,
                     designation=payload.designation,
-                    department=payload.department,
+                    # `.value`, so the column keeps the key the catalogue
+                    # matches on rather than `Department.HR`'s repr.
+                    department=payload.department.value if payload.department else None,
                 ),
                 allow_duplicate=payload.confirm_separate_company,
             )

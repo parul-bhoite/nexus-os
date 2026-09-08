@@ -1,0 +1,147 @@
+{
+  "type": "object",
+  "properties": {
+    "profile": {
+      "type": "object",
+      "properties": {
+        "found": {
+          "type": "boolean"
+        },
+        "value": {
+          "type": "string"
+        },
+        "confidence": {
+          "type": "string",
+          "enum": [
+            "read",
+            "inferred"
+          ]
+        },
+        "source": {
+          "type": "string"
+        },
+        "reasoning": {
+          "type": "string"
+        },
+        "missing": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "found"
+      ],
+      "additionalProperties": false
+    },
+    "products_services": {
+      "type": "object",
+      "properties": {
+        "found": {
+          "type": "boolean"
+        },
+        "value": {
+          "type": "string"
+        },
+        "confidence": {
+          "type": "string",
+          "enum": [
+            "read",
+            "inferred"
+          ]
+        },
+        "source": {
+          "type": "string"
+        },
+        "reasoning": {
+          "type": "string"
+        },
+        "missing": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "found"
+      ],
+      "additionalProperties": false
+    },
+    "brand_voice": {
+      "type": "object",
+      "properties": {
+        "found": {
+          "type": "boolean"
+        },
+        "value": {
+          "type": "string"
+        },
+        "confidence": {
+          "type": "string",
+          "enum": [
+            "read",
+            "inferred"
+          ]
+        },
+        "source": {
+          "type": "string"
+        },
+        "reasoning": {
+          "type": "string"
+        },
+        "missing": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "found"
+      ],
+      "additionalProperties": false
+    },
+    "technology_seen": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "evidence"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "could_not_determine": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string"
+          },
+          "why": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "topic",
+          "why"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "pages_read": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "profile",
+    "products_services",
+    "brand_voice",
+    "could_not_determine",
+    "pages_read"
+  ],
+  "additionalProperties": false
+}

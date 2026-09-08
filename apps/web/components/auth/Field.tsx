@@ -20,6 +20,7 @@ export function Field({
   disabled,
   placeholder,
   revealable,
+  options,
 }: {
   label: string
   /**
@@ -28,7 +29,7 @@ export function Field({
    * duplicating this component to say so would have meant two places to fix the
    * `aria-describedby` reasoning below.
    */
-  type?: 'email' | 'password' | 'text' | 'url'
+  type?: 'email' | 'password' | 'text' | 'url' | 'tel'
   value: string
   onChange: (value: string) => void
   /** Optional: only credential fields have a meaningful autofill token. */
@@ -38,6 +39,20 @@ export function Field({
   disabled?: boolean
   placeholder?: string
   revealable?: boolean
+  /**
+   * Render a `<select>` over these instead of a text input.
+   *
+   * Here rather than in a second component so that the label, the hint, the
+   * `role="alert"` error and the `aria-describedby` reasoning below have one
+   * implementation. A `SelectField` copy would be a second place for the
+   * describedby bug this component's comment documents.
+   *
+   * `placeholder` becomes the empty first option, which is how a `<select>`
+   * expresses "nothing chosen" — an optional field has to be able to stay
+   * unanswered, and a select with no empty option silently answers it with
+   * whatever happens to be first.
+   */
+  options?: { value: string; label: string }[]
 }) {
   const id = useId()
   const [revealed, setRevealed] = useState(false)
@@ -57,22 +72,65 @@ export function Field({
       </label>
 
       <div className="relative mt-1.5">
-        <input
-          id={id}
-          type={inputType}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          autoComplete={autoComplete}
-          disabled={disabled}
-          placeholder={placeholder}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={describedById}
-          className={`h-12 w-full rounded-xl border bg-white px-4 text-[0.95rem] text-ink-900 shadow-paper outline-none transition-colors placeholder:text-ink-300 disabled:bg-bone-100 disabled:text-ink-500 ${
-            error
-              ? 'border-clay-500 focus:border-clay-500 focus:ring-2 focus:ring-clay-200'
-              : 'border-ink-200 focus:border-steel-500 focus:ring-2 focus:ring-steel-200'
-          } ${revealable ? 'pr-20' : ''}`}
-        />
+        {options ? (
+          <select
+            id={id}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            disabled={disabled}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={describedById}
+            // `appearance-none` plus an explicit chevron: the native control
+            // renders at its own height and font on every platform, which next
+            // to these inputs reads as a different form. No `pr-20` branch —
+            // `revealable` is a password affordance and cannot apply here.
+            className={`h-12 w-full appearance-none rounded-xl border bg-white px-4 pr-10 text-[0.95rem] shadow-paper outline-none transition-colors disabled:bg-bone-100 disabled:text-ink-500 ${
+              value ? 'text-ink-900' : 'text-ink-300'
+            } ${
+              error
+                ? 'border-clay-500 focus:border-clay-500 focus:ring-2 focus:ring-clay-200'
+                : 'border-ink-200 focus:border-steel-500 focus:ring-2 focus:ring-steel-200'
+            }`}
+          >
+            <option value="">{placeholder ?? 'Select…'}</option>
+            {options.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            id={id}
+            type={inputType}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            autoComplete={autoComplete}
+            disabled={disabled}
+            placeholder={placeholder}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={describedById}
+            className={`h-12 w-full rounded-xl border bg-white px-4 text-[0.95rem] text-ink-900 shadow-paper outline-none transition-colors placeholder:text-ink-300 disabled:bg-bone-100 disabled:text-ink-500 ${
+              error
+                ? 'border-clay-500 focus:border-clay-500 focus:ring-2 focus:ring-clay-200'
+                : 'border-ink-200 focus:border-steel-500 focus:ring-2 focus:ring-steel-200'
+            } ${revealable ? 'pr-20' : ''}`}
+          />
+        )}
+
+        {options ? (
+          <svg
+            aria-hidden
+            viewBox="0 0 20 20"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            className="pointer-events-none absolute inset-y-0 right-3.5 my-auto h-4 w-4 text-ink-400"
+          >
+            <path d="M6 8l4 4 4-4" />
+          </svg>
+        ) : null}
 
         {revealable ? (
           <button

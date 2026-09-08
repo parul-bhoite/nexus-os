@@ -18,6 +18,7 @@ Three caps, all required by doc 06 §1.2:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Final
 from urllib.parse import urlsplit
 
 import httpx
@@ -58,11 +59,24 @@ class FetchedPage:
     truncated: bool = False
 
 
+CONNECT_TIMEOUT_SECONDS: Final = 4.0
+"""Separate from the read timeout, and much shorter.
+
+`httpx.Timeout(n)` sets every phase to `n`, so an unreachable host held a slot
+for the full page timeout. The two deserve different patience: a server taking
+twelve seconds to render a page is slow, and worth waiting for; a host that has
+not completed a TCP and TLS handshake in four seconds is not answering, and
+waiting longer only adds up. It added up most on the sites that need the crawl
+to be forgiving — a company on plain HTTP pays this once per scheme before the
+fallback even begins.
+"""
+
+
 def _client(timeout: float) -> httpx.AsyncClient:
     return httpx.AsyncClient(
         # Redirects are followed by hand so each hop can be re-validated.
         follow_redirects=False,
-        timeout=httpx.Timeout(timeout),
+        timeout=httpx.Timeout(timeout, connect=CONNECT_TIMEOUT_SECONDS),
         headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"},
         # No cookies: nothing about this fetch should carry state between hops
         # or between targets.

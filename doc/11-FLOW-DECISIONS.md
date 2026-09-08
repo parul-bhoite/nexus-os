@@ -25,7 +25,7 @@ questions you are good") · **⚠ needs one line of clarification**
 | 6 | ★ **Email and password at MVP. Google sign-in comes after.** | So password reset is genuinely required at MVP (Q10) |
 | 7 | ★ **Verification email goes to the person signing up, sent over SMTP.** | **D4 resolved: SMTP, not a provider API.** `Mailer` gains an `SmtpMailer` driver beside `FileMailer`; `FileMailer` stays for local development. ⚠ Whether verification *blocks* the flow is still open — see §5.1 |
 | 8 | ★ **Offer "request to join".** | When the email domain already has a workspace, the primary action is a join request; "create a separate company" is secondary. The request needs an approval surface for that workspace's Owner |
-| 9 | ★ **No — one person belongs to one company.** | **This reverses doc 07 M1's agency case.** Consequences in §3.2 |
+| 9 | ★ ~~**No — one person belongs to one company.**~~ **Superseded by ADR 0026** | Reversed doc 07 M1's agency case; ADR 0026 reverses it back and builds multi-entity at MVP. Consequences in §3.2's banner |
 | 10 | ★ **Password reset is in MVP.** | Same token machinery as verification |
 | 11 | ⚠ Session length — see §5.2 | "Forty-five days" was said; it is unclear whether that referred to the session or the trial |
 
@@ -38,7 +38,7 @@ questions you are good") · **⚠ needs one line of clarification**
 | 14 | ★ **Gate the exclusive domain claim, invitations and company-data tools — not workspace existence.** | **D19 resolved.** The workspace is created immediately, unverified. `create_workspace_for_claim` splits into `create_workspace` + `attach_verified_claim` |
 | 15 | ★ **Allow a mismatch between website domain and signup email domain.** | They lose the EMAIL verification method; DNS TXT or file-at-path only |
 | 16 | ★ **One registered domain per company — the company's main URL.** | Additional URLs **may be added** and are crawled as part of research, but they are not identity and cannot be verified. So: `workspace.domain` stays singular and verifiable; a separate `workspace_url` list feeds the crawler |
-| 17 | ✓ **No — a user cannot create more than one company.** | *Recommendation reversed by Q9.* One user, one company, one workspace |
+| 17 | ✓ ~~**No — a user cannot create more than one company.**~~ **Superseded by ADR 0026** | *Recommendation reversed by Q9, then reinstated:* multi-entity is built at MVP. See §3.2's banner |
 | 18 | ✓ Trial then read-only, nothing deleted | ⚠ Length pending §5.2 |
 
 ## Stages 3–10 and cross-cutting — recommendations accepted
@@ -150,6 +150,14 @@ first-value moment.** That raises the stakes on stage 7 finishing quickly, which
 why the crawl starts at stage 2 and documents parse as they upload.
 
 ### 3.2 One person, one company — the M:N reversal
+
+> ⚠ **Superseded on 9 September 2026 by ADR 0026** — multi-entity workspaces are built
+> at MVP after all. Q9, Q17 and this section's post-MVP deferral are reversed. The
+> schema decision below still holds and is what makes the reversal affordable:
+> `membership` was kept many-to-many, so nothing needs migrating. What comes back is the
+> switcher, `POST /auth/workspace`, work item H6 — and **I5's
+> cache-invalidation-on-switch**, which the deletion below retired. Read ADR 0026 before
+> acting on anything in this section.
 
 Q9 reverses doc 07 M1's *"many-to-many user↔workspace (agency case)"*.
 

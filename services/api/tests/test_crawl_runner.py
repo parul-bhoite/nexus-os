@@ -119,3 +119,89 @@ async def test_a_spent_time_budget_stops_before_fetching(
 
     assert outcome.pages == []
     assert outcome.state is SourceState.FAILED, "nothing read is not a success"
+
+
+# ── HTTPS is a preference, not a requirement ──────────────────
+#
+# Found in the field: a customer registered `prosoftinformatics.com`, which
+# serves plain HTTP and refuses 443. Every caller builds `https://`, so the
+# crawl reached nothing and the founder was told "we could not read any pages on
+# your website" about a site that was up and serving.
+
+
+async def test_a_site_with_no_https_is_read_over_http(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(runner, "fetch_page", _serving({"http://example.om": RICH}))
+
+    outcome = await runner.crawl_site([SITE])
+
+    assert outcome.state is SourceState.SUCCEEDED
+    assert [page["url"] for page in outcome.pages] == ["http://example.om"]
+
+
+async def test_https_is_tried_first_and_http_is_not_used_when_it_works(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The fallback must not become a downgrade on every crawl."""
+    asked: list[str] = []
+
+    async def fake(url: str, **_: object) -> object:
+        asked.append(url)
+        if url != SITE:
+            raise FetchError("Not found.")
+
+        class Page:
+            html = RICH
+
+        return Page()
+
+    monkeypatch.setattr(runner, "fetch_page", fake)
+    outcome = await runner.crawl_site([SITE])
+
+    assert outcome.state is SourceState.SUCCEEDED
+    assert not [url for url in asked if url.startswith("http://")]
+
+
+async def test_a_reachable_javascript_shell_is_not_downgraded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A shell means the host answered. Retrying over HTTP would prove nothing."""
+    asked: list[str] = []
+
+    async def fake(url: str, **_: object) -> object:
+        asked.append(url)
+        if url != SITE:
+            raise FetchError("Not found.")
+
+        class Page:
+            html = SHELL
+
+        return Page()
+
+    monkeypatch.setattr(runner, "fetch_page", fake)
+    outcome = await runner.crawl_site([SITE])
+
+    assert outcome.state is SourceState.JS_RENDERED
+    assert not [url for url in asked if url.startswith("http://")]
+
+
+async def test_a_same_host_link_follows_the_scheme_that_works(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An HTTP-only site still writes `https://` into its own navigation.
+
+    Following those verbatim spends one guaranteed failure per link on a host
+    whose HTTPS has already been shown unreachable.
+    """
+    home = f"<html><body><a href='{SITE}/about'>About</a>{RICH}</body></html>"
+    monkeypatch.setattr(
+        runner,
+        "fetch_page",
+        _serving({"http://example.om": home, "http://example.om/about": RICH}),
+    )
+
+    outcome = await runner.crawl_site([SITE])
+
+    assert {page["url"] for page in outcome.pages} == {
+        "http://example.om",
+        "http://example.om/about",
+    }

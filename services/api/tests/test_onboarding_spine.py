@@ -104,6 +104,11 @@ def _owner_scope(user: UUID, ws: UUID) -> ScopedSession:
 
 async def _cleanup(db: AsyncSession, user: UUID, ws: UUID) -> None:
     await db.execute(sa.text("SELECT set_config('nexus.workspace_id', :w, true)"), {"w": str(ws)})
+    # Same leak as the agent suite: the tenant outlives the workspace unless
+    # it is read before the row pointing at it is removed.
+    tenant = (
+        await db.execute(sa.text("SELECT tenant_id FROM workspace WHERE id = :w"), {"w": str(ws)})
+    ).scalar_one_or_none()
     for statement in (
         "DELETE FROM onboarding_progress WHERE workspace_id = :w",
         "DELETE FROM workspace_department WHERE workspace_id = :w",
@@ -114,6 +119,8 @@ async def _cleanup(db: AsyncSession, user: UUID, ws: UUID) -> None:
     ):
         await db.execute(sa.text(statement), {"w": str(ws)})
     await db.execute(sa.text("DELETE FROM app_user WHERE id = :u"), {"u": str(user)})
+    if tenant is not None:
+        await db.execute(sa.text("DELETE FROM tenant WHERE id = :t"), {"t": str(tenant)})
     await db.commit()
 
 

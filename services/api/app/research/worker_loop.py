@@ -13,6 +13,7 @@ rather than nothing for four minutes and then everything.
 
 from __future__ import annotations
 
+import json
 from typing import Final
 from uuid import UUID
 
@@ -60,16 +61,29 @@ async def _record(
     source stays `running` forever, the run never finishes, and there is nothing
     in any log. Found exactly that way.
     """
+    # What was read, not just that reading happened.
+    #
+    # `result_json` existed from 0014 and nothing ever wrote it, so a completed
+    # run left twenty fetched pages in memory and a row saying `succeeded` —
+    # the deep research the founder was promised produced a green tick and no
+    # material. Keeping the text is what lets the Brain be built from it later,
+    # and what makes a claim in the Brain traceable to a page after the fact.
+    payload = (
+        json.dumps({"pages": outcome.pages, "js_rendered_urls": outcome.js_rendered_urls})
+        if outcome.pages or outcome.js_rendered_urls
+        else None
+    )
     await apply_workspace_scope(db, workspace_id)
     await db.execute(
         text(
             "UPDATE research_source"
-            "   SET state = :s, error_reason = :e, finished_at = now()"
+            "   SET state = :s, error_reason = :e, finished_at = now(), result_json = :p"
             " WHERE run_id = :r AND kind = :k"
         ),
         {
             "s": outcome.state.value,
             "e": outcome.error_reason,
+            "p": payload,
             "r": str(run_id),
             "k": kind.value,
         },

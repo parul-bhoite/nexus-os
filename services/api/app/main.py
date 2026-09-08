@@ -11,8 +11,9 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
 from app.config import Env, get_settings
-from app.db import get_engine
+from app.db import get_engine, warm_pool
 from app.health import router as health_router
+from app.http_limits import BodySizeLimit
 from app.jobs.scheduler import build_scheduler
 from app.logging import configure_logging, get_logger, request_id_var
 from app.routes.audit import router as audit_router
@@ -22,6 +23,7 @@ from app.routes.dashboards import router as dashboards_router
 from app.routes.documents import router as documents_router
 from app.routes.files import router as files_router
 from app.routes.onboarding import router as onboarding_router
+from app.routes.onboarding_agent import router as onboarding_agent_router
 from app.routes.research import router as research_router
 from app.routes.review import router as review_router
 from app.routes.setup import router as setup_router
@@ -63,6 +65,13 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             "the application role cannot see another company's row (ADR 0018). "
             "Run db/bootstrap.sql to create the role, then set the second URL."
         )
+
+    # Fill the pool before the first request rather than during it. A
+    # connection costs ~7s to establish against a remote database, so without
+    # this the slowest requests the application ever serves are the ones made
+    # immediately after it starts — and it never raises, because a database
+    # that is down must not stop `/health` from coming up to say so.
+    await warm_pool()
 
     # **Off unless this process is the worker** (`NEXUS_RUN_SCHEDULER`).
     #
@@ -113,6 +122,17 @@ def create_app() -> FastAPI:
         redoc_url=None,
         openapi_url="/openapi.json" if settings.docs_enabled else None,
     )
+
+    # Outermost of the two, so a body over the ceiling is refused before the
+    # request id is minted and before anything reads it. `add_middleware`
+    # inserts at the front of the user stack and the last one added runs
+    # outermost, so this line must stay *below* `request_context` to sit above
+    # it at runtime — which reads backwards and is why it is said out loud.
+    #
+    # A refusal from here therefore carries no `x-request-id`. That is the
+    # trade: correlating a 413 matters less than not buffering the body that
+    # earned it, and the log line above records the path and the size.
+    app.add_middleware(BodySizeLimit)
 
     @app.middleware("http")
     async def request_context(
@@ -195,6 +215,7 @@ def create_app() -> FastAPI:
     app.include_router(companies_router)
     app.include_router(audit_router)
     app.include_router(onboarding_router)
+    app.include_router(onboarding_agent_router)
     app.include_router(documents_router)
     app.include_router(files_router)
     app.include_router(research_router)

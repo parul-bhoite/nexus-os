@@ -1,0 +1,29 @@
+name = "persona-builder"
+version = "2"
+description = "Assemble a presentation persona, every field citing the answer that produced it."
+model = "claude-sonnet-5"
+effort = "high"
+# 8192, matching the other `effort = "high"` assembly stage rather than the
+# medium-effort skills this used to sit beside at 2048.
+#
+# On this model the reasoning budget and the answer come out of the *same*
+# allowance, so a high-effort skill with a small one spends it all thinking and
+# is cut off before it writes a character of JSON. That is exactly what
+# happened: `stop_reason=max_tokens`, `output_tokens=2048`, twice — the runner
+# retries an identical request, so it failed the same way both times — and the
+# journey 502'd at the persona stage every single run, ~40s of Sonnet spent to
+# produce nothing. Onboarding could not complete at all.
+#
+# The persona itself is a few hundred tokens; this ceiling is headroom for the
+# thinking in front of it and costs nothing when it is not used.
+max_output_tokens = 8192
+cache_system = true
+requires_grounding = ["answers", "company_profile", "persona_fields"]
+writes = [
+  "persona.stated_purpose",
+  "persona.priority_topics",
+  "persona.communication_style",
+  "persona.language",
+  "persona.default_landing_screen",
+]
+tags = ["onboarding", "persona"]

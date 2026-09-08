@@ -1,0 +1,35 @@
+{
+  "type": "object",
+  "properties": {
+    "done": {
+      "type": "boolean"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "question": {
+      "type": "string",
+      "minLength": 1
+    },
+    "target": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rationale": {
+      "type": "string"
+    },
+    "choices": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "quotes_previous": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "done"
+  ],
+  "additionalProperties": false
+}

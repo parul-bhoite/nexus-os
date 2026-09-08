@@ -1,0 +1,15 @@
+name = "company-research"
+version = "1"
+description = "Read a company's public web presence and report only what is on the page."
+model = "claude-sonnet-5"
+effort = "high"
+max_output_tokens = 4096
+cache_system = true
+timeout_seconds = 120
+requires_grounding = ["domain", "pages"]
+writes = [
+  "brain.profile",
+  "brain.products_services",
+  "brain.brand_voice",
+]
+tags = ["onboarding", "research"]

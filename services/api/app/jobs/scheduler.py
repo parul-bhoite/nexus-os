@@ -38,6 +38,15 @@ minutes, not hours - and a pass with nothing to do costs one indexed query."""
 
 EMBEDDING_BATCH = 64
 
+RESEARCH_INTERVAL_MINUTES = 1
+"""Short, because a founder is watching.
+
+The run is enqueued the moment their company is created and its results feed the
+Company Brain at the end of onboarding — a sweep on a long interval would mean
+the interview routinely finishes first and the Brain is built from the three
+pages the foreground read. A pass with nothing queued costs one indexed query.
+"""
+
 
 async def _expiry_job() -> None:
     try:
@@ -45,6 +54,28 @@ async def _expiry_job() -> None:
             await run_expiry_sweep(db, jobs_db)
     except Exception as exc:
         log.warning("expiry.sweep.failed", error=type(exc).__name__)
+
+
+async def _research_job() -> None:
+    """Claim and finish one queued research run.
+
+    The last link in a chain that was otherwise complete. `process_one_run`
+    was written, tested and reachable, and nothing scheduled it — so a run
+    enqueued at company registration sat `queued` forever. Company creation
+    inserted the run, the sources were added, the worker loop knew how to drain
+    them, and no clock ever called it. Nothing errored; the queue simply grew.
+
+    One run per tick, not a drain loop. `process_one_run` claims a single run
+    without two workers taking the same one, and finishing one run per minute is
+    both enough for the signup rate this product has and a natural cap on how
+    much crawling happens at once.
+    """
+    from app.research.worker_loop import process_one_run
+
+    async with jobs_session() as db:
+        run_id = await process_one_run(db)
+    if run_id is not None:
+        log.info("research.run_finished", run_id=str(run_id))
 
 
 async def _embedding_job() -> None:
@@ -109,6 +140,15 @@ def build_scheduler() -> AsyncIOScheduler:
         # Explicit for the same reason as above: omitting it would be fine, but
         # `None` would silently mean paused, and that mistake has already been
         # made once in this file.
+        next_run_time=datetime.now(UTC) + FIRST_RUN_DELAY,
+    )
+    scheduler.add_job(
+        _research_job,
+        trigger=IntervalTrigger(minutes=RESEARCH_INTERVAL_MINUTES),
+        id="research_runs",
+        name="Drain queued company research runs",
+        max_instances=1,
+        coalesce=True,
         next_run_time=datetime.now(UTC) + FIRST_RUN_DELAY,
     )
     return scheduler

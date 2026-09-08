@@ -402,3 +402,71 @@ async def test_an_unverified_duplicate_does_not_block_registration(app_db: None)
         finally:
             for user, created in ((first, a), (second, b)):
                 await _cleanup(db, user=user, workspace=created.workspace_id if created else None)
+
+
+async def test_the_department_catalogue_matches_the_enum_and_carries_labels() -> None:
+    """The company form's dropdown, served rather than hardcoded.
+
+    Two things asserted together because they fail apart:
+
+    **Every department is offered, including `executive`.** Choosing a
+    *workspace's* departments excludes it — Chief of Staff is derived rather
+    than selected — but a person can sit in the executive function and must be
+    able to say so. This endpoint answers "where do you work", not "which
+    dashboards exist", and it is the only place those two questions have
+    different answers.
+
+    **Every label comes from `label_for`, not from the key.** Finding F13 was
+    `hr` rendered as "Hr" on one surface and "People" on another, because each
+    surface title-cased the enum itself. `hr -> People` is checked by name
+    because it is the pair that proves the label is served: a client deriving
+    it cannot produce "People", and `.title()` cannot either.
+    """
+    from app.domain.departments import label_for
+    from app.domain.scopes import Department
+    from app.routes.companies import list_departments
+
+    offered = await list_departments()
+
+    assert [d.value for d in offered] == [d.value for d in Department]
+    assert all(d.label == label_for(Department(d.value)) for d in offered)
+
+    labels = {d.value: d.label for d in offered}
+    assert labels["hr"] == "People"
+    assert labels["executive"] == "Chief of Staff"
+    # The failure mode this replaces, stated so it cannot creep back.
+    assert "Hr" not in labels.values()
+
+
+def test_a_department_that_is_not_a_department_is_refused() -> None:
+    """R4. An unrecognised value silently disabled the whole scoping.
+
+    `askable_fields` treats anything it does not recognise as "nobody said" and
+    offers all 31 fields — deliberately, so a typo cannot leave the interview
+    with nothing to ask. The cost is that a *bad* value reproduces the exact
+    pre-narrowing behaviour with no error anywhere. An audit sent the label
+    `"Operations"` where the key `operations` was wanted, and a Head of
+    Operations was led with Finance questions.
+
+    Pydantic is the boundary: the field is the enum, so anything else is a 422
+    naming it rather than a row nobody notices.
+    """
+    import pytest
+    from pydantic import ValidationError
+
+    from app.domain.scopes import Department
+    from app.routes.companies import RegisterCompanyRequest
+
+    ok = RegisterCompanyRequest(name="Maersk", website_url="maersk.com", department="operations")
+    assert ok.department is Department.OPERATIONS
+
+    # The label, which is what actually went wrong.
+    with pytest.raises(ValidationError):
+        RegisterCompanyRequest(name="Maersk", website_url="maersk.com", department="Operations")
+    with pytest.raises(ValidationError):
+        RegisterCompanyRequest(name="Maersk", website_url="maersk.com", department="People")
+    with pytest.raises(ValidationError):
+        RegisterCompanyRequest(name="Maersk", website_url="maersk.com", department="Design")
+
+    # Absent stays legal — the field is optional and always was.
+    assert RegisterCompanyRequest(name="Maersk", website_url="maersk.com").department is None

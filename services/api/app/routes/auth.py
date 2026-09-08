@@ -63,6 +63,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH)
     display_name: str | None = Field(default=None, max_length=200)
+    phone: str | None = Field(default=None, max_length=32)
 
 
 class LoginRequest(BaseModel):
@@ -229,6 +230,7 @@ async def register(
                 email=payload.email,
                 password=payload.password,
                 display_name=payload.display_name,
+                phone=payload.phone,
             )
             issued = await issue_verification(db, user_id=user_id, email=payload.email)
             await db.commit()

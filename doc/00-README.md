@@ -21,6 +21,7 @@ Version 0.9 (Draft for review) · 16 August 2026 · Parul Bhoite
 | `10-FLOW-QUESTIONS.md` | **The interrogation** — 71 questions across the eleven stages, each with a recommendation. Historical; the answers are in doc 11 | Understanding why a decision went the way it did |
 | `11-FLOW-DECISIONS.md` | **The answer record** — every flow decision, the consequences of each reversal, the preserved capability list, and the four items still open. **Authoritative** | Building anything user-facing |
 | `12-IMPLEMENTATION-PLAN.md` | **The executable plan** — twenty-two phases, each with a build list, a do-not-build list, tests-first, and an acceptance test. Supersedes `VISION-AND-PLAN.md` §6 | Executing a phase |
+| `13-DASHBOARD-DESIGN.md` | **The dashboard, the settings portal and the agents** (v2, 9 Sep 2026) — information architecture for all seven directors (sections, blocks, seven render states, what every domain can honestly show on day one with no connector, the Watchlist, the finding primitive); the fourteen-panel settings portal and why it holds the dashboard's denominators; the tool ledger — every tool, what it unlocks, what it cannot answer; and every director as a skill on the existing skill runtime. Four decisions taken (ADR 0023–0026), nine still owed, nine defects found | Designing or building the dashboard, settings, connectors or the directors |
 | `NEXUS-OS-Solution-Overview.pptx` | **Executive deck** (20 slides) — opportunity, solution, capability, trust model, architecture, business model, roadmap, risks, next steps *(now in `doc/exports/`)* | Presenting to stakeholders |
 
 ## Folder map
@@ -28,7 +29,7 @@ Version 0.9 (Draft for review) · 16 August 2026 · Parul Bhoite
 | Folder | Contents |
 |---|---|
 | `doc/` | The eight specification documents, in Markdown. **Canonical** |
-| `doc/adr/` | Architecture decision records, `0001`–`0012` |
+| `doc/adr/` | Architecture decision records, `0001`–`0026` |
 | `doc/exports/` | `.docx` and `.pptx` renderings of the specs, for sharing. **Generated — do not edit; the `.md` is the source** |
 | `doc/source/` | The four supplied documents these specs derive from |
 | `doc/prototype/` | The interactive prototype and its notes, plus the v2 dashboard mock and tools sheet. Doc 08 was extracted from these |

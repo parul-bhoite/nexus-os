@@ -74,18 +74,30 @@ async def app_db(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
 
 @requires_db
 @pytest.mark.parametrize(
-    ("guc", "expected"),
+    ("guc", "expected_ms"),
     [
-        ("statement_timeout", "15s"),
-        ("lock_timeout", "5s"),
-        ("idle_in_transaction_session_timeout", "30s"),
+        ("statement_timeout", 15_000),
+        ("lock_timeout", 5_000),
+        ("idle_in_transaction_session_timeout", 180_000),
     ],
 )
-async def test_the_server_has_the_timeout_applied(guc: str, expected: str, app_db: None) -> None:
-    """`SHOW` reports what the session actually has, not what we asked for."""
+async def test_the_server_has_the_timeout_applied(guc: str, expected_ms: int, app_db: None) -> None:
+    """The session actually has it, not merely that we asked for it.
+
+    Read from `pg_settings`, which reports the value in the setting's base unit
+    — milliseconds for all three — rather than from `SHOW`, which renders it for
+    a human and **normalises the units while doing so**. That is not a
+    hypothetical: raising the idle timeout from `30s` to `180s` made `SHOW`
+    return `3min`, and this test failed on a change that was entirely correct.
+    A test that breaks when nothing broke teaches people to edit the test.
+    """
     async with _unscoped_session() as session:
-        value = (await session.execute(text(f"SHOW {guc}"))).scalar_one()
-    assert value == expected
+        value = (
+            await session.execute(
+                text("SELECT setting FROM pg_settings WHERE name = :guc"), {"guc": guc}
+            )
+        ).scalar_one()
+    assert int(value) == expected_ms
 
 
 @requires_db
@@ -160,7 +172,12 @@ def test_the_transaction_pooler_is_an_explicit_setting() -> None:
     concurrency, which is the hardest possible way to find out.
     """
     assert "db_transaction_pooler" in Settings.model_fields
-    assert Settings(_env_file=None, env=Env.local).db_transaction_pooler is False
+    # `_env_file` is a real pydantic-settings argument that its generated
+    # `__init__` signature does not advertise, so `--strict` cannot see it.
+    # Kept because dropping it would let a developer's `.env` decide the
+    # assertion — which is the opposite of what this test is for.
+    settings = Settings(_env_file=None, env=Env.local)  # type: ignore[call-arg]
+    assert settings.db_transaction_pooler is False
 
 
 @pytest.mark.parametrize("pooled", [True, False])
@@ -199,6 +216,190 @@ def test_a_pooler_hostname_alone_no_longer_changes_behaviour(
         cache.cache_clear()
     try:
         assert not isinstance(get_engine().pool, NullPool)
+    finally:
+        for cache in (get_settings, get_engine, get_sessionmaker):
+            cache.cache_clear()
+
+
+def test_the_idle_timeout_outlasts_the_slowest_model_call() -> None:
+    """The idle-in-transaction limit must exceed the work done inside one.
+
+    Not a style rule — this is a defect that already happened. `scoped_connection`
+    wraps a whole handler in one transaction, and onboarding's handlers then wait
+    tens of seconds on a model with that transaction sitting idle. At the old
+    30s, a `/read` that spent 27.7s in `company-research` and 8.0s in
+    `company-summary` had its connection closed by Postgres before it could write:
+    `InterfaceError: connection is closed`, a 500, and two model calls paid for
+    and thrown away.
+
+    Asserted against the *skills' own* declared timeouts rather than a number
+    typed twice, so raising a skill's `timeout_seconds` past the database's
+    patience fails here instead of in production. The real fix is to stop holding
+    a transaction across a provider call at all; until then this is the coupling,
+    and it is better written down than remembered.
+    """
+    from app.ai.runtime.skills import SkillRegistry
+    from app.config import get_settings
+
+    idle = get_settings().db_idle_in_transaction_timeout
+    assert idle.endswith("s"), f"expected a seconds value, got {idle!r}"
+    idle_seconds = float(idle.removesuffix("s"))
+
+    registry = SkillRegistry().load()
+    slowest = max(
+        (registry.get(name).timeout_seconds or 0) for name in registry.names()
+    )
+    assert slowest > 0, "no skill declares a timeout; this test would prove nothing"
+    assert idle_seconds > slowest, (
+        f"idle_in_transaction_session_timeout is {idle_seconds}s but a skill may "
+        f"run for {slowest}s inside the transaction. A handler that waits longer "
+        f"than the database will tolerate loses its connection mid-request."
+    )
+
+
+# ── The pool (findings B1/B5) ─────────────────────────────────
+#
+# These four were hardcoded, and the cost of every one of them is a function of
+# how far away the database is — which is the one thing the code cannot know.
+# Measured against the Neon instance in `.env` (us-east-2, from a laptop): a
+# cold connect is 7,148ms, a warm statement 529ms, and one argon2 hash 19ms.
+# That last number is why these tests exist in this file rather than in an auth
+# one: the breaking-point report attributed login latency under load to argon2
+# serialising on CPU, and a hash is 1/370th of a connection. It was the pool.
+
+
+def _engine_with(monkeypatch: pytest.MonkeyPatch, **env: str) -> object:
+    """Build an engine under an environment, without connecting to anything.
+
+    `example.invalid` is unresolvable on purpose. Engine construction is lazy,
+    so every assertion below reads configuration rather than reaching a server
+    — which is what keeps these runnable with no database.
+    """
+    monkeypatch.setenv("NEXUS_DATABASE_URL", "postgresql+asyncpg://u:p@example.invalid:5432/nexus")
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    for cache in (get_settings, get_engine, get_sessionmaker):
+        cache.cache_clear()
+    return get_engine().pool
+
+
+def test_the_pool_dimensions_follow_the_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tunable, because the right values depend on the round trip to the database."""
+    try:
+        pool = _engine_with(
+            monkeypatch,
+            NEXUS_DB_POOL_SIZE="7",
+            NEXUS_DB_POOL_MAX_OVERFLOW="3",
+            NEXUS_DB_POOL_RECYCLE_SECONDS="90",
+        )
+        assert pool.size() == 7
+        assert pool._max_overflow == 3
+        assert pool._recycle == 90
+    finally:
+        for cache in (get_settings, get_engine, get_sessionmaker):
+            cache.cache_clear()
+
+
+def test_pre_ping_can_be_turned_off_but_defaults_on(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**The single most expensive line in the request path on a remote database.**
+
+    A ping per checkout is a round trip per request: measured at ~1.27s against
+    us-east-2 (2,249ms with it, 977ms without, for checkout plus one
+    statement), and about 2ms against a database in the same region. So it is a
+    deployment decision rather than a constant.
+
+    Defaulting *on* is the assertion that matters. The safe default has to be
+    the one that survives a provider closing a connection underneath us; the
+    fast default is opt-in, because a wrong choice there fails as an
+    intermittent 500 rather than as slowness somebody can see.
+    """
+    try:
+        assert _engine_with(monkeypatch)._pre_ping is True
+        assert _engine_with(monkeypatch, NEXUS_DB_POOL_PRE_PING="false")._pre_ping is False
+    finally:
+        for cache in (get_settings, get_engine, get_sessionmaker):
+            cache.cache_clear()
+
+
+def test_a_transaction_pooler_is_never_pre_pinged(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`NullPool` opens a fresh connection per checkout, so a ping is known-waste.
+
+    Asking "is this brand-new connection alive" costs a round trip to learn
+    something the previous line established — on the deployment shape where
+    round trips are already the problem.
+    """
+    try:
+        pool = _engine_with(
+            monkeypatch, NEXUS_DB_TRANSACTION_POOLER="true", NEXUS_DB_POOL_PRE_PING="true"
+        )
+        assert isinstance(pool, NullPool)
+        assert pool._pre_ping is False, "a pooler connection was pinged for nothing"
+    finally:
+        for cache in (get_settings, get_engine, get_sessionmaker):
+            cache.cache_clear()
+
+
+def test_the_recycle_stays_inside_a_provider_idle_timeout() -> None:
+    """It was 300s, which is *on* the boundary rather than inside it.
+
+    Recycling is the free half of staying ahead of a dead connection — an age
+    check in the pool, no round trip — and it only helps if it fires before the
+    provider gives up. A value equal to the timeout it is racing is as likely
+    to run after as before.
+    """
+    settings = Settings(_env_file=None, env=Env.local)  # type: ignore[call-arg]
+    assert settings.db_pool_recycle_seconds < 300
+
+
+async def test_warming_is_skipped_when_there_is_nothing_to_warm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No database, and a pooler, are both "no pool to fill" — not a failure.
+
+    The application is required to run with no database at all (tests, tooling,
+    `/health` reporting that it is down), so this cannot be a startup
+    precondition. And under a transaction pooler `NullPool` keeps nothing
+    between checkouts, so connections opened here would close again immediately
+    and the first request would still pay full price.
+    """
+    from app.db import warm_pool
+
+    monkeypatch.setenv("NEXUS_DATABASE_URL", "")
+    for cache in (get_settings, get_engine, get_sessionmaker):
+        cache.cache_clear()
+    try:
+        assert await warm_pool() == 0
+
+        monkeypatch.setenv(
+            "NEXUS_DATABASE_URL", "postgresql+asyncpg://u:p@example.invalid:5432/nexus"
+        )
+        monkeypatch.setenv("NEXUS_DB_TRANSACTION_POOLER", "true")
+        for cache in (get_settings, get_engine, get_sessionmaker):
+            cache.cache_clear()
+        assert await warm_pool() == 0
+    finally:
+        for cache in (get_settings, get_engine, get_sessionmaker):
+            cache.cache_clear()
+
+
+async def test_warming_never_raises_when_the_database_is_unreachable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A container that refuses to boot reports nothing at all.
+
+    `/health` exists to say the database is down, which it can only do if the
+    process started. So warming logs its failure and returns a count — it is an
+    optimisation, and an optimisation that can prevent startup is a liability.
+    """
+    from app.db import warm_pool
+
+    monkeypatch.setenv("NEXUS_DATABASE_URL", "postgresql+asyncpg://u:p@example.invalid:5432/nexus")
+    monkeypatch.setenv("NEXUS_DB_TRANSACTION_POOLER", "false")
+    monkeypatch.setenv("NEXUS_DB_POOL_SIZE", "2")
+    for cache in (get_settings, get_engine, get_sessionmaker):
+        cache.cache_clear()
+    try:
+        assert await warm_pool() == 0, "an unreachable host must warm nothing and raise nothing"
     finally:
         for cache in (get_settings, get_engine, get_sessionmaker):
             cache.cache_clear()

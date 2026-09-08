@@ -18,7 +18,7 @@ that could name the target could choose the sensitivity its answer is stored at.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import sqlalchemy as sa
@@ -27,16 +27,32 @@ from pydantic import BaseModel, Field
 
 from app.ai.registry import get_provider
 from app.ai.runtime.commands import CommandContext
-from app.ai.runtime.fields import UndeclaredFieldError, resolve
+from app.ai.runtime.fields import (
+    BRAIN_GROUPS,
+    FIELD_CATALOGUE,
+    UndeclaredFieldError,
+    resolve,
+)
 from app.ai.runtime.hooks import get_hooks
 from app.ai.runtime.runner import SkillFailedError, SkillRunner
 from app.auth.csrf import require_csrf
 from app.deps import CurrentScope
+from app.domain import connections
 from app.domain import onboarding_sessions as store
-from app.domain.onboarding_agent import MAX_QUESTIONS, AgentState, OnboardingAgent, Turn
+from app.domain.connections import UnknownProviderError
+from app.domain.departments import label_for, selected_departments
+from app.domain.onboarding_agent import (
+    MAX_QUESTIONS,
+    AgentState,
+    OnboardingAgent,
+    Turn,
+    next_brain_group,
+)
+from app.domain.onboarding_promotion import promote
+from app.domain.scopes import Department
 from app.domain.session import ScopedSession
 from app.logging import get_logger
-from app.research.runner import crawl_site
+from app.research.runner import crawl_site, is_prose
 from app.retrieval.scoped import scoped_connection
 
 router = APIRouter(prefix="/onboarding/agent", tags=["onboarding"])
@@ -113,6 +129,25 @@ class StateOut(BaseModel):
     URLs is the difference between a wait that shows its working and a spinner.
     """
 
+    assembly_step: int = 0
+    """How many assembly stages have committed. Monotone, and the client's only
+    way to tell two consecutive Brain groups apart.
+
+    The phase alone cannot: the Brain is several committed steps that all leave
+    the row at `persona`, so a loop watching only the phase sees "nothing moved"
+    after the first group and stops with a half-built Brain. This counts, so
+    "the phase did not change *and* neither did this" is a real stall.
+    """
+
+    site_unreadable: bool = False
+    """The crawl ran and the site gave us nothing.
+
+    Distinct from `pages_read` being empty, which is also true before the crawl
+    has happened. The screen needs to tell "still fetching" from "there is
+    nothing to fetch and it is your turn to talk", and only the second one may
+    replace the reading bubble with three questions.
+    """
+
     viewer: ViewerOut = Field(default_factory=ViewerOut)
     """Who is asking, for the greeting.
 
@@ -136,6 +171,73 @@ class AnswerIn(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
 
 
+class DescribeIn(BaseModel):
+    """The three things the crawl would have told us, from the founder instead.
+
+    Deliberately three, and deliberately these three: they are what every later
+    skill needs as grounding. `profile` becomes `company_profile`, which
+    `interpret-user` and `build-persona` both declare in
+    `requires_grounding` — without it the persona is assembled by a model that
+    has not been told what the company does.
+    """
+
+    profile: str = Field(min_length=1, max_length=2000)
+    target_customers: str = Field(min_length=1, max_length=2000)
+    goals: str = Field(min_length=1, max_length=2000)
+
+
+class DocumentsIn(BaseModel):
+    """Leaving the documents step. `skipped` is a record, not a permission.
+
+    The step is skippable either way — `doc/09` §6.2 — so this does not decide
+    whether the phase advances. What it decides is what gets *logged*: a founder
+    who pressed "Skip for now" and one who uploaded nothing and pressed
+    "Continue" are the same row and two different product problems, and only the
+    flag can tell them apart.
+    """
+
+    skipped: bool = False
+
+
+class ToolsIn(BaseModel):
+    """The systems this company runs on, by catalogue id.
+
+    A list of ids and nothing else. In particular **no state and no
+    credentials**: every row this writes is `declared`, because declaring is all
+    this endpoint can honestly do until the OAuth half lands. A client that
+    could send `state` could write `connected` against a system nobody has ever
+    reached, and every tile downstream would then render a stale figure as live.
+    """
+
+    providers: list[str] = Field(default_factory=list, max_length=connections.MAX_DECLARED)
+    skipped: bool = False
+
+
+class ToolOut(BaseModel):
+    id: str
+    name: str
+    department: str
+    department_label: str
+    unlocks: str
+    kind: str
+    declared: bool
+    connectable: bool
+    """Whether a connect flow exists for this tool **today**. False for all nine.
+
+    On the wire rather than assumed by the screen, so the day one becomes true
+    the button appears without a second list in TypeScript to remember to edit.
+    A screen that hard-coded "we will ask you to connect this later" would go on
+    saying it after it stopped being true.
+    """
+
+
+class ToolsOut(BaseModel):
+    """The catalogue, ordered for this company, with what it already declared."""
+
+    tools: list[ToolOut] = Field(default_factory=list)
+    declared: list[str] = Field(default_factory=list)
+
+
 class QuestionOut(BaseModel):
     done: bool
     question: str | None = None
@@ -143,6 +245,29 @@ class QuestionOut(BaseModel):
     scope: int | None = None
     choices: list[str] = Field(default_factory=list)
     reason: str | None = None
+
+
+class AnswerOut(BaseModel):
+    """An answer recorded and the question that follows it, in one round trip.
+
+    The client used to post the answer and then `GET /next`, sequentially. Both
+    requests opened a transaction, set the scoping GUC, loaded the session and
+    all its turns, and read the same `app_user`/`membership` row — so the second
+    one repeated about seven statements purely to arrive back where the first
+    already was. Against a database ~340ms away that is over two seconds per
+    question, spent on nothing.
+
+    `question` is nullable, and that is load-bearing rather than defensive.
+    `scoped_connection` wraps the whole handler in one transaction, so letting a
+    failure in question generation raise here would roll back **the answer that
+    had just been stored** — the person would retype a sentence the server had
+    already accepted. Instead the failure is logged, `question` comes back null,
+    and the client falls back to `GET /next`, which is the endpoint that still
+    exists precisely to be retried.
+    """
+
+    state: StateOut
+    question: QuestionOut | None = None
 
 
 # ── Guards ────────────────────────────────────────────────────
@@ -207,6 +332,62 @@ def _rehydrate(stored: store.StoredSession, company_name: str = "") -> AgentStat
     return state
 
 
+def _labelled_brief(brief: Mapping[str, Any]) -> dict[str, Any]:
+    """The brief, with each statement carrying the field's human label.
+
+    The screen was rendering the raw catalogue key over every statement —
+    `brain.products_services` above a paragraph a founder is being asked to
+    correct. That is an internal identifier and it reads like a leaked variable
+    name on the first screen anybody sees.
+
+    Resolved here rather than mapped in the browser, because the label lives in
+    `fields.py` with the scope and the column, and a second copy in TypeScript
+    is a second thing to keep in step. `field` stays on the wire untouched: it
+    is what a correction is keyed by, and that must remain the real key.
+
+    A statement naming a field the catalogue does not have keeps its key as the
+    label. It cannot be corrected either way, and inventing a prettier name for
+    a field that does not exist would hide that.
+    """
+    statements = brief.get("statements")
+    if not isinstance(statements, list):
+        return dict(brief)
+
+    labelled: list[dict[str, Any]] = []
+    for statement in statements:
+        if not isinstance(statement, dict):
+            continue
+        key = str(statement.get("field", ""))
+        spec = FIELD_CATALOGUE.get(key)
+        labelled.append({**statement, "label": spec.label if spec else key})
+    return {**brief, "statements": labelled}
+
+
+def _assembly_step(stored: store.StoredSession) -> int:
+    """A monotone count of committed assembly stages.
+
+    Persona is one, each Brain group is one more, the context is the last. Not a
+    percentage and never shown: it exists so the client's assembly loop can
+    distinguish "another group just committed" from "the server returned the
+    same state twice", which the phase cannot express while several steps share
+    the phase `persona`.
+    """
+    # `documents` and `tools` sit between the interview and the assembly, so
+    # nothing has been assembled while a session is in either — the same as
+    # `discovery`. Listed explicitly rather than left to the fallthrough below,
+    # which returns "everything is done" and would have told the client's
+    # assembly loop that a journey yet to build its persona was complete.
+    if stored.phase in ("analysing", "brief", "discovery", "documents", "tools"):
+        return 0
+    done = len(dict(stored.context).get("groups_done", []))
+    if stored.phase == "persona":
+        return 1 + done
+    # `assembling` means every group landed, whatever the row happens to say.
+    if stored.phase == "assembling":
+        return 1 + len(BRAIN_GROUPS)
+    return 2 + len(BRAIN_GROUPS)
+
+
 def _out(stored: store.StoredSession, viewer: ViewerOut | None = None) -> StateOut:
     return StateOut(
         viewer=viewer or ViewerOut(),
@@ -218,27 +399,44 @@ def _out(stored: store.StoredSession, viewer: ViewerOut | None = None) -> StateO
             TurnOut(role=t.role, text=t.text, target=t.target_field, scope=t.scope)
             for t in stored.turns
         ],
-        brief=dict(stored.brief),
+        brief=_labelled_brief(stored.brief),
         persona=dict(stored.persona_draft),
         context=dict(stored.context),
-        answered=len(stored.answers),
+        # The same number the ceiling is checked against — agent turns carrying
+        # a target — not `len(answers)`, which also counts the brief corrections
+        # and the three `/describe` turns. Every completed run reported
+        # `answered: 6, ceiling: 5`, so the one field a reader would use to
+        # check the ceiling said the opposite of what the code does.
+        answered=sum(1 for t in stored.turns if t.role == "agent" and t.target_field),
+        assembly_step=_assembly_step(stored),
         pages_read=[
             str(page.get("url", ""))
             for page in stored.research.get("crawl", {}).get("pages", [])
             if page.get("url")
         ],
+        site_unreadable=bool(stored.research.get("crawl", {}).get("unreadable")),
     )
 
 
-async def _state(db: Any, scope: ScopedSession, stored: store.StoredSession) -> StateOut:
+async def _state(
+    db: Any,
+    scope: ScopedSession,
+    stored: store.StoredSession,
+    who: Mapping[str, str] | None = None,
+) -> StateOut:
     """`_out` plus the viewer — what every endpoint returns.
 
     A wrapper rather than a parameter each endpoint remembers to pass, because
     the greeting is drawn from the *latest* response and the component replaces
     its state wholesale. One handler returning a bare `_out` would blank the
     greeting the moment somebody answered a question, and only on that endpoint.
+
+    `who` is the row a handler has already read for the agent's grounding.
+    Passing it in is worth a parameter: `_user_context` and `_viewer` are the
+    same query behind two names, and a handler that needed both was paying for
+    it twice — a wasted round trip on the hot path of every turn.
     """
-    return _out(stored, await _viewer(db, scope))
+    return _out(stored, _viewer_of(who if who is not None else await _who(db, scope)))
 
 
 async def _workspace_identity(db: Any, scope: ScopedSession) -> tuple[str, str]:
@@ -283,7 +481,12 @@ async def _user_context(db: Any, scope: ScopedSession) -> dict[str, str]:
     Absent values are omitted rather than sent empty, so a skill can tell "no
     name given" from "the name is an empty string" and decline to guess.
     """
-    return {key: value for key, value in (await _who(db, scope)).items() if key != "company"}
+    return _user_context_of(await _who(db, scope))
+
+
+def _user_context_of(who: Mapping[str, str]) -> dict[str, str]:
+    """The grounding half of `_who`, for a handler that already holds the row."""
+    return {key: value for key, value in who.items() if key != "company"}
 
 
 async def _who(db: Any, scope: ScopedSession) -> dict[str, str]:
@@ -324,13 +527,60 @@ async def _who(db: Any, scope: ScopedSession) -> dict[str, str]:
     return {key: str(value) for key, value in out.items() if value}
 
 
+def _viewer_of(who: Mapping[str, str]) -> ViewerOut:
+    """The greeting's raw material, from a row already read.
+
+    `department` is stored as the catalogue key — `hr`, not "People" — because
+    narrowing the question catalogue to a department needs the machine-readable
+    form (`askable_fields`). The greeting needs the other one: "you work at
+    Gusto, in hr" is not a sentence, and that is exactly what a browser showed
+    when this resolution lived only in `_viewer` while `_state` built its own
+    `ViewerOut` and bypassed it. **One function, both callers.**
+
+    Anything the catalogue does not recognise passes through untouched. Rows
+    written before the field became a dropdown hold free text — "Design",
+    "People" — and rewriting somebody's own words into the nearest official
+    department would be putting a claim in their mouth.
+    """
+    resolved = dict(who)
+    stored = resolved.get("department")
+    if stored:
+        try:
+            resolved["department"] = label_for(Department(stored))
+        except ValueError:
+            pass  # Free text from before the dropdown. Their words, kept.
+    return ViewerOut(**resolved)
+
+
 async def _viewer(db: Any, scope: ScopedSession) -> ViewerOut:
-    """The greeting's raw material. Absent fields stay `None`."""
-    return ViewerOut(**await _who(db, scope))
+    """`_viewer_of` over a freshly read row. Absent fields stay `None`."""
+    return _viewer_of(await _who(db, scope))
+
+
+DEEP_RESEARCH_PAGE_LIMIT = 8
+"""How many background-crawl pages the Brain builder is given.
+
+There was no limit, and for a company with a busy site that meant twenty full
+pages of prose in one prompt. Measured: with all twenty folded in, the Brain
+build ran past the 240s proxy timeout and was killed — twice, before the field
+groups existed, and then again on the `market` group after they did. The
+`identity` group finished in 47s on the same input, so the wall is not the field
+count; it is the size of what every group has to read.
+
+Eight is a judgement, not a measurement, and it is a real trade: pages nine to
+twenty stop contributing, so a claim that only appears deep in a blog archive
+will now show up as a known gap instead of a sourced value. That is the right
+direction for this product — a gap names its own unlock, and a Brain nobody can
+finish assembling has no values at all — but it is the kind of number to revisit
+with a real corpus rather than to treat as settled.
+
+Ordered by the query below, so the eight are the most recently finished sources'
+pages rather than an arbitrary eight.
+"""
 
 
 async def _deep_research(db: Any, scope: ScopedSession) -> dict[str, Any]:
-    """Whatever the background research run has finished, or nothing.
+    """Whatever the background research run has finished, capped. Or nothing.
 
     The interview and the twenty-page crawl race each other by design, and this
     is the moment they meet. A founder who answered quickly finishes first, and
@@ -367,8 +617,18 @@ async def _deep_research(db: Any, scope: ScopedSession) -> dict[str, Any]:
                 pages.append(page)
     if not pages:
         return {}
-    log.info("onboarding.deep_research.folded_in", pages=len(pages))
-    return {"pages": pages}
+    # Capped, and the drop is logged rather than silent: "we read twenty pages"
+    # and "we gave the builder twenty pages" were the same sentence in the logs
+    # while only one of them was true, and that is what made the timeout hard to
+    # attribute.
+    kept = pages[:DEEP_RESEARCH_PAGE_LIMIT]
+    log.info(
+        "onboarding.deep_research.folded_in",
+        pages=len(kept),
+        available=len(pages),
+        dropped=len(pages) - len(kept),
+    )
+    return {"pages": kept}
 
 
 async def _load(db: Any, scope: ScopedSession) -> store.StoredSession:
@@ -457,24 +717,63 @@ async def start(scope: CurrentScope) -> StateOut:
             # company's bandwidth to arrive exactly here.
             return await _state(db, scope, stored)
 
-        outcome = await crawl_site([f"https://{domain}"], limit=ONBOARDING_PAGE_BUDGET)
-        if not outcome.pages:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail={
-                    "error": "nothing_to_read",
-                    "message": f"Could not read any pages at {domain}.",
-                    "reason": outcome.error_reason or "no pages returned",
-                },
+        # `crawl_site` is documented to return rather than raise, "including
+        # when everything fails". Wrapped anyway: this is the first request of
+        # a customer's life in the product, the account and the company row
+        # already exist by the time it runs, and an exception here is the one
+        # that leaves them with no workspace and no way to make one. If the
+        # contract ever slips, it must not slip into a 500 on the signup path.
+        try:
+            outcome = await crawl_site([f"https://{domain}"], limit=ONBOARDING_PAGE_BUDGET)
+        except Exception:
+            log.exception("onboarding.crawl.raised", domain=domain)
+            outcome = None
+
+        # Filtered, not just counted. A response the fetcher could not decode
+        # comes back as a non-empty string of replacement characters, so it
+        # passes every "did we get anything?" test and then either kills the
+        # request (`jsonb` refuses its NUL bytes) or reaches a model as the
+        # company's own words. `is_prose` carries the measurement.
+        fetched = list(outcome.pages) if outcome is not None else []
+        pages = [page for page in fetched if is_prose(page.get("text", ""))]
+        if len(pages) < len(fetched):
+            log.info(
+                "onboarding.crawl.undecodable_pages_dropped",
+                domain=domain,
+                dropped=len(fetched) - len(pages),
+                kept=len(pages),
             )
+        if not pages:
+            # **Recorded and returned, not refused.** This used to be a 422, and
+            # a 422 here is a dead end: the account exists, the company row
+            # exists, and the only screen that could build a workspace has told
+            # the customer their website is unreadable and offered them nothing.
+            # An audit of nine real sites found two in this state — one behind
+            # Cloudflare — so it is not an edge case, it is a signup funnel that
+            # drops customers whose only fault is bot protection.
+            #
+            # The state now says the site could not be read, and `/describe`
+            # lets the founder supply what the crawl would have. ADR 0022 is not
+            # in the way: it rules out a scripted *alternative to the agent* when
+            # no model is configured. The agent still runs here — only the source
+            # of its opening facts changes, from the site to the person, which is
+            # the same precedence the brief step already grants them when it says
+            # "you outrank the website".
+            reason = (
+                (outcome.error_reason if outcome is not None else "")
+                or ("nothing readable in the pages returned" if fetched else "no pages returned")
+            )
+            log.info("onboarding.crawl.unreadable", domain=domain, reason=reason)
+            await store.save_crawl(
+                db, session_id=session_id, pages=[], unreadable_reason=reason
+            )
+            return await _state(db, scope, await _load(db, scope))
 
         # Held under `research.crawl` rather than passed back through the
         # client. The pages are the grounding every claim in the brief is
         # traceable to, and grounding that made a round trip through a browser
         # is grounding a browser could have edited.
-        await store.save_crawl(
-            db, session_id=session_id, pages=[dict(page) for page in outcome.pages]
-        )
+        await store.save_crawl(db, session_id=session_id, pages=[dict(p) for p in pages])
         return await _state(db, scope, await _load(db, scope))
 
 
@@ -494,14 +793,21 @@ async def read(scope: CurrentScope) -> StateOut:
 
         pages = list(stored.research.get("crawl", {}).get("pages", []))
         if not pages:
-            # `/read` before `/start`, or after a session was opened and the
-            # crawl never landed. Nothing to read is a sequencing error, not a
-            # failure of the site.
+            # Two different states, and telling a caller to run `/start` is only
+            # right for one of them. If the crawl already ran and the site gave
+            # nothing, `/start` will do exactly the same thing again — the way
+            # forward is `/describe`, and saying so is the difference between a
+            # recoverable error and a loop.
+            unreadable = bool(stored.research.get("crawl", {}).get("unreadable"))
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail={
-                    "error": "nothing_fetched",
-                    "message": "No pages have been fetched yet; POST /start first.",
+                    "error": "site_unreadable" if unreadable else "nothing_fetched",
+                    "message": (
+                        f"{stored.domain} could not be read; POST /describe instead."
+                        if unreadable
+                        else "No pages have been fetched yet; POST /start first."
+                    ),
                 },
             )
 
@@ -524,6 +830,124 @@ async def read(scope: CurrentScope) -> StateOut:
                 role=turn.role, text=turn.text, target_field=turn.target_field,
                 skill=turn.skill, skill_version=turn.skill_version,
             )
+        return await _state(db, scope, await _load(db, scope))
+
+
+# The three fields, in catalogue order, paired with the sentence the transcript
+# shows for each. Declared keys, so what a founder types here is stored at the
+# same sensitivity and with the same provenance machinery as any interview
+# answer — a manual brief is a different *source*, not a different kind of fact.
+_DESCRIBE_FIELDS: tuple[tuple[str, str, str], ...] = (
+    ("brain.profile", "profile", "In a sentence or two, what does the company do?"),
+    ("brain.target_customers", "target_customers", "Who actually buys from you?"),
+    ("brain.goals", "goals", "What would make the next twelve months a success?"),
+)
+
+
+@router.post("/describe", response_model=StateOut, dependencies=[Depends(require_csrf)])
+async def describe(payload: DescribeIn, scope: CurrentScope) -> StateOut:
+    """The brief, from the founder, when the site could not be read.
+
+    **Only reachable when the crawl produced nothing.** Offering it otherwise
+    would be offering a way to skip the read, and the read is what makes the
+    brief correctable rather than merely typed.
+
+    **It goes straight to `discovery`, skipping the brief step.** That step
+    exists so a person can correct what a machine claimed about them; there is
+    nothing to correct in three sentences they wrote ten seconds ago, and
+    asking "is this right?" about their own words is the kind of small
+    absurdity that makes the rest of the screen harder to believe.
+
+    No model call. The three answers are already the values — they are written
+    into `research` in the shape `company-research` produces so every later
+    skill's grounding is satisfied, and into the turn log against their declared
+    fields so `state.answers` carries them at the same precedence a brief
+    correction gets. Running a summariser over prose the author just typed would
+    spend twenty seconds to paraphrase them back.
+    """
+    _require_model()
+    async with scoped_connection(scope) as db:
+        stored = await _load(db, scope)
+        if not stored.research.get("crawl", {}).get("unreadable"):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "error": "site_was_readable",
+                    "message": "This workspace's site was read; confirm the brief instead.",
+                },
+            )
+        if stored.turns:
+            # Already described. Returning the state is the right answer to a
+            # repeat, and it keeps a double submit from doubling the transcript.
+            return await _state(db, scope, stored)
+
+        values = {name: getattr(payload, name).strip() for _, name, _ in _DESCRIBE_FIELDS}
+
+        # Written in `company-research`'s own output shape. `confidence` is
+        # "stated" — a third value alongside its "read" and "inferred", and the
+        # honest one: nobody read this and nobody inferred it. `source` is the
+        # person rather than a URL, because a citation has to point at something
+        # and here it points at them.
+        research = {
+            "profile": {
+                "found": True, "value": values["profile"],
+                "confidence": "stated", "source": "you",
+            },
+            "products_services": {"found": False},
+            "brand_voice": {"found": False},
+            "technology_seen": [],
+            "could_not_determine": [
+                {
+                    "topic": "Everything the website would have said",
+                    "why": f"{stored.domain} could not be read: "
+                    f"{stored.research.get('crawl', {}).get('reason', 'no pages returned')}",
+                }
+            ],
+            "pages_read": 0,
+        }
+        await store.save_research(db, session_id=stored.id, research=research)
+
+        agent_line = (
+            f"I could not read {stored.domain} — it may be behind bot protection, or "
+            "there may be nothing there yet. That is not a problem: tell me the three "
+            "things I would have looked for and we can carry on."
+        )
+        stored.turns.append(
+            await store.append_turn(
+                db, session_id=stored.id, workspace_id=scope.workspace_id,
+                role="agent", text=agent_line,
+            )
+        )
+        for key, name, question in _DESCRIBE_FIELDS:
+            stored.turns.append(
+                await store.append_turn(
+                    db, session_id=stored.id, workspace_id=scope.workspace_id,
+                    # **No `target_field` on the agent turn, deliberately.**
+                    # `_rehydrate` counts `asked` as "agent turns carrying a
+                    # target", so tagging these three spent three of the five
+                    # interview questions before the interview began — and the
+                    # people on this path are the ones whose site could not be
+                    # read, so they are exactly who needs the full five. An
+                    # audit measured it: `answered: 6, ceiling: 5` after two
+                    # real questions.
+                    #
+                    # The target belongs on the *user* turn, which is what
+                    # `StoredSession.answers` reads, so nothing is lost: the
+                    # answers still land against their declared fields at the
+                    # catalogue's scope. The question still shows in the
+                    # transcript — an agent turn with no target renders as an
+                    # ordinary bubble.
+                    role="agent", text=question,
+                )
+            )
+            stored.turns.append(
+                await store.append_turn(
+                    db, session_id=stored.id, workspace_id=scope.workspace_id,
+                    role="user", text=values[name], target_field=key,
+                )
+            )
+
+        await store.set_phase(db, session_id=stored.id, phase=store.Phase.DISCOVERY)
         return await _state(db, scope, await _load(db, scope))
 
 
@@ -559,42 +983,107 @@ async def confirm_brief(payload: BriefIn, scope: CurrentScope) -> StateOut:
         return await _state(db, scope, await _load(db, scope))
 
 
-@router.post("/discovery", response_model=StateOut, dependencies=[Depends(require_csrf)])
-async def open_discovery(payload: DiscoveryIn, scope: CurrentScope) -> StateOut:
-    """The one free-text turn — what they are responsible for, in their words."""
-    _require_model()
-    async with scoped_connection(scope) as db:
-        stored = await _load(db, scope)
-        agent = OnboardingAgent(_context(scope, db, await _user_context(db, scope)))
-        state = _rehydrate(stored)
-        try:
-            await agent.open_discovery(state, payload.answer)
-        except SkillFailedError as exc:
-            raise _unusable(exc) from exc
-        await store.append_turn(
-            db, session_id=stored.id, workspace_id=scope.workspace_id,
-            role="user", text=payload.answer, target_field="persona.stated_purpose",
-            skill="user-discovery",
+def _outstanding_question(stored: store.StoredSession) -> store.StoredTurn | None:
+    """The last agent question, if nobody has answered it yet.
+
+    "Unanswered" means no *later* turn carries the same target — not merely that
+    the transcript ends on an agent turn. A brief correction or the opening
+    discovery answer can land after a question is asked without answering it.
+    """
+    last = next(
+        (t for t in reversed(stored.turns) if t.role == "agent" and t.target_field),
+        None,
+    )
+    if last is None:
+        return None
+    answered = any(
+        t.role == "user" and t.target_field == last.target_field and t.seq > last.seq
+        for t in stored.turns
+    )
+    return None if answered else last
+
+
+async def _ask_next(
+    db: Any,
+    scope: ScopedSession,
+    stored: store.StoredSession,
+    who: Mapping[str, str],
+) -> QuestionOut:
+    """Generate the next question, record it, and add it to `stored` in place.
+
+    Shared by `/next`, `/answer` and `/discovery` so that "ask the next thing"
+    is written once. Mutating `stored.turns` rather than re-reading the session
+    is the point: the caller is holding the row it just wrote to, and fetching
+    it again to discover the turn it appended itself is two round trips to learn
+    something already known.
+
+    Raises `SkillFailedError`. The caller decides what that means, because it
+    differs: `/next` is the retry endpoint and turns it into a 502, while
+    `/answer` has an answer committed in the same transaction and must not let
+    it roll back.
+
+    **An outstanding question is re-served, never regenerated.** This used to
+    generate unconditionally, and `AgentOnboarding` calls `nextQuestion()` on
+    every resume into `discovery` — so any page refresh mid-question wrote a
+    second agent turn for the same field. An audited transcript shows the cost:
+
+        11. agent  fact.hr.leave_basis   Is leave accrued monthly or granted annually?
+        12. agent  fact.hr.leave_basis   Is leave accrued monthly or granted annually?
+
+    `submit_answer` reads the target from the *last* agent turn, so turn 11 was
+    orphaned and unanswerable. Worse, `asked` counts agent turns carrying a
+    target, so five turns for three real questions tripped the ceiling — the
+    person was told "that is the 5 questions I get to ask" after answering
+    three, one of them twice. Each duplicate also spent a model call.
+    """
+    outstanding = _outstanding_question(stored)
+    if outstanding is not None:
+        log.info("onboarding.question.reserved", target=outstanding.target_field)
+        spec = resolve(str(outstanding.target_field))
+        return QuestionOut(
+            done=False,
+            question=outstanding.text,
+            target=spec.key,
+            scope=spec.scope,
+            choices=[],
         )
-        return await _state(db, scope, await _load(db, scope))
 
+    agent = OnboardingAgent(_context(scope, db, _user_context_of(who)))
+    result = await agent.next_question(_rehydrate(stored))
+    if result.get("done"):
+        # The interview is over, so the phase moves on here rather than waiting
+        # for a click. Two reasons it belongs on this side of the wire.
+        #
+        # **The client cannot be the one to say the interview ended.** Every
+        # other transition in this journey is decided by the server from state
+        # it holds — the target of an answer, which assembly stage runs next —
+        # for the same reason: a client that could name the next phase could
+        # name `persona` and skip the two steps in between, which is exactly
+        # the ordering the feature exists to guarantee.
+        #
+        # **A refresh must not undo it.** `AgentOnboarding` used to hold "the
+        # interview is done" only in the `question.done` it had in memory, so
+        # reloading the page dropped it and the screen came back to a composer
+        # over a closed interview. The phase is on the row, so the reload lands
+        # on the documents step.
+        #
+        # Guarded on the current phase rather than written unconditionally:
+        # `/next` is the resume endpoint and is called again on a session
+        # already past discovery, where this would drag the phase backwards.
+        if stored.phase == store.Phase.DISCOVERY.value:
+            await store.set_phase(
+                db, session_id=stored.id, phase=store.Phase.DOCUMENTS.value
+            )
+            stored.phase = store.Phase.DOCUMENTS.value
+            log.info(
+                "onboarding.interview_closed",
+                session_id=str(stored.id),
+                asked=sum(1 for t in stored.turns if t.role == "agent" and t.target_field),
+            )
+        # The agent's reason, never a house string. See `next_question`.
+        return QuestionOut(done=True, reason=str(result.get("reason", "")))
 
-@router.get("/next", response_model=QuestionOut)
-async def next_question(scope: CurrentScope) -> QuestionOut:
-    """The next question, chosen and worded by the model, bound to a declared field."""
-    _require_model()
-    async with scoped_connection(scope) as db:
-        stored = await _load(db, scope)
-        agent = OnboardingAgent(_context(scope, db, await _user_context(db, scope)))
-        state = _rehydrate(stored)
-        try:
-            result = await agent.next_question(state)
-        except SkillFailedError as exc:
-            raise _unusable(exc) from exc
-
-        if result is None:
-            return QuestionOut(done=True, reason="nothing further worth asking")
-
+    stored.turns.append(
         await store.append_turn(
             db, session_id=stored.id, workspace_id=scope.workspace_id,
             role="agent", text=str(result["question"]),
@@ -602,22 +1091,115 @@ async def next_question(scope: CurrentScope) -> QuestionOut:
             skill=str(result.get("skill", "")),
             skill_version=str(result.get("skill_version", "")),
         )
-        return QuestionOut(
-            done=False,
-            question=str(result["question"]),
-            target=str(result["target"]),
-            scope=int(result["scope"]),
-            choices=list(result.get("choices", [])),
+    )
+    return QuestionOut(
+        done=False,
+        question=str(result["question"]),
+        target=str(result["target"]),
+        scope=int(result["scope"]),
+        choices=list(result.get("choices", [])),
+    )
+
+
+async def _next_or_none(
+    db: Any,
+    scope: ScopedSession,
+    stored: store.StoredSession,
+    who: Mapping[str, str],
+) -> QuestionOut | None:
+    """`_ask_next`, but a failure returns None instead of unwinding the request.
+
+    The answer that precedes it in this transaction is the thing being
+    protected. Raising here would roll it back and ask the person to retype a
+    sentence the server had already accepted and audited — a worse outcome than
+    one extra request, which is what returning None costs.
+    """
+    try:
+        return await _ask_next(db, scope, stored, who)
+    except SkillFailedError as exc:
+        log.warning("onboarding.next_question.deferred", error=str(exc))
+        return None
+
+
+@router.post("/discovery", response_model=AnswerOut, dependencies=[Depends(require_csrf)])
+async def open_discovery(payload: DiscoveryIn, scope: CurrentScope) -> AnswerOut:
+    """The one free-text turn — what they are responsible for, in their words."""
+    _require_model()
+    async with scoped_connection(scope) as db:
+        stored = await _load(db, scope)
+        who = await _who(db, scope)
+        agent = OnboardingAgent(_context(scope, db, _user_context_of(who)))
+        state = _rehydrate(stored)
+        try:
+            await agent.open_discovery(state, payload.answer)
+        except SkillFailedError as exc:
+            raise _unusable(exc) from exc
+        # The opening question, written before the answer that replies to it.
+        #
+        # It used to be rendered on the client and never stored, which cost three
+        # things at once. The transcript showed an answer with no question above
+        # it. `_rehydrate` counts `asked` as agent turns carrying a target, so the
+        # opener was uncounted — `MAX_QUESTIONS = 5` let six questions be asked,
+        # and the rail read "Question 5 of 5" while the sixth was on screen. And
+        # the one question every person is asked was the one question absent from
+        # the record of what they were asked.
+        #
+        # Both turns land in the same transaction, so the agent turn is never
+        # outstanding: `_outstanding_question` looks for a *later* turn with the
+        # same target and finds the answer immediately below it.
+        for role, text in (
+            ("agent", resolve("persona.stated_purpose").fallback_question),
+            ("user", payload.answer),
+        ):
+            stored.turns.append(
+                await store.append_turn(
+                    db, session_id=stored.id, workspace_id=scope.workspace_id,
+                    role=role, text=text, target_field="persona.stated_purpose",
+                    skill="user-discovery",
+                )
+            )
+        # **The question first, then the state.** Keyword arguments are
+        # evaluated in source order, and `_next_or_none` is what closes the
+        # interview — it moves the phase to `documents` when the agent says
+        # there is nothing left worth asking. Reading the state before it
+        # therefore serialised the phase the session was in a moment ago, so a
+        # response could carry `question.done: true` beside `phase: discovery`
+        # and the screen would render a composer over a finished interview.
+        question = await _next_or_none(db, scope, stored, who)
+        return AnswerOut(
+            state=await _state(db, scope, stored, who),
+            question=question,
         )
 
 
-@router.post("/answer", response_model=StateOut, dependencies=[Depends(require_csrf)])
-async def submit_answer(payload: AnswerIn, scope: CurrentScope) -> StateOut:
-    """Answer the outstanding question.
+@router.get("/next", response_model=QuestionOut)
+async def next_question(scope: CurrentScope) -> QuestionOut:
+    """The next question, chosen and worded by the model, bound to a declared field.
+
+    Still here, and still its own endpoint, even though `/answer` now returns
+    the question with the answer. Two callers need it: a resumed journey, which
+    has a transcript and no outstanding question, and a `/answer` whose question
+    generation failed after the answer was safely stored.
+    """
+    _require_model()
+    async with scoped_connection(scope) as db:
+        stored = await _load(db, scope)
+        try:
+            return await _ask_next(db, scope, stored, await _who(db, scope))
+        except SkillFailedError as exc:
+            raise _unusable(exc) from exc
+
+
+@router.post("/answer", response_model=AnswerOut, dependencies=[Depends(require_csrf)])
+async def submit_answer(payload: AnswerIn, scope: CurrentScope) -> AnswerOut:
+    """Answer the outstanding question, and get the next one back with it.
 
     The body carries text and nothing else. The field it belongs to is the one
     the agent's own last turn declared — read server-side, never accepted from
     the client.
+
+    **One request where there were two.** See `AnswerOut` for what the second
+    one was spending, and why the question it returns is allowed to be null.
     """
     _require_model()
     async with scoped_connection(scope) as db:
@@ -635,11 +1217,200 @@ async def submit_answer(payload: AnswerIn, scope: CurrentScope) -> StateOut:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="no outstanding question; GET /onboarding/agent/next first",
             )
-        agent = OnboardingAgent(_context(scope, db, await _user_context(db, scope)))
+        who = await _who(db, scope)
+        agent = OnboardingAgent(_context(scope, db, _user_context_of(who)))
         await agent.submit_answer(_rehydrate(stored), target=target, text=payload.text)
-        await store.append_turn(
-            db, session_id=stored.id, workspace_id=scope.workspace_id,
-            role="user", text=payload.text, target_field=target,
+        stored.turns.append(
+            await store.append_turn(
+                db, session_id=stored.id, workspace_id=scope.workspace_id,
+                role="user", text=payload.text, target_field=target,
+            )
+        )
+        # Appended above *before* this runs, so the generator sees the answer in
+        # `already_known` and does not re-ask the field just filled.
+        # **The question first, then the state.** Keyword arguments are
+        # evaluated in source order, and `_next_or_none` is what closes the
+        # interview — it moves the phase to `documents` when the agent says
+        # there is nothing left worth asking. Reading the state before it
+        # therefore serialised the phase the session was in a moment ago, so a
+        # response could carry `question.done: true` beside `phase: discovery`
+        # and the screen would render a composer over a finished interview.
+        question = await _next_or_none(db, scope, stored, who)
+        return AnswerOut(
+            state=await _state(db, scope, stored, who),
+            question=question,
+        )
+
+
+# ── The two steps between the interview and the assembly ──────
+#
+# They exist because of *when* they are, not because of what they collect. The
+# Persona and the Company Brain are assembled from whatever is in hand when
+# `/finish` runs, and that assembly is the moment a draft becomes the artefact
+# every later agent reads. Collect the price list afterwards and the Brain
+# quoting from it has never seen it; the only repair is assembling a second
+# time, paying for every model call again.
+#
+# So `/finish` refuses to start from either of them (see its own guard), and the
+# phase column is what carries the ordering. Neither step *requires* anything —
+# both are skippable, `doc/09` §6.2 — but leaving one is an explicit move rather
+# than a silence the server has to interpret.
+
+
+async def _uploaded(db: Any) -> int:
+    """How many documents this workspace has. Scoped by the connection's GUC.
+
+    No `workspace_id` parameter, deliberately: this runs inside
+    `scoped_connection`, where row-level security already answers "whose
+    documents" — and a count that took a workspace id would be a count that
+    could be asked about somebody else's.
+    """
+    return int(
+        (await db.execute(sa.text("SELECT COUNT(*) FROM document"))).scalar_one()
+    )
+
+
+@router.post("/documents", response_model=StateOut, dependencies=[Depends(require_csrf)])
+async def documents_done(payload: DocumentsIn, scope: CurrentScope) -> StateOut:
+    """Leave the documents step. Uploading happens at `POST /documents`.
+
+    **This endpoint moves no files.** The upload path already exists, enforces
+    the consent warranty, parses, chunks and classifies — this is only the
+    person saying they are finished with that step, which is a different act and
+    a different precondition. Folding the two together would mean the last
+    upload of a batch also advanced the phase, and a founder who wanted to add a
+    fourth file would find the step closed behind them.
+
+    Skipping is permitted and is recorded. What it must not do is pretend: a
+    workspace that skipped has no price list, so nothing downstream may imply it
+    quoted from one.
+
+    Idempotent past its own step. Called on a session already in `tools` it
+    returns the state unchanged, because a double-click on Continue is not a
+    reason to refuse anybody.
+    """
+    _require_model()
+    async with scoped_connection(scope) as db:
+        stored = await _load(db, scope)
+
+        if stored.phase in (store.Phase.TOOLS.value, store.Phase.PERSONA.value,
+                            store.Phase.ASSEMBLING.value, store.Phase.READY.value):
+            return await _state(db, scope, stored)
+
+        if stored.phase != store.Phase.DOCUMENTS.value:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "error": "not_at_documents",
+                    "message": "The interview is not finished yet.",
+                },
+            )
+
+        count = await _uploaded(db)
+        await store.set_phase(db, session_id=stored.id, phase=store.Phase.TOOLS.value)
+        # Both numbers, because the interesting case is the disagreement. A skip
+        # with files already uploaded is somebody who added what they had and
+        # moved on; a skip with none is the step failing to earn its place, and
+        # only these two fields together can tell an operator which happened.
+        log.info(
+            "onboarding.documents_step_left",
+            session_id=str(stored.id),
+            uploaded=count,
+            skipped=payload.skipped,
+        )
+        return await _state(db, scope, await _load(db, scope))
+
+
+@router.get("/tools", response_model=ToolsOut)
+async def tools(scope: CurrentScope) -> ToolsOut:
+    """The tool catalogue, this company's departments first, and what it declared.
+
+    Ordered rather than filtered — `connections.for_departments` explains why.
+    Every tool is offered to every company: a company that runs no formal
+    finance function may still run Stripe, and hiding it would be the product
+    deciding it knows their stack better than they do.
+
+    `connectable` is false for all nine today, and comes from the server so that
+    the screen stops promising a later connect flow on the day one arrives.
+
+    **No `_require_model()`, on purpose.** It is the one exception this router
+    already makes, and for the same reason `read_state` makes it: this is a
+    read of a fixed catalogue and a set of rows, and it works with no model
+    configured. The two *writes* below it do require one — there is no point
+    collecting a stack into a journey that cannot assemble.
+    """
+    async with scoped_connection(scope) as db:
+        chosen = await selected_departments(db, workspace_id=scope.workspace_id)
+        on_record = set(await connections.declared(db, workspace_id=scope.workspace_id))
+
+    return ToolsOut(
+        tools=[
+            ToolOut(
+                id=tool.id,
+                name=tool.name,
+                department=tool.department.value,
+                department_label=label_for(tool.department),
+                unlocks=tool.unlocks,
+                kind=tool.kind,
+                declared=tool.id in on_record,
+                connectable=tool.id in connections.OAUTH_READY,
+            )
+            for tool in connections.for_departments(chosen)
+        ],
+        declared=sorted(on_record),
+    )
+
+
+@router.post("/tools", response_model=StateOut, dependencies=[Depends(require_csrf)])
+async def declare_tools(payload: ToolsIn, scope: CurrentScope) -> StateOut:
+    """Record which systems this company runs on. The last step before assembly.
+
+    **The phase does not advance here.** It stays at `tools`, and `/finish` is
+    what starts the assembly from it. That is not an omission: the assembly is
+    several committed stages the client already drives in a loop, and giving
+    this endpoint a phase to advance to would mean inventing one that says
+    "tools are done but the persona has not started" — a state whose only
+    purpose would be to be passed through. Staying put also makes a refresh
+    land on this step with the boxes as they were left, which is the right
+    place to land.
+
+    Replaces rather than appends, so a person who returns and unticks something
+    is believed. A `connected` row survives an untick — see `connections.declare`
+    for why unticking a checkbox must not throw away live credentials.
+    """
+    _require_model()
+    async with scoped_connection(scope) as db:
+        stored = await _load(db, scope)
+
+        if stored.phase != store.Phase.TOOLS.value:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "error": "not_at_tools",
+                    "message": "The documents step comes first.",
+                },
+            )
+
+        try:
+            on_record = await connections.declare(
+                db,
+                workspace_id=scope.workspace_id,
+                user_id=scope.user_id,
+                providers=payload.providers,
+            )
+        except UnknownProviderError as exc:
+            # 400 rather than 422: the body is well formed and the schema
+            # accepted it. What is wrong is the value, checked against a
+            # catalogue the client can read from `GET /tools` — the same shape
+            # as `confirm_brief` refusing a field the catalogue does not
+            # declare.
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        log.info(
+            "onboarding.tools_declared",
+            session_id=str(stored.id),
+            declared=len(on_record),
+            skipped=payload.skipped,
         )
         return await _state(db, scope, await _load(db, scope))
 
@@ -698,6 +1469,39 @@ async def finish(scope: CurrentScope) -> StateOut:
             assert done is not None
             return await _state(db, scope, done)
 
+        # **The ordering, enforced where the client cannot reach it.** The two
+        # collection steps sit between the interview and the assembly precisely
+        # so that the Persona and the Brain are built with the documents and the
+        # declared stack in hand. A client that could call this from `discovery`
+        # would get a Brain assembled without them, and the only repair would be
+        # to assemble a second time — every model call paid for twice to reach a
+        # state that could have been reached once.
+        #
+        # Read from the locked row rather than from the request, the same as the
+        # stage choice below. There is nothing in the body to trust.
+        #
+        # A journey already in flight when this shipped is sitting at
+        # `discovery`, and this refuses it. It is not stuck: the client asks
+        # `GET /next` on every resume into `discovery`, the interview reports
+        # done, and that endpoint moves the phase to `documents`.
+        if phase in (
+            store.Phase.ANALYSING.value,
+            store.Phase.BRIEF.value,
+            store.Phase.DISCOVERY.value,
+            store.Phase.DOCUMENTS.value,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "error": "steps_outstanding",
+                    "message": (
+                        "Your documents and tools come before this. "
+                        "Nothing is built until they do."
+                    ),
+                    "phase": phase,
+                },
+            )
+
         # The name the Brain is assembled under. `_rehydrate` defaults it to the
         # empty string and the old single-call path never passed it, so
         # `company-brain-builder` — which declares `company_name` in
@@ -708,23 +1512,77 @@ async def finish(scope: CurrentScope) -> StateOut:
 
         try:
             if phase == "persona":
-                await agent.build_brain(state, deep_research=await _deep_research(db, scope))
+                # One group per request. `next_brain_group` reads which are
+                # already committed off the row, so this is also the resume
+                # point: a run killed mid-Brain restarts at the group that did
+                # not finish, not at the first one.
+                group = next_brain_group(dict(stored.context))
+                if group is None:  # pragma: no cover - the command advances the phase
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="the Brain is complete but the phase did not advance",
+                    )
+                await agent.build_brain(
+                    state,
+                    group=group,
+                    so_far=dict(stored.context),
+                    deep_research=await _deep_research(db, scope),
+                )
             elif phase == "assembling":
                 # Read back off the row rather than carried in memory — which is
                 # exactly what lets this be its own request. `context` holds the
                 # Brain at this point; stage three overwrites it with the
                 # preamble, which is the artefact the journey exists to produce.
+                assembled_brain = dict(stored.context)
                 context = await agent.build_context(
                     state,
-                    brain=dict(stored.context),
+                    brain=assembled_brain,
                     persona=dict(stored.persona_draft),
                     role_reach={"role": str(scope.role)},
                 )
-                await store.complete(db, session_id=stored.id, context=dict(context))
+                context = _with_tool_gaps(
+                    dict(context),
+                    await connections.declared(db, workspace_id=scope.workspace_id),
+                )
+
+                # **The only moment the assembled Brain still exists.** The
+                # `store.complete` below replaces `context` with the preamble,
+                # and until this call nothing in the agent path had ever written
+                # `company_brain`, `fact` or `persona` — `INSERT INTO fact`
+                # appeared nowhere in the repository. Two audits of *which*
+                # questions to ask were landing in a column that this very
+                # function then overwrote.
+                #
+                # Before `complete`, and in its transaction, so a workspace is
+                # never marked finished with nothing behind it and never left
+                # holding a promoted Brain against an unfinished session.
+                promoted = await promote(
+                    db,
+                    workspace_id=scope.workspace_id,
+                    user_id=scope.user_id,
+                    session_id=stored.id,
+                    brain=assembled_brain,
+                    persona_draft=dict(stored.persona_draft),
+                    answers=stored.answers,
+                )
+                await store.complete(
+                    db,
+                    session_id=stored.id,
+                    context=_with_promoted_facts(dict(context), stored.answers),
+                )
+                log.info(
+                    "onboarding.promotion.committed",
+                    workspace_id=str(scope.workspace_id),
+                    brain_version=promoted.brain_version,
+                    facts=promoted.facts,
+                    persona_fields=promoted.persona_fields,
+                )
             else:
                 await agent.build_persona(state)
         except SkillFailedError as exc:
-            raise _unusable(exc) from exc
+            # Per-stage commits mean a failure here keeps every stage before it,
+            # and clicking again resumes at the one that broke.
+            raise _unusable(exc, keeps_progress=True) from exc
 
         # By id, not by `active`: the last stage marks the session `completed`,
         # and `_load` would report no journey in progress on the request that
@@ -734,18 +1592,124 @@ async def finish(scope: CurrentScope) -> StateOut:
         return await _state(db, scope, latest)
 
 
-def _unusable(exc: SkillFailedError) -> HTTPException:
+def _with_tool_gaps(context: dict[str, Any], providers: Sequence[str]) -> dict[str, Any]:
+    """Name every declared-but-unconnected tool in the gap list, with its unlock.
+
+    This is what the tools step *does* to the artefact. The declarations
+    themselves live in `workspace_connection`, which is where a connect flow
+    will find them; what belongs in the preamble every later agent reads is the
+    consequence — "I cannot see your traffic until Analytics is connected" —
+    because an agent that does not know a source is missing answers as though it
+    were merely empty.
+
+    Added in code rather than asked of `context-personalization`, for the same
+    reason `_with_promoted_facts` is: the unlock is an instruction a person will
+    act on, and a model's paraphrase of "Connecting Google Analytics" is a
+    different instruction wearing the same meaning.
+
+    De-duplicated by topic, existing entries winning. The personalisation may
+    already have said something more useful about the same gap, and this is
+    adding what is missing rather than overwriting what is there.
+    """
+    gaps: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for entry in context.get("known_gaps", []):
+        if not isinstance(entry, dict):
+            continue
+        topic = str(entry.get("topic"))
+        if topic in seen:
+            continue
+        seen.add(topic)
+        gaps.append(entry)
+
+    for gap in connections.gaps_for(providers):
+        if gap["topic"] in seen:
+            continue
+        seen.add(gap["topic"])
+        gaps.append(dict(gap))
+
+    return {**context, "known_gaps": gaps}
+
+
+def _with_promoted_facts(
+    context: dict[str, Any], answers: Mapping[str, str]
+) -> dict[str, Any]:
+    """Put the department thresholds into the preamble every later agent reads.
+
+    **They were missing.** A completed journey's `context.facts` held the brain
+    and persona keys and not one `fact.*` — so the three thresholds the
+    interview worked hardest to get were in the `fact` table and absent from the
+    context any downstream agent is handed before it answers anything. An agent
+    reading the preamble rather than querying `fact` did not know the promised
+    lead time.
+
+    Added in code rather than asked of `context-personalization`, because a
+    threshold must not be paraphrased. "Forty-eight hours from vessel discharge"
+    is the answer; a model's rendering of it is a different fact wearing the
+    same key.
+
+    De-duplicated by key on the way through, which also fixes
+    `persona.priority_topics` appearing twice in an audited preamble. Existing
+    entries win: the personalisation may have said something more useful about a
+    key than the raw answer, and this is adding what is missing rather than
+    overwriting what is there.
+    """
+    # De-duplicated on the way *in*, not only on the way out. The duplicate an
+    # audit found — `persona.priority_topics` twice — came from
+    # `context-personalization` itself, so filtering only what this function
+    # adds would leave the reported defect exactly where it was.
+    facts: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for entry in context.get("facts", []):
+        if not isinstance(entry, dict):
+            continue
+        key = str(entry.get("key"))
+        if key in seen:
+            continue
+        seen.add(key)
+        facts.append(entry)
+
+    for key, value in answers.items():
+        if not key.startswith("fact.") or key in seen:
+            continue
+        spec = FIELD_CATALOGUE.get(key)
+        text = str(value or "").strip()
+        if spec is None or not text:
+            continue
+        seen.add(key)
+        facts.append({"key": key, "value": text, "scope": spec.scope})
+
+    context["facts"] = facts
+    return context
+
+
+def _unusable(exc: SkillFailedError, *, keeps_progress: bool = False) -> HTTPException:
     """A skill ran and produced nothing usable.
 
     502 rather than 500: the provider answered, the answer was unusable. Never a
     plausible default — a fabricated brief is the thing this product exists not
     to produce, and it would be indistinguishable from a real one on screen.
+
+    **`keeps_progress` exists because the old message was a lie.** Every caller
+    said "Nothing was saved", which is true of `/read` and false of `/finish`:
+    the assembly commits one stage per request precisely so a later failure
+    keeps the earlier ones. Telling somebody nothing was saved when their
+    persona and Brain are both on the row invites them to start over, and
+    starting over is the one thing that would actually lose work.
     """
-    log.warning("onboarding.skill_failed", error=str(exc))
+    log.warning("onboarding.skill_failed", error=str(exc), keeps_progress=keeps_progress)
     return HTTPException(
         status_code=status.HTTP_502_BAD_GATEWAY,
         detail={
             "error": "skill_failed",
-            "message": "The assistant could not produce a usable answer. Nothing was saved.",
+            "message": (
+                "The assistant could not finish this step. Everything before it is "
+                "saved — try again."
+                if keeps_progress
+                else "The assistant could not produce a usable answer. Nothing was saved."
+            ),
+            # The client renders a Retry rather than deciding for itself whether
+            # this class of failure is worth another request.
+            "retryable": True,
         },
     )

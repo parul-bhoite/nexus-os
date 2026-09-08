@@ -32,8 +32,11 @@ from app.documents.classify import ReviewState
 from app.documents.status import DocumentStatus
 from app.domain.access import Sensitivity
 from app.domain.company_brain import GeneratedBy
+from app.domain.connections import PROVIDER_IDS
+from app.domain.connectors import ConnectionState
 from app.domain.department_answers import AnswerState
 from app.domain.facts import SourceKind as FactSourceKind
+from app.domain.onboarding_sessions import Phase, SessionStatus, TurnRole
 from app.domain.registration import JoinRequestState, ResearchRunState
 from app.domain.research import SourceKind, SourceState
 from app.domain.scopes import Role, Scope, scope_code
@@ -144,6 +147,42 @@ MAPPINGS: tuple[Mapping, ...] = (
         "ck_domain_claim_strength",
         "app.connectors.domain_check.Strength",
         frozenset(strength.value for strength in Strength),
+    ),
+    Mapping(
+        "ck_onboarding_session_phase",
+        "app.domain.onboarding_sessions.Phase",
+        frozenset(phase.value for phase in Phase),
+    ),
+    Mapping(
+        "ck_onboarding_session_status",
+        "app.domain.onboarding_sessions.SessionStatus",
+        frozenset(status.value for status in SessionStatus),
+    ),
+    Mapping(
+        "ck_onboarding_turn_role",
+        "app.domain.onboarding_sessions.TurnRole",
+        frozenset(role.value for role in TurnRole),
+    ),
+    # The tools step. Both of these were written in the same commit as the
+    # constraint, which is the habit `CONTINUE-HERE` records as having cost a CI
+    # round trip three times — a value-list CHECK with no Mapping fails
+    # `test_every_value_list_constraint_is_registered` rather than the test it
+    # was added for.
+    Mapping(
+        "ck_workspace_connection_state",
+        "app.domain.connectors.ConnectionState",
+        frozenset(state.value for state in ConnectionState),
+    ),
+    # The one mapping here whose Python side is not an enum. The catalogue is a
+    # tuple of `Tool` dataclasses because each entry carries a name, a
+    # department and the sentence saying what it unlocks — none of which fits in
+    # an enum member — so the compared set is the ids it exposes. The constraint
+    # is doing the same job either way: refusing a provider nothing downstream
+    # can read.
+    Mapping(
+        "ck_workspace_connection_provider",
+        "app.domain.connections.PROVIDERS via PROVIDER_IDS",
+        PROVIDER_IDS,
     ),
 )
 

@@ -13,7 +13,8 @@
 
   One file. The whole journey, in order:
 
-      Landing page  →  preview audit  →  sign up  →  onboarding (7 steps)
+      Landing page  →  preview audit  →  sign up  →  the agent takes over
+                    →  reads the site, briefs you, interviews you, builds a persona
                     →  choose an account  →  that person's workspace  →  admin
 
   No build step, no server, no network. Double-click to open.
@@ -432,6 +433,188 @@ tbody tr:hover{background:var(--bone-50)}
 .oppCard.high{border-left-color:#3E8259}
 .oppCard.low{border-left-color:var(--bone-400)}
 
+/* ── Agentic onboarding ──────────────────────────────────────────────────────
+   Two panes: the agent talks on the left, and everything it learns appears on
+   the right as it learns it. The right pane is the point — it is the receipt for
+   the conversation, and every row in it is editable, because a fact the person
+   cannot correct is a fact they cannot trust.
+
+   Everything here is `ob`-prefixed. The assistant's `.msg` / `.bubble` /
+   `.suggest` rules are unscoped globals tuned for its 408px docked panel, which
+   renders inside all 38 workspace sections — so the transcript gets its own
+   classes rather than overrides, and a later grep for `.bubble` cannot sweep the
+   onboarding into an assistant change. */
+
+.obTop{
+  position:sticky; top:var(--banner-h); z-index:70; background:rgba(255,255,255,.93);
+  backdrop-filter:blur(10px); border-bottom:1px solid var(--bone-200);
+}
+.obTop .inner{display:flex; align-items:center; justify-content:space-between; gap:16px; height:60px}
+.obRail{display:flex; align-items:center; gap:7px}
+.obRail .ph{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-300)}
+.obRail .ph .dot{width:7px; height:7px; border-radius:50%; background:var(--bone-300); flex:none; transition:background .3s}
+.obRail .ph.done{color:var(--ink-400)}
+.obRail .ph.done .dot{background:var(--steel-500)}
+.obRail .ph.now{color:var(--ink-800); font-weight:500}
+.obRail .ph.now .dot{background:var(--gold-500); box-shadow:0 0 0 4px var(--gold-100)}
+.obRail .tick{width:16px; height:1px; background:var(--bone-300); flex:none}
+.obModel{
+  font-family:var(--font-mono); font-size:10px; letter-spacing:.07em; text-transform:uppercase;
+  color:var(--ink-400); background:var(--bone-100); border:1px solid var(--bone-300);
+  border-radius:7px; padding:4px 9px; white-space:nowrap;
+}
+.obModel:hover{border-color:var(--steel-400); color:var(--steel-700)}
+@media(max-width:900px){.obRail .ph span:last-child{display:none}.obRail .tick{width:8px}}
+
+/* `align-items:start` is load-bearing: the grid default stretches the aside to
+   full height, which makes position:sticky on it a silent no-op. */
+.obWrap{display:grid; grid-template-columns:minmax(0,1fr) 344px; gap:22px;
+        align-items:start; padding:22px 0 72px}
+.obLeft{min-width:0}
+.obPanel{position:sticky; top:calc(var(--banner-h) + 78px);
+         max-height:calc(100vh - var(--banner-h) - 100px); overflow-y:auto;
+         display:flex; flex-direction:column; gap:13px}
+/* Stacked, with the conversation FIRST. Ordering the panel above would put ten
+   fact rows between the reader and the thing they are meant to be answering. */
+@media(max-width:1000px){
+  .obWrap{grid-template-columns:minmax(0,1fr)}
+  .obPanel{position:static; max-height:none}
+}
+
+/* ── The transcript ─────────────────────────────────────────────────────── */
+.obThread{display:flex; flex-direction:column; gap:17px}
+.obTurn{display:flex; gap:11px; max-width:660px}
+.obTurn.you{margin-left:auto; flex-direction:row-reverse}
+.obTurn .face{
+  width:28px; height:28px; border-radius:50%; flex:none; display:grid; place-items:center;
+  background:var(--ink-800); color:var(--gold-400); font-size:12px; margin-top:2px;
+}
+.obTurn.you .face{background:var(--steel-200); color:var(--steel-700); font-family:var(--font-mono); font-size:10px}
+.obTurn .said{min-width:0; flex:1}
+.obTurn .bub{padding:12px 15px; border-radius:16px; font-size:14px; line-height:1.6}
+.obTurn.agent .bub{background:var(--bone-100); border-bottom-left-radius:5px}
+.obTurn.you .bub{background:var(--ink-800); color:var(--bone-50); border-bottom-right-radius:5px; display:inline-block}
+.obThread > .obTurn:last-child{animation:rise .4s var(--ease-expo) both}
+.obWhy{margin-top:8px; font-size:12px; color:var(--ink-400); line-height:1.55}
+
+.obTyping{display:inline-flex; gap:4px; padding:15px 16px; background:var(--bone-100);
+          border-radius:16px; border-bottom-left-radius:5px}
+.obTyping i{width:6px; height:6px; border-radius:50%; background:var(--ink-300); opacity:.35;
+            animation:obDot 1.1s infinite}
+.obTyping i:nth-child(2){animation-delay:.16s}
+.obTyping i:nth-child(3){animation-delay:.32s}
+@keyframes obDot{0%,60%,100%{opacity:.3}30%{opacity:1}}
+
+/* ── Answering ──────────────────────────────────────────────────────────── */
+.obChips{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px}
+.obChip{
+  padding:9px 14px; border-radius:999px; border:1px solid var(--bone-300); background:#fff;
+  font-size:13px; color:var(--ink-700); text-align:left; line-height:1.35;
+  transition:border-color .18s, background .18s, transform .18s var(--ease-expo);
+}
+.obChip:hover{border-color:var(--steel-400); background:var(--steel-100); transform:translateY(-1px)}
+
+.obSay{display:flex; gap:9px; align-items:flex-end; margin-top:11px}
+.obSay textarea{
+  flex:1; min-height:46px; max-height:150px; padding:13px 15px; border-radius:16px;
+  border:1px solid var(--bone-300); font:inherit; font-size:14px; resize:none; background:#fff;
+}
+.obSay textarea:focus{border-color:var(--steel-400); outline:none}
+.obSend{width:40px; height:40px; border-radius:50%; background:var(--ink-800); color:var(--bone-50);
+        display:grid; place-items:center; flex:none}
+.obSend:hover{background:var(--ink-700)}
+
+.obScope{display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:11px}
+.obSkipLink{
+  font-family:var(--font-mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--ink-300); margin-left:auto; text-align:left;
+}
+.obSkipLink:hover{color:var(--steel-600)}
+
+/* ── The scan log. Named artefacts, and it never disappears — it is the
+      receipt that work happened, not a spinner that gets replaced. ───────── */
+.obLog{margin-top:11px; border-left:2px solid var(--bone-200); padding-left:13px}
+.obLogLine{display:flex; gap:9px; padding:6px 0; font-size:12.5px; color:var(--ink-500);
+           line-height:1.5; animation:rise .35s var(--ease-expo) both}
+.obLogLine > span:first-child{flex:none; font-family:var(--font-mono); font-size:11px; width:12px}
+.obLogLine .ok{color:#3E8259}
+.obLogLine .no{color:var(--clay-500)}
+.obLogLine.work{color:var(--ink-300)}
+
+/* ── Cards inside the conversation ──────────────────────────────────────── */
+.obBrief{margin-top:12px; border:1px solid var(--bone-300); border-radius:16px; background:#fff; padding:6px 15px}
+.obGap{margin-top:12px; border:1px solid var(--bone-300); border-radius:16px; background:#fff; padding:15px}
+.obAssume{margin-top:12px; border:1px dashed var(--bone-400); border-radius:14px;
+          background:var(--bone-50); padding:13px 15px}
+.struck{text-decoration:line-through; opacity:.5}
+.obFetched{display:flex; flex-wrap:wrap; gap:6px; margin-top:12px}
+.obFetched .chip{cursor:default}
+.obRole{margin-top:12px; padding:11px 13px; border-radius:12px; background:var(--bone-50);
+        font-size:12.5px; color:var(--ink-500); display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+
+/* ── The finale ─────────────────────────────────────────────────────────── */
+.obQ{margin-top:14px; font-family:var(--font-display); font-size:19px; color:var(--ink-700)}
+.vs{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:12px}
+@media(max-width:760px){.vs{grid-template-columns:minmax(0,1fr)}}
+.vs .side{border-radius:16px; padding:15px; border:1px solid var(--bone-300); background:#fff}
+.vs .side.dim{background:var(--bone-50); color:var(--ink-400)}
+.obSum{margin-top:14px; padding:13px 15px; border-radius:14px; background:var(--ink-800);
+       color:var(--bone-100); font-size:13px; line-height:1.7}
+.obSum b{color:var(--gold-400); font-weight:500}
+
+/* ── The panel ──────────────────────────────────────────────────────────── */
+.obPanel .pan{background:var(--bone-50); border:1px solid var(--bone-300); border-radius:18px; padding:15px}
+.obPanel h4{font-size:14px; font-family:var(--font-display)}
+.obAcct{display:flex; gap:10px; align-items:center; padding:11px 13px; border-radius:14px;
+        background:#fff; border:1px solid var(--bone-200)}
+.obBound{margin-top:7px; font-size:11.5px; color:var(--ink-400); line-height:1.5;
+         border-left:2px solid var(--gold-400); padding-left:9px}
+
+/* Progress with no denominator: one segment per named slot, filling as each
+   resolves. A percentage would need a guess at how much there is to know. */
+.obRibbon{display:flex; gap:3px; margin-top:10px}
+.obRibbon span{flex:1; height:3px; border-radius:99px; background:var(--bone-200); transition:background .5s}
+.obRibbon span.on{background:var(--steel-500)}
+
+.obFact{display:flex; gap:9px; align-items:flex-start; padding:9px 2px;
+        border-bottom:1px solid var(--bone-200)}
+.obFact:last-child{border-bottom:0}
+.obFact.wide{padding:11px 0}
+.obFact .st{width:15px; height:15px; border-radius:50%; flex:none; margin-top:2px; display:grid;
+            place-items:center; font-size:8px; background:var(--bone-200); color:var(--ink-300)}
+.obFact.read .st{background:var(--steel-200); color:var(--steel-700)}
+.obFact.inferred .st{background:var(--gold-200); color:var(--gold-600)}
+.obFact.you .st{background:#DCEBE1; color:#2F6B45}
+.obFact .k{font-size:12px; font-weight:500; color:var(--ink-600)}
+.obFact .v{font-size:12px; color:var(--ink-500); line-height:1.5; margin-top:2px}
+.obFact.pending .v{color:var(--ink-300); font-style:italic}
+/* An inference is the one status not pre-accepted: one walked past silently
+   acquires a weight it never earned. */
+.obFact.inferred .v{text-decoration:underline dashed var(--gold-300); text-underline-offset:3px}
+.obFact .obSrc{display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:5px}
+.obFact .pen{margin-left:auto; flex:none; font-family:var(--font-mono); font-size:9.5px;
+             letter-spacing:.08em; text-transform:uppercase; color:var(--ink-300);
+             opacity:0; transition:opacity .18s}
+.obFact:hover .pen, .obFact.pending .pen{opacity:1}
+.obFact .pen:hover{color:var(--steel-600)}
+.obFact.editing{padding:11px 2px}
+.obFact.lit{background:var(--gold-100); border-radius:9px; box-shadow:0 0 0 4px var(--gold-100)}
+.obFact.wide .k{font-size:12.5px}
+.obFact.wide .v{font-size:13px; color:var(--ink-700)}
+
+.obSub{font-family:var(--font-mono); font-size:9.5px; letter-spacing:.14em; text-transform:uppercase;
+       color:var(--ink-300); margin:14px 0 4px; padding-top:11px; border-top:1px solid var(--bone-200)}
+.obRule{display:flex; gap:9px; align-items:flex-start; justify-content:space-between;
+        padding:8px 2px; border-bottom:1px solid var(--bone-200)}
+.obRule .k{font-size:11.5px; color:var(--ink-400); line-height:1.4}
+.obRule .v{font-size:12px; color:var(--ink-700); margin-top:2px}
+.obLocked{border-style:none}
+.obLocked.connected .st{background:#DCEBE1; color:#2F6B45}
+.obLocked.skipped .v{color:var(--clay-500); font-style:normal}
+.obPrec{margin-top:12px; padding-top:10px; border-top:1px dashed var(--bone-300);
+        font-family:var(--font-mono); font-size:9.5px; letter-spacing:.1em;
+        text-transform:uppercase; color:var(--ink-300)}
+
 </style>
 </head>
 <body>
@@ -744,10 +927,10 @@ const D = {
    =========================================================================== */
 
 const S = {
-  route:'landing', step:0, me:null, section:null, open:new Set(),
-  /* Onboarding answers. The department set drives which questions appear. */
-  onbDepts:new Set(['executive', 'sales', 'finance']),
-  onbPurpose:'diagnose',
+  route:'landing', me:null, section:null, open:new Set(),
+  /* The agent-first onboarding, in one sub-object. Null until the route is
+     entered; render() builds it, so a deep link and a click behave the same. */
+  ob:null,
   /* Assistant. Cleared on every sign-in: carrying one person's thread into
      another's workspace would leak exactly what the scoping prevents. */
   chatOpen:false, chat:[]
@@ -1013,31 +1196,47 @@ function viewSignup() {
 }
 
 /* ===========================================================================
-   5. ONBOARDING
+   5. ONBOARDING — THE AGENT GOES FIRST
    ---------------------------------------------------------------------------
-   Verify email → say what you are responsible for → answer the questions that
-   follow from that → connect sources → upload documents → invite the team.
+   Five phases, none numbered on screen:
 
-   Domain ownership is established from the sign-up address rather than by asking
-   for a DNS record. The manual claim step was removed as friction, and the API
-   still supports it (`/domains`, `/domains/{id}/check`) for the case the email
-   domain does not match the website — a free-mail sign-up, or an agency setting
-   a client up. That path has no UI here.
+       analyse -> brief -> converse -> persona -> ready
 
-   The restriction it guards is unchanged and still worth explaining: until
-   ownership is established the audit stays reduced, with no competitor discovery
-   and no keyword data, because anyone can type a competitor's address.
+   The old flow was seven steps and asked the person to supply. This one asks
+   them to *adjudicate*: the agent reads the website first, states what it found,
+   and the user corrects it. That inversion is the whole design, and it is the
+   honest shape too, because the product's claim is that it reads before it asks.
+
+   THREE RULES IT IS BUILT AGAINST, all of them decided elsewhere:
+
+   1. **No "verify your email" step.** D19 (doc/09 §4.1) made verification
+      non-blocking. It gates exactly two acts — connecting a tool that holds
+      company data, and inviting a member — so it appears at those two moments
+      and nowhere else. `require_verified_domain` in app/auth/workspaces.py is
+      the real gate; this is a picture of it.
+
+   2. **The agent chooses how to ask, never what to ask** (ADR 0019). The
+      catalogue below — DEPT_QUESTIONS, and doc/08 behind it — is the source of
+      truth for what must be known, and every question carries the scope tag that
+      decides whether its answer is stored at L1, L2 or L3. A generated question
+      has no scope tag, so its answer has nowhere honest to go. OB_GRAPH holds
+      only the phrasing, the order, the follow-ups, and what gets skipped.
+      `obCoverage()` reports any node that asks something the catalogue does not
+      contain. That list must be empty.
+
+   3. **The persona is presentation preference, never authorisation.** The real
+      persona table (migration 0002) holds stated_purpose, priority_topics,
+      communication_style, language and timezone — and persona_chat.py carries
+      `never_asked = ("seniority", "role", "departments")`, because doc/06 §2.6
+      says conflating preference with authorisation is how access-control bugs
+      get written. So role is rendered outside both cards with no edit control,
+      and the agent says the boundary out loud once. See obPersonaCard().
+
+   Nothing here is generated. Every agent line is written in this file, the
+   branching is a lookup, and no network call is made. What is real is the
+   *shape*: which questions exist, which are skipped because a source answers
+   them, and where each fact came from.
    =========================================================================== */
-
-const ONBOARD = [
-  { key:'verify',  title:'Verify your email',            sub:'We sent a link to layla@nakhla-trading.om' },
-  { key:'scope',   title:'What are you responsible for?', sub:'This decides which questions you get asked next, and which directors you start with.' },
-  { key:'profile', title:'A few questions',              sub:'Only what NEXUS cannot read from a source. Everything else it will fetch.' },
-  { key:'connect', title:'Connect your tools',           sub:'Each connection unlocks the departments that depend on it.' },
-  { key:'docs',    title:'Add your documents',           sub:'Price lists, catalogues, contracts, plans.' },
-  { key:'team',    title:'Invite your team',             sub:'Role decides which workspace each person gets.' },
-  { key:'done',    title:'Building your Company Brain',  sub:'' }
-];
 
 /* ---------------------------------------------------------------------------
    ONBOARDING QUESTION BANK
@@ -1055,17 +1254,18 @@ const ONBOARD = [
       not in any API. "What counts as a lead" changes every marketing number
       downstream, and no crawl will ever tell us.
 
-   Each entry: [question, control, value-or-options].
+   Each entry: [question, control, value-or-options, catalogue key]. The key is
+   what OB_GRAPH references, so a question cannot be asked without one.
    --------------------------------------------------------------------------- */
 const DEPT_QUESTIONS = {
   marketing: {
     director:'Marketing Director',
     ask:[
-      ['What counts as a lead worth passing to Sales?', 'textarea', 'A named contact at a company with a live project and a budget holder identified.'],
-      ['Which channels do you actively run?', 'select', ['Search and referrals','Search, paid and social','Trade shows and referrals','Everything']],
-      ['Monthly budget you are willing to spend on acquisition?', 'input', 'OMR 1,500'],
-      ['Who do you most often lose to?', 'input', 'Two regional distributors on price'],
-      ['Is Arabic-language content in scope this year?', 'select', ['Not yet','Planned','Already publishing']]
+      ['What counts as a lead worth passing to Sales?', 'textarea', 'A named contact at a company with a live project and a budget holder identified.', 'marketing.lead_definition'],
+      ['Which channels do you actively run?', 'select', ['Search and referrals','Search, paid and social','Trade shows and referrals','Everything'], 'marketing.channels'],
+      ['Monthly budget you are willing to spend on acquisition?', 'input', 'OMR 1,500', 'marketing.budget'],
+      ['Who do you most often lose to?', 'input', 'Two regional distributors on price', 'marketing.lose_to'],
+      ['Is Arabic-language content in scope this year?', 'select', ['Not yet','Planned','Already publishing'], 'marketing.arabic']
     ],
     fetched:[
       ['Sessions, sources and conversion rate', 'Google Analytics'],
@@ -1076,11 +1276,11 @@ const DEPT_QUESTIONS = {
   sales: {
     director:'Sales Director',
     ask:[
-      ['What are your pipeline stages, in order?', 'input', 'Enquiry → Qualified → Proposal → Negotiation → Won'],
-      ['After how many days of silence should NEXUS flag a deal?', 'select', ['7 days','10 days','14 days','Use my median cycle']],
-      ['How are new leads assigned?', 'select', ['Round robin','By region','By product','Manager assigns']],
-      ['What is the quota period?', 'select', ['Monthly','Quarterly','Annual','No formal quota']],
-      ['What disqualifies a deal outright?', 'textarea', 'No budget holder, or a required lead time under two weeks.']
+      ['What are your pipeline stages, in order?', 'input', 'Enquiry → Qualified → Proposal → Negotiation → Won', 'sales.stages'],
+      ['After how many days of silence should NEXUS flag a deal?', 'select', ['7 days','10 days','14 days','Use my median cycle'], 'sales.stale_days'],
+      ['How are new leads assigned?', 'select', ['Round robin','By region','By product','Manager assigns'], 'sales.assignment'],
+      ['What is the quota period?', 'select', ['Monthly','Quarterly','Annual','No formal quota'], 'sales.quota_period'],
+      ['What disqualifies a deal outright?', 'textarea', 'No budget holder, or a required lead time under two weeks.', 'sales.disqualifier']
     ],
     fetched:[
       ['Deals, values, stages and activity dates', 'CRM'],
@@ -1091,11 +1291,11 @@ const DEPT_QUESTIONS = {
   finance: {
     director:'Finance Director',
     ask:[
-      ['When does your financial year end?', 'select', ['31 December','31 March','30 June','30 September']],
-      ['Standard payment terms you offer?', 'select', ['On receipt','30 days','45 days','60 days']],
-      ['Above what amount does spend need approval?', 'input', 'OMR 1,000'],
-      ['Who approves spend above that?', 'select', ['Owner only','Owner or Finance Manager','Department manager','Board']],
-      ['How many months of runway would worry you?', 'select', ['Under 3','Under 6','Under 9','Under 12']]
+      ['When does your financial year end?', 'select', ['31 December','31 March','30 June','30 September'], 'finance.year_end'],
+      ['Standard payment terms you offer?', 'select', ['On receipt','30 days','45 days','60 days'], 'finance.terms'],
+      ['Above what amount does spend need approval?', 'input', 'OMR 1,000', 'finance.approval_threshold'],
+      ['Who approves spend above that?', 'select', ['Owner only','Owner or Finance Manager','Department manager','Board'], 'finance.approver'],
+      ['How many months of runway would worry you?', 'select', ['Under 3','Under 6','Under 9','Under 12'], 'finance.runway_alarm']
     ],
     fetched:[
       ['Bank balances, invoices and ledger detail', 'Accounting'],
@@ -1106,11 +1306,11 @@ const DEPT_QUESTIONS = {
   operations: {
     director:'Operations Director',
     ask:[
-      ['What do you promise customers as a lead time?', 'input', '3 working days within Muscat, 5 elsewhere'],
-      ['What usually causes a delay?', 'select', ['Stock-outs','Supplier lead time','Picking capacity','Transport']],
-      ['Do you hold stock, or order per job?', 'select', ['Hold stock','Order per job','Both']],
-      ['At what point is an order officially late?', 'select', ['Missed promised date','One day after','Three days after']],
-      ['Which supplier are you most exposed to?', 'input', 'One valve supplier, roughly a third of purchases']
+      ['What do you promise customers as a lead time?', 'input', '3 working days within Muscat, 5 elsewhere', 'operations.lead_time'],
+      ['What usually causes a delay?', 'select', ['Stock-outs','Supplier lead time','Picking capacity','Transport'], 'operations.delay_cause'],
+      ['Do you hold stock, or order per job?', 'select', ['Hold stock','Order per job','Both'], 'operations.stock_policy'],
+      ['At what point is an order officially late?', 'select', ['Missed promised date','One day after','Three days after'], 'operations.late_rule'],
+      ['Which supplier are you most exposed to?', 'input', 'One valve supplier, roughly a third of purchases', 'operations.supplier_risk']
     ],
     fetched:[
       ['Order status, dispatch dates and lateness', 'Operations system'],
@@ -1121,11 +1321,11 @@ const DEPT_QUESTIONS = {
   hr: {
     director:'People Director',
     ask:[
-      ['Is leave accrued monthly or granted annually?', 'select', ['Accrued monthly','Granted annually','Mixed by contract']],
-      ['Who signs off a new hire?', 'select', ['Owner only','Owner and department manager','Department manager']],
-      ['What is your biggest people risk right now?', 'textarea', 'One warehouse supervisor vacancy is holding back dispatch.'],
-      ['Do you run performance reviews on a cycle?', 'select', ['No formal cycle','Annual','Twice a year','Quarterly']],
-      ['Should NEXUS track visa and document expiry?', 'select', ['Yes','No','Not yet']]
+      ['Is leave accrued monthly or granted annually?', 'select', ['Accrued monthly','Granted annually','Mixed by contract'], 'hr.leave_basis'],
+      ['Who signs off a new hire?', 'select', ['Owner only','Owner and department manager','Department manager'], 'hr.hire_signoff'],
+      ['What is your biggest people risk right now?', 'textarea', 'One warehouse supervisor vacancy is holding back dispatch.', 'hr.people_risk'],
+      ['Do you run performance reviews on a cycle?', 'select', ['No formal cycle','Annual','Twice a year','Quarterly'], 'hr.review_cycle'],
+      ['Should NEXUS track visa and document expiry?', 'select', ['Yes','No','Not yet'], 'hr.doc_expiry']
     ],
     fetched:[
       ['Headcount, start dates and contract types', 'HRIS'],
@@ -1136,11 +1336,11 @@ const DEPT_QUESTIONS = {
   strategy: {
     director:'Strategy Director',
     ask:[
-      ['What would make the next twelve months a success?', 'textarea', 'Two annual supply contracts signed and on-time dispatch back above 95%.'],
-      ['Which competitors should NEXUS watch?', 'input', 'The two regional distributors we lose to on price'],
-      ['Which market or segment are you trying to enter?', 'input', 'Sohar industrial estate'],
-      ['What is the binding constraint today?', 'select', ['Cash','People','Stock','Demand','Time']],
-      ['What are you deliberately not doing?', 'textarea', 'No retail counter, no direct import.']
+      ['What would make the next twelve months a success?', 'textarea', 'Two annual supply contracts signed and on-time dispatch back above 95%.', 'strategy.success'],
+      ['Which competitors should NEXUS watch?', 'input', 'The two regional distributors we lose to on price', 'strategy.competitors'],
+      ['Which market or segment are you trying to enter?', 'input', 'Sohar industrial estate', 'strategy.market'],
+      ['What is the binding constraint today?', 'select', ['Cash','People','Stock','Demand','Time'], 'strategy.constraint'],
+      ['What are you deliberately not doing?', 'textarea', 'No retail counter, no direct import.', 'strategy.not_doing']
     ],
     fetched:[
       ['Competitor pages and observed changes', 'Web crawl'],
@@ -1151,11 +1351,11 @@ const DEPT_QUESTIONS = {
   executive: {
     director:'Chief of Staff',
     ask:[
-      ['What do you check first, most mornings?', 'select', ['Cash','Pipeline','Orders going out','Nothing regular']],
-      ['Which number do you not currently trust?', 'input', 'Gross margin by product line'],
-      ['What decision have you been putting off?', 'textarea', 'Whether to open a stock point in Sohar.'],
-      ['How would you like to be interrupted?', 'select', ['One brief each morning','Only when something breaks','Weekly summary']],
-      ['Who should see company-wide figures?', 'select', ['Me only','Me and one other','All managers']]
+      ['What do you check first, most mornings?', 'select', ['Cash','Pipeline','Orders going out','Nothing regular'], 'executive.morning_check'],
+      ['Which number do you not currently trust?', 'input', 'Gross margin by product line', 'executive.distrusted_number'],
+      ['What decision have you been putting off?', 'textarea', 'Whether to open a stock point in Sohar.', 'executive.deferred_decision'],
+      ['How would you like to be interrupted?', 'select', ['One brief each morning','Only when something breaks','Weekly summary'], 'executive.interrupt'],
+      ['Who should see company-wide figures?', 'select', ['Me only','Me and one other','All managers'], 'executive.who_sees']
     ],
     fetched:[
       ['Every department score and the composite', 'All connected sources'],
@@ -1165,295 +1365,1174 @@ const DEPT_QUESTIONS = {
   }
 };
 
-const PURPOSES = [
-  ['diagnose', 'Find out what is quietly broken', 'NEXUS leads with risks and anomalies.'],
-  ['consolidate', 'Get one place for the numbers', 'NEXUS leads with the scoreboard and its sources.'],
-  ['time', 'Free up my own time', 'NEXUS leads with the work it can do for you.'],
-  ['grow', 'Prepare for growth or funding', 'NEXUS leads with trend, margin and capacity.']
+/* ---------------------------------------------------------------------------
+   THE FACT CATALOGUE
+
+   Two sets, both seeded at `pending` rather than grown from empty, so the panel
+   opens as a list of *named holes* instead of a blank card. An undetermined row
+   renders locked with the step that unlocks it — never blank, never a zero
+   (invariant I10). The company set is keyed to the real `company_brain` columns
+   (migration 0019) so the mock and the schema agree; the persona set is keyed to
+   the real `persona` columns (migration 0002) and holds five rows, no more.
+
+   status:  pending | read | inferred | you
+   Those map onto the fact layer's source_kind, and that order is its precedence:
+       user_confirmed > connected_system > crawl > inference
+   --------------------------------------------------------------------------- */
+const OB_FACTS = {
+  company: [
+    { key:'profile',        label:'Company profile',        scope:1, unlock:'Read from your website' },
+    { key:'products',       label:'Products & services',    scope:1, unlock:'Read from your website' },
+    { key:'markets',        label:'Key markets',            scope:1, unlock:'Read from your website' },
+    { key:'voice',          label:'Brand voice',            scope:1, unlock:'Read from your website' },
+    { key:'tech',           label:'Technology landscape',   scope:2, unlock:'Detected from your pages' },
+    { key:'customers',      label:'Target customers',       scope:2, unlock:'Only you can tell me this' },
+    { key:'goals',          label:'Goals this year',        scope:2, unlock:'Only you can tell me this' },
+    { key:'competitors',    label:'Competitors',            scope:1, unlock:'Named by you, then discovered' },
+    { key:'terminology',    label:'Internal terminology',   scope:2, unlock:'Learned from your documents' },
+    { key:'org',            label:'Organisation structure', scope:2, unlock:'Invite someone and I infer it' }
+  ],
+  you: [
+    { key:'landing',   label:'Opens on',     unlock:'From what you check first' },
+    { key:'topics',    label:'Wants first',  unlock:'From what you said would go wrong' },
+    { key:'style',     label:'Detail level', unlock:'From how you want to be interrupted' },
+    { key:'language',  label:'Language',     unlock:'Ask or detect' },
+    { key:'timezone',  label:'Timezone',     unlock:'From your domain' }
+  ]
+};
+
+/* The connector-dependent rows. These sit in the panel from the first frame, so
+   when the conversation later walks into one it reads as inevitable rather than
+   as an upsell that appeared at the moment of asking. */
+const OB_LOCKED = [
+  { key:'crm',        label:'Sales performance', unlock:'Needs your CRM',        tool:'CRM (HubSpot)',
+    loses:['pipeline value','win rate','cycle length','quota attainment'] },
+  { key:'accounting', label:'Cash position',     unlock:'Needs your accounting', tool:'Accounting (Xero)',
+    loses:['cash & runway','gross margin','receivables ageing','approval queue'] },
+  { key:'analytics',  label:'Website traffic',   unlock:'Needs Analytics',       tool:'Google Analytics 4',
+    loses:['sessions by source','conversion rate','landing page performance'] },
+  { key:'ops',        label:'Dispatch & stock',  unlock:'Needs your ops system', tool:'Operations system',
+    loses:['on-time dispatch','stock cover','supplier on-time delivery'] }
 ];
 
-function toggleDept(id) {
-  S.onbDepts.has(id) ? S.onbDepts.delete(id) : S.onbDepts.add(id);
+/* ---------------------------------------------------------------------------
+   THE SCAN
+
+   Six seconds that have to read as work rather than as a spinner. Four rules,
+   and each is doing a job:
+
+     - it names artefacts, not percentages. A crawl has no denominator until it
+       finishes, so a progress bar here would literally be an invented number;
+     - one step visibly FAILS. A scan where everything succeeds reads as theatre,
+       and the one clean failure is what makes the other seven believable;
+     - the log never disappears. It stays in the transcript as the receipt that
+       work occurred;
+     - it ends by naming its own ignorance, which reframes the whole interview as
+       the agent's shortfall rather than the user's homework.
+   --------------------------------------------------------------------------- */
+const OB_SCAN = [
+  { ms:420, ok:true,  line:'Fetched ' + CO.domain + ' — 200 OK, 47 pages in the sitemap.' },
+  { ms:760, ok:true,  line:'Reading twelve of them: home, about, six product pages, contact, two case pages.' },
+  { ms:980, ok:true,  line:'Valves, fittings, fasteners, PPE and lubricants — read off your catalogue nav, not guessed.',
+    set:[['products', 'Valves, fittings, fasteners, PPE and lubricants. Next-day delivery in Muscat, scheduled site replenishment elsewhere.', 'read', '6 product pages']] },
+  { ms:640, ok:true,  line:'Two addresses, both in Oman: Ghala in Muscat, and a depot in Sohar.',
+    set:[['profile', 'Industrial supplies and distribution, selling to trade rather than retail. Ghala in Muscat, with a depot in Sohar.', 'read', '/about, /contact'],
+         ['markets', 'Oman only — Muscat, Sohar, Salalah. No export pages, no other currency on the site.', 'read', 'sitemap + /contact']] },
+  { ms:880, ok:true,  line:'Plain, technical copy. Bilingual — though the Arabic reads as a translation of the English, not separate content.',
+    set:[['voice', 'Plain and technical. No marketing language. Bilingual, English-led.', 'inferred', 'tone across 12 pages']] },
+  { ms:700, ok:true,  line:'A HubSpot form on /contact and Cloudflare in front. That tells me your CRM without having to ask.',
+    set:[['tech', 'HubSpot (form embed on /contact), Cloudflare. No analytics tag found on the product pages.', 'inferred', 'page source']] },
+  { ms:820, ok:false, line:'Google Business Profile — no listing found for this domain. Not a criticism; it means the reviews tile stays locked rather than showing a zero.' },
+  { ms:900, ok:true,  last:true,
+    line:'Three things I could not get: who your customers actually are beyond &ldquo;contractors&rdquo;, what you sell most of, and what you are trying to do this year. Those I have to ask you.' }
+];
+
+/* Shown, never silently applied. `assumptions[]` is a separate column from
+   `provenance[]` in migration 0019 for exactly this reason. */
+const OB_ASSUMPTIONS = [
+  { id:'currency', text:'Reporting currency is <b>OMR</b>',           why:'.om domain, Muscat and Sohar addresses, no other currency on the site' },
+  { id:'fy',       text:'Financial year ends <b>31 December</b>',     why:'the Oman default; nothing on the site says otherwise' }
+];
+
+/* ---------------------------------------------------------------------------
+   THE BRANCHES
+
+   The opening question's answer selects one of these. The department set is
+   therefore derived from a sentence rather than ticked in a grid — the grid was
+   a form however it was phrased, and it asked a founder to translate her own
+   business into our taxonomy, which is the thing ADR 0019 exists to avoid.
+
+   `q` holds three DEPT_QUESTIONS keys, in the order the agent will reach for
+   them. `tool` is the connector this branch runs into first.
+   --------------------------------------------------------------------------- */
+const OB_BRANCH = {
+  finance: {
+    dept:'finance', label:'cash',
+    q:['finance.approval_threshold', 'finance.approver', 'finance.runway_alarm'],
+    tool:'accounting',
+    goal:'Not running out of cash.',
+    topics:'cash, then anything with a payment date on it'
+  },
+  sales: {
+    dept:'sales', label:'deals lost on price',
+    q:['sales.stages', 'sales.stale_days', 'sales.disqualifier'],
+    tool:'crm',
+    goal:'Stop losing on price to the same two distributors.',
+    topics:'deals at risk, then margin'
+  },
+  operations: {
+    dept:'operations', label:'late deliveries',
+    q:['operations.lead_time', 'operations.late_rule', 'operations.supplier_risk'],
+    tool:'ops',
+    goal:'Get on-time dispatch back up and keep it there.',
+    topics:'orders going out, then stock'
+  },
+  executive: {
+    dept:'executive', label:'everything routing through one person',
+    q:['executive.distrusted_number', 'executive.deferred_decision', 'executive.who_sees'],
+    tool:'accounting',
+    goal:'Stop being the bottleneck on every decision.',
+    topics:'what changed since yesterday, then decisions waiting on me'
+  }
+};
+
+/* Branch-specific phrasing. The BANK decides what is asked (OB_BRANCH.q, which
+   are DEPT_QUESTIONS keys); these decide only how. Each takes the previous
+   answer and must escape it — it is user input being put back on the page. */
+OB_BRANCH.finance.says = [
+  (a) => `&ldquo;${esc(a)}&rdquo; — then the first number I owe you is runway, and there is no way to read that
+          off a website. Start with a rule you already have: above what amount does spend need approval?`,
+  (a) => `${esc(a)} — so most single purchases clear without you. Who signs the ones above it?`,
+  () => `Last one on cash. How many months of runway would make you change plans?`
+];
+OB_BRANCH.sales.says = [
+  (a) => `&ldquo;${esc(a)}&rdquo;. I can find out <i>that</i> a deal was lost. What I cannot find out is how a deal
+          moves through your business — a CRM's stage names are usually the vendor's defaults, not yours.
+          Walk me through them, in your words.`,
+  (a) => `${esc(a)}. So how long should one of those sit still before I flag it to you?`,
+  () => `What kills a deal outright, so I do not chase something that is already dead?`
+];
+OB_BRANCH.operations.says = [
+  (a) => `&ldquo;${esc(a)}&rdquo; — then <i>late</i> needs a definition before I can count it, and no system stores
+          the promise, only the outcome. What do you actually promise? Not the best case — what is on the quote.`,
+  (a) => `${esc(a)}. And at what point is an order officially late?`,
+  () => `Which supplier would hurt most if they stopped tomorrow? I will be able to compute who you spend
+         the most with. I will never be able to compute who you cannot replace.`
+];
+OB_BRANCH.executive.says = [
+  (a) => `&ldquo;${esc(a)}&rdquo; — that usually means the numbers disagree with each other somewhere, and you are
+          the one holding the contradiction. Which number do you not currently trust?`,
+  (a) => `${esc(a)}. That one gets re-sourced with its working shown every time it appears — no system reports
+          its own unreliability, so you telling me is the only way I would know. What decision have you been putting off?`,
+  () => `Who should see company-wide figures?`
+];
+
+/* ---------------------------------------------------------------------------
+   THE CONVERSATION GRAPH
+
+   A catalogue, not a script. Each entry is a node the agent can be at; an answer
+   chooses the next one. `bank` names the DEPT_QUESTIONS entry a node renders —
+   `'branch'` means "take it from the branch the user selected". A node with no
+   bank key and kind 'question' would be a question this file invented, which is
+   what obCoverage() looks for.
+
+   kind: question | note | connect | verify | documents | invite
+   --------------------------------------------------------------------------- */
+const OB_GRAPH = {
+
+  'open': {
+    kind:'question', bank:null,   /* not a catalogue question — it is the router */
+    say:() => `I have read what you sell and roughly who to. What I cannot read anywhere is what is
+               actually hard right now.<br><br><b>If the next twelve months went badly, what would have
+               gone wrong?</b>`,
+    hint:'Your answer picks which directors you start with. There is no list of departments to tick.',
+    chips:[
+      { label:'We would have run out of cash',                 branch:'finance' },
+      { label:'We would have kept losing deals on price',      branch:'sales' },
+      { label:'We would have kept shipping late',              branch:'operations' },
+      { label:'I would still be the only decision-maker',      branch:'executive' }
+    ],
+    free:{ placeholder:'Or say it your own way…', branch:'executive' },
+    next:'ask.1'
+  },
+
+  'ask.1': { kind:'question', bank:'branch', qi:0, next:'ask.2' },
+  'ask.2': { kind:'question', bank:'branch', qi:1, next:'note' },
+
+  /* The strongest persuasive move in the flow, and it is placed rather than
+     written: straight after the first genuinely effortful answer, where it reads
+     as reciprocation. At the end of a block it read as an apology. The chips ARE
+     DEPT_QUESTIONS[dept].fetched, and the count in the prose is that array's
+     length — a real count of a real thing. */
+  'note': {
+    kind:'note',
+    say:() => `That is the last thing I will ask you about ${esc(obDeptLabel().toLowerCase())}.<br><br>
+               <b>Here is what I am not going to ask you</b> — because asking would be asking you to read
+               your own systems out loud to me:`,
+    hint:'Hover one to see the row in the panel it will fill.',
+    next:'gap.tool'
+  },
+
+  'gap.tool':   { kind:'connect',   next:'ask.3' },
+  'gap.verify': { kind:'verify',    next:'ask.3' },
+  'ask.3':      { kind:'question', bank:'branch', qi:2, next:'gap.docs' },
+  'gap.docs':   { kind:'documents', next:'me.morning' },
+
+  /* The first answer that lands in the Persona card rather than the Brain. The
+     panel visibly routes it to the other card, which teaches the two-artefact
+     model without a sentence of explanation. */
+  'me.morning': {
+    kind:'question', bank:'executive.morning_check',
+    say:() => `Enough about the company. Two about you, so I know what to put in front of you first.<br><br>
+               What do you check first, most mornings?`,
+    next:'me.interrupt'
+  },
+
+  'me.interrupt': {
+    kind:'question', bank:'executive.interrupt',
+    say:(a) => `${esc(a)}. And how should I interrupt you?`,
+    next:'gap.people'
+  },
+
+  'gap.people': { kind:'invite', next:null }
+};
+
+/* Which bank question a node renders, resolving 'branch' against the branch the
+   user's first answer selected. */
+function obBankKey(node) {
+  if (!node || !node.bank) return null;
+  if (node.bank !== 'branch') return node.bank;
+  const b = OB_BRANCH[S.ob.branch];
+  return b ? b.q[node.qi] : null;
+}
+
+/** The catalogue entry behind a key: 'sales.stale_days' -> its DEPT_QUESTIONS row.
+ *  Returns null if the catalogue does not contain it, which is the failure
+ *  obCoverage() exists to surface. */
+function obBank(key) {
+  if (!key) return null;
+  const dept = key.split('.')[0];
+  const d = DEPT_QUESTIONS[dept];
+  if (!d) return null;
+  const row = d.ask.find((x) => x[3] === key);
+  return row ? { q:row[0], kind:row[1], val:row[2], key:row[3], dept:dept, director:d.director } : null;
+}
+
+/** ADR 0019's invariant, as far as a file with no test suite can check it.
+ *
+ *  `unbacked` must be empty: a question node that names no catalogue entry is a
+ *  question this prototype invented, and its answer would have no scope tag.
+ *
+ *  `notDemoed` is informational and is NOT expected to be empty — the graph
+ *  walks three questions per branch, so most of the bank is simply not on the
+ *  demo path. In the real product that list is the coverage gap and P7 owes it
+ *  a test; here it is a note to whoever builds it. */
+function obCoverage() {
+  const unbacked = [], reached = [];
+  Object.keys(OB_GRAPH).forEach((id) => {
+    const n = OB_GRAPH[id];
+    if (n.kind !== 'question' || id === 'open') return;
+    if (n.bank === 'branch') {
+      Object.keys(OB_BRANCH).forEach((b) => {
+        const k = OB_BRANCH[b].q[n.qi];
+        obBank(k) ? reached.push(k) : unbacked.push(id + ' → ' + k);
+      });
+      return;
+    }
+    obBank(n.bank) ? reached.push(n.bank) : unbacked.push(id + ' → ' + n.bank);
+  });
+  const all = [];
+  Object.keys(DEPT_QUESTIONS).forEach((d) => DEPT_QUESTIONS[d].ask.forEach((x) => all.push(x[3])));
+  return { unbacked:unbacked, reached:reached.length,
+           notDemoed:all.filter((k) => reached.indexOf(k) < 0) };
+}
+
+/* ---------------------------------------------------------------------------
+   STATE, AND THE TWO THINGS THAT MAKE IT SURVIVE render()
+
+   render() replaces the whole of #screens, which destroys focus, the caret and
+   any half-typed text. Two mechanisms, ten lines between them:
+
+     - `draft` mirrors the composer on every keystroke, WITHOUT re-rendering, so
+       a timer firing mid-sentence re-renders with the text intact;
+     - `focus` and `scrolledAt` are restored once, in obAfterRender(), and the
+       transcript only auto-scrolls when the thread has actually grown — so a
+       timer cannot yank someone who scrolled up to re-read.
+
+   The assistant (askSubmit) has the same bug and is deliberately left alone: it
+   renders inside all 38 workspace sections, and widening the blast radius of a
+   prototype edit is not worth it. Recorded in PROTOTYPE-NOTES.md instead.
+   --------------------------------------------------------------------------- */
+let OB_RUN = 0;
+
+function obSeed(which) {
+  const out = {};
+  OB_FACTS[which].forEach((f) => {
+    out[f.key] = { label:f.label, scope:f.scope || null, unlock:f.unlock,
+                   value:null, status:'pending', source:null };
+  });
+  return out;
+}
+
+function obBlank() {
+  return {
+    phase:'analyse',            // analyse | brief | converse | persona | ready
+    run:0, timers:[],           // epoch + outstanding ids
+    scan:{ i:0, lines:[] },
+    thread:[], typing:false,
+    node:null, asked:[], branch:null,
+    facts:{ company:obSeed('company'), you:obSeed('you') },
+    rules:[],                   // department answers, each with its scope tag
+    locked:{},                  // connector key -> 'locked' | 'connected' | 'skipped'
+    assume:{ currency:'held', fy:'held' },
+    docs:0, invited:null, verified:false,
+    editing:null, draft:'', edraft:'', focus:null, scrolledAt:-1,
+    model:true, glow:null       // glow: fact key to highlight for a moment
+  };
+}
+
+const obReduced = () => window.matchMedia
+  && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/** Everything deferred goes through here; nothing else calls setTimeout. Two
+ *  independent guards — the epoch and the route — so neither alone is
+ *  load-bearing. Under reduced motion the delay collapses: killing animation
+ *  duration (as the stylesheet does) while keeping the wall-clock wait is worse
+ *  than the animation, not better. */
+function obLater(fn, ms) {
+  const run = S.ob.run;
+  const id = setTimeout(() => {
+    if (run !== S.ob.run || S.route !== 'onboarding') return;
+    S.ob.timers = S.ob.timers.filter((x) => x !== id);
+    fn();
+  }, obReduced() ? 0 : ms);
+  S.ob.timers.push(id);
+  return id;
+}
+
+function obCancel() {
+  if (S.ob) { S.ob.timers.forEach(clearTimeout); S.ob.timers = []; }
+  OB_RUN++;
+}
+
+function obEnter() {
+  obCancel();
+  S.ob = obBlank();
+  S.ob.run = ++OB_RUN;
+  S.ob.locked = { crm:'locked', accounting:'locked', analytics:'locked', ops:'locked' };
+  S.ob.thread.push({ who:'agent', kind:'say', text:
+    `${esc(obWho().name.split(' ')[0])} — I have <b>${esc(CO.domain)}</b> from your email address, so I am going to
+     read your site rather than ask you to describe your own company. Give me a few seconds.` });
+  S.ob.thread.push({ who:'agent', kind:'scan' });
+  obScanStep();
+}
+
+/* ── Facts ───────────────────────────────────────────────────────────────── */
+
+function obFact(set, key) { return S.ob.facts[set][key]; }
+
+function obSet(set, key, value, status, source) {
+  const f = S.ob.facts[set][key];
+  if (!f) return;
+  if (f.value && f.value !== value) f.was = f.value;   // superseded, kept on the expand
+  f.value = value; f.status = status; f.source = source || null;
+  /* Flash the row that just changed, then let it go. A highlight that never
+     clears stops meaning "this one just moved" and becomes decoration. */
+  S.ob.glow = set + ':' + key;
+  obLater(() => { if (S.ob.glow === set + ':' + key) { S.ob.glow = null; render(); } }, 1500);
+}
+
+/** A department answer. It does not fill a named Brain row — it becomes a rule,
+ *  carrying the scope tag the catalogue gave it. That tag is the reason the
+ *  question had to come from the catalogue in the first place. */
+function obRule(bank, value) {
+  if (!bank) return;
+  const scope = bank.dept === 'executive' ? 2 : 3;
+  const at = S.ob.rules.findIndex((r) => r.key === bank.key);
+  const row = { key:bank.key, label:bank.q, value:value, scope:scope, dept:bank.dept };
+  at < 0 ? S.ob.rules.push(row) : (S.ob.rules[at] = row);
+}
+
+const OB_FILL = {
+  'executive.morning_check':['you','landing'],
+  'executive.interrupt':['you','style']
+};
+
+function obDeptLabel() {
+  const b = OB_BRANCH[S.ob.branch];
+  return b ? DEPT_SCORES[b.dept].label : 'that';
+}
+
+/* ── The scan ────────────────────────────────────────────────────────────── */
+
+function obScanStep() {
+  const beat = OB_SCAN[S.ob.scan.i];
+  if (!beat) { obToBrief(); return; }
+  obLater(() => {
+    S.ob.scan.lines.push(beat);
+    (beat.set || []).forEach((s) => obSet('company', s[0], s[1], s[2], s[3]));
+    S.ob.scan.i++;
+    render();
+    obScanStep();
+  }, beat.ms);
+}
+
+function obSkipScan() {
+  /* The button only renders while the scan is running, but a double click or a
+     beat landing between render and click would otherwise push a second brief. */
+  if (S.ob.phase !== 'analyse') return;
+  while (S.ob.scan.i < OB_SCAN.length) {
+    const beat = OB_SCAN[S.ob.scan.i];
+    S.ob.scan.lines.push(beat);
+    (beat.set || []).forEach((s) => obSet('company', s[0], s[1], s[2], s[3]));
+    S.ob.scan.i++;
+  }
+  obCancelTimers();
+  obToBrief();
+}
+function obCancelTimers() { S.ob.timers.forEach(clearTimeout); S.ob.timers = []; }
+
+function obToBrief() {
+  if (S.ob.phase !== 'analyse') return;
+  S.ob.phase = 'brief';
+  S.ob.thread.push({ who:'agent', kind:'brief', text:
+    `Here is what I think I know. <b>Correct anything that is wrong</b> — you outrank the website,
+     and anything you change here is the version every director works from.` });
   render();
 }
-function setPurpose(id) { S.onbPurpose = id; render(); }
 
-function stepBar() {
-  return `<div class="steps">${ONBOARD.map((_, i) =>
-    `<span class="s ${i < S.step ? 'done' : i === S.step ? 'now' : ''}"></span>`).join('')}</div>`;
+/* ── Turn-taking ─────────────────────────────────────────────────────────── */
+
+function obSay(id) {
+  const n = OB_GRAPH[id];
+  if (!n) { obToPersona(); return; }
+  const last = [...S.ob.thread].reverse().find((t) => t.who === 'you');
+  const prev = last ? last.text : '';
+  let text = '', hint = n.hint || '';
+  if (n.say) {
+    text = n.say(prev);
+  } else {
+    const bank = obBank(obBankKey(n));
+    text = bank ? esc(bank.q) : '';
+    const b = OB_BRANCH[S.ob.branch];
+    if (b && b.says && typeof n.qi === 'number' && S.ob.model) text = b.says[n.qi](prev);
+  }
+  S.ob.thread.push({ who:'agent', kind:n.kind, node:id, text:text, hint:hint });
+  S.ob.node = id;
+  S.ob.asked.push(id);
+  S.ob.draft = '';
+  render();
 }
-function onboardNext() {
-  if (S.step < ONBOARD.length - 1) { S.step++; render(); window.scrollTo(0, 0); } else signIn('layla');
+
+function obAdvance(id) {
+  S.ob.node = null;
+  S.ob.typing = true;
+  render();
+  obLater(() => { S.ob.typing = false; obSay(id); }, 620);
 }
-function onboardBack() {
-  if (S.step > 0) { S.step--; render(); window.scrollTo(0, 0); } else go('signup');
+
+function obReply(text, thenId) {
+  S.ob.node = null;
+  S.ob.typing = true;
+  render();
+  obLater(() => {
+    S.ob.typing = false;
+    S.ob.thread.push({ who:'agent', kind:'say', text:text });
+    render();
+    obLater(() => obSay(thenId), 520);
+  }, 560);
 }
+
+/* Who signed up. Taken from PEOPLE rather than retyped, so the onboarding and
+   the workspace it hands over to cannot disagree about who this is. */
+const obWho = () => PEOPLE[0];
+
+/** Chips for a node. A `select` in the catalogue becomes its own options; an
+ *  `input` offers the catalogue's example as one tap; a `textarea` gets none,
+ *  because the whole value of those questions is the person's own wording. */
+function obChips(node) {
+  if (node.chips) return node.chips;
+  const bank = obBank(obBankKey(node));
+  if (!bank) return [];
+  if (bank.kind === 'select') return bank.val.map((v) => ({ label:v }));
+  if (bank.kind === 'input')  return [{ label:bank.val }];
+  return [];
+}
+
+/* Two places where the agent says something before moving on. Both earn it. */
+const OB_AFTER = {
+  'ask.2': (text) => (S.ob.branch === 'sales' && /median/i.test(text))
+    ? `Then I would rather compute it than pick a number. Once your CRM is connected I will use your own
+       median cycle, and the flag will say which figure it used.`
+    : null,
+  'me.interrupt': () => `One thing about what I have just written down. All of it changes <b>what I show you
+       first</b>. None of it changes <b>what you are allowed to see</b> — that comes from your role, which you
+       did not set here and I cannot change.<br><br>If you told me you were the CFO, I would write down that
+       finance matters to you. I would not give you the ledger.`
+};
+
+function obTake(n, text, choice) {
+  S.ob.thread.push({ who:'you', kind:'you', text:text });
+  if (choice.branch) {
+    S.ob.branch = choice.branch;
+    const b = OB_BRANCH[choice.branch];
+    obSet('company', 'goals', b.goal, 'you', 'you said so');
+    obSet('you', 'topics', b.topics, 'you', 'from what you said would go wrong');
+  }
+  const bank = obBank(obBankKey(n));
+  if (bank) {
+    const fill = OB_FILL[bank.key];
+    if (fill) obSet(fill[0], fill[1], text, 'you', 'you said so');
+    else obRule(bank, text);
+  }
+  const at = S.ob.node;
+  S.ob.draft = '';
+  const after = OB_AFTER[at] ? OB_AFTER[at](text) : null;
+  const next = choice.next || n.next;
+  after ? obReply(after, next) : obAdvance(next);
+}
+
+function obAnswer(i) {
+  if (S.ob.typing) return;
+  const n = OB_GRAPH[S.ob.node]; if (!n) return;
+  const chip = obChips(n)[i]; if (!chip) return;
+  obTake(n, chip.label, chip);
+}
+function obFree() {
+  if (S.ob.typing) return;
+  const n = OB_GRAPH[S.ob.node]; if (!n) return;
+  const t = S.ob.draft.trim(); if (!t) return;
+  obTake(n, t, n.free || {});
+}
+function obSkipQ() {
+  if (S.ob.typing) return;
+  const n = OB_GRAPH[S.ob.node]; if (!n) return;
+  S.ob.thread.push({ who:'you', kind:'you', text:'Skip this one' });
+  S.ob.draft = '';
+  obAdvance(n.next);
+}
+function obGo(id) { if (!S.ob.typing) obAdvance(id); }
+
+/* ── The three gaps ──────────────────────────────────────────────────────── */
+
+const obTool = () => OB_LOCKED.find((x) => x.key === (OB_BRANCH[S.ob.branch] || {}).tool) || OB_LOCKED[0];
+
+function obConnect() {
+  if (S.ob.typing) return;
+  S.ob.thread.push({ who:'you', kind:'you', text:'Connect ' + obTool().tool });
+  obAdvance('gap.verify');
+}
+
+function obVerified() {
+  if (S.ob.typing) return;
+  const t = obTool();
+  S.ob.verified = true;
+  S.ob.locked[t.key] = 'connected';
+  S.ob.thread.push({ who:'you', kind:'you', text:'I have clicked it' });
+  obReply(`Confirmed, and <b>${esc(t.tool)}</b> is reading. ${esc(t.loses.length)} things that were locked
+           are now computed rather than asked: ${t.loses.map(esc).join(', ')}.`, 'ask.3');
+}
+
+function obSkipTool() {
+  if (S.ob.typing) return;
+  const t = obTool();
+  S.ob.locked[t.key] = 'skipped';
+  S.ob.thread.push({ who:'you', kind:'you', text:'Not now' });
+  obReply(`Then I will not have it, and I will say so rather than estimate. <b>${esc(t.loses.length)} tiles
+           stay locked</b>: ${t.loses.map(esc).join(', ')}. Your board will be empty rather than wrong, and
+           you can connect it later from the sidebar.`, 'ask.3');
+}
+
+function obUpload() {
+  if (S.ob.typing) return;
+  S.ob.docs = 3;
+  obSet('company', 'terminology',
+    'Reads "consumables" for PPE and lubricants, and "fit-out" for contract work. I will use your words back.',
+    'read', '3 documents, 310 passages');
+  S.ob.thread.push({ who:'you', kind:'you', text:'Added three files' });
+  obReply(`Indexed. One thing changed straight away: you call PPE and lubricants <b>consumables</b>, and I
+           had them as two categories. Your words win — that is now how I will group them.`, 'me.morning');
+}
+
+function obSkipDocs() {
+  if (S.ob.typing) return;
+  S.ob.thread.push({ who:'you', kind:'you', text:'Later' });
+  obReply(`Then the Brain is your website plus what you have told me, and it will say exactly that. Anything
+           that would have needed a price will say <b>no pricing source</b> rather than estimating one.`, 'me.morning');
+}
+
+function obInvite() {
+  if (S.ob.typing) return;
+  S.ob.invited = true;
+  obSet('company', 'org', 'Two accounts. Reporting lines inferred from who approves what, not from a chart you drew.',
+        'you', 'you invited them');
+  S.ob.thread.push({ who:'you', kind:'you', text:'Invite them' });
+  const gate = S.ob.verified
+    ? 'Sent.'
+    : 'One line, same reason as the connector — inviting people needs the address confirmed, and it still is not. The invitation goes out the moment you click the link.';
+  obReply(`${gate} They get a ${esc(obInviteRole()[0])} workspace: ${esc(obInviteRole()[3].toLowerCase())}. Not yours.`, null);
+}
+
+function obSkipPeople() {
+  if (S.ob.typing) return;
+  S.ob.thread.push({ who:'you', kind:'you', text:'Just me for now' });
+  obReply(`Then you are the only account, and People stays locked — there is nothing to compute per-person
+           from one person. Nothing here is one-time; invite anyone later from the sidebar.`, null);
+}
+
+/** The one role being assigned, not all six. Six rows at that moment is a form;
+ *  one row is a decision. The full table is one click away. */
+function obInviteRole() {
+  const want = { finance:'Department manager', sales:'Department manager',
+                 operations:'Department manager', executive:'Executive' }[S.ob.branch];
+  return ROLE_REACH.find((r) => r[0] === want) || ROLE_REACH[2];
+}
+
+/* ── Phase transitions ───────────────────────────────────────────────────── */
+
+function obConfirmBrief() {
+  obSet('you', 'timezone', 'Asia/Muscat (GMT+4)', 'inferred', '.om domain');
+  obSet('you', 'language', 'English, with Arabic content on your site', 'inferred', 'page language tags');
+  S.ob.phase = 'converse';
+  S.ob.thread.push({ who:'you', kind:'you', text:'That is right' });
+  obAdvance('open');
+}
+
+function obToPersona() {
+  S.ob.phase = 'persona';
+  S.ob.node = null;
+  S.ob.thread.push({ who:'agent', kind:'persona', text:
+    `That is enough to start. Here is what I wrote down about <b>you</b>, and the sentence that produced each
+     line. Change anything that does not sound like you.` });
+  render();
+}
+
+function obToReady() {
+  S.ob.phase = 'ready';
+  S.ob.thread.push({ who:'agent', kind:'ready', text:'Before I hand over — here is the difference this made.' });
+  render();
+}
+
+function obFinish() { obCancel(); signIn('layla'); }
+
+/* ── Editing, drafting, focus ────────────────────────────────────────────── */
+
+function obEditOpen(set, key) {
+  const f = obFact(set, key);
+  S.ob.editing = set + ':' + key;
+  S.ob.edraft = f.value || '';
+  S.ob.focus = 'obEdit';
+  render();
+}
+function obEditDraft(v) { S.ob.edraft = v; }          /* deliberately no render() */
+function obEditCancel() { S.ob.editing = null; S.ob.focus = null; render(); }
+function obEditSave() {
+  const at = (S.ob.editing || '').split(':');
+  const f = at[0] && obFact(at[0], at[1]);
+  const v = (S.ob.edraft || '').trim();
+  if (f && v) {
+    obSet(at[0], at[1], v, 'you', 'you corrected this');
+    /* An edit the agent does not notice breaks the illusion completely. */
+    if (S.ob.phase !== 'analyse') S.ob.thread.push({ who:'agent', kind:'say', text:
+      `Noted — <b>${esc(f.label.toLowerCase())}</b> is yours now, not the website's. That version is what every
+       director works from.` });
+  }
+  S.ob.editing = null; S.ob.focus = null; render();
+}
+
+function obAssume(id) {
+  S.ob.assume[id] = S.ob.assume[id] === 'held' ? 'wrong' : 'held';
+  render();
+}
+
+function obDraft(v) { S.ob.draft = v; }               /* deliberately no render() */
+function obKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); obFree(); }
+}
+function obEditKey(e) {
+  if (e.key === 'Enter') { e.preventDefault(); obEditSave(); }
+  if (e.key === 'Escape') obEditCancel();
+}
+
+/** The one post-render hook. Restores focus and caret, and scrolls the
+ *  transcript only when it has actually grown — an unconditional scroll would
+ *  yank anyone who scrolled up to re-read whenever a timer fires. */
+function obAfterRender() {
+  const want = S.ob.focus || (!S.ob.editing && $('#obField') ? 'obField' : null);
+  const f = want && $('#' + want);
+  if (f) {
+    f.focus({ preventScroll:true });          /* the scroll below is the only one */
+    const n = f.value.length;
+    if (f.setSelectionRange) f.setSelectionRange(n, n);
+  }
+  /* The page scrolls, not the transcript — .obThread has no overflow, so the
+     panel beside it can stay sticky. Only follow when the thread has actually
+     grown: a timer that merely re-renders (the highlight clearing, an edit being
+     saved) must not yank someone who scrolled up to re-read. */
+  if (S.ob.scrolledAt === S.ob.thread.length) return;
+  const turns = document.querySelectorAll('#obThread > .obTurn');
+  const last = turns[turns.length - 1];
+  if (last) last.scrollIntoView({ block:'end', behavior: obReduced() ? 'auto' : 'smooth' });
+  S.ob.scrolledAt = S.ob.thread.length;
+}
+
+/** ADR 0011 made visible. Flipping this mid-conversation keeps every answer and
+ *  every fact — only the wording changes, because branching is a lookup and not
+ *  a model. If a flip ever loses an answer, the two renderers have diverged,
+ *  which is the failure "two renderers, one catalogue" exists to prevent. */
+function obToggleModel() { S.ob.model = !S.ob.model; render(); }
+
+/* The non-question nodes speak too. Kept out of the literal above so the graph
+   stays readable as a catalogue. */
+OB_GRAPH['gap.tool'].say = () => {
+  const t = obTool();
+  const seen = t.key === 'crm'
+    ? ' &mdash; which I already know you run, because your contact page has its form embedded in it'
+    : '';
+  return `That is about as far as talking gets me. The rest is measurement, and measurement needs
+          <b>${esc(t.tool)}</b>${seen}.`;
+};
+OB_GRAPH['gap.verify'].say = () => `One thing first. ${esc(obTool().tool)} holds your customers' data, so I need
+  the address confirmed before I read it. There is a link in your inbox at <b>${esc(obWho().id)}@${esc(CO.domain)}</b>.
+  <br><br><b>Nothing else is waiting on this.</b> The crawl, your answers, your documents and your Brain do
+  not need it. Everything so far is saved.`;
+OB_GRAPH['gap.docs'].say = () => `Your site lists what you sell and never what it costs &mdash; deliberate, I
+  assume, for trade. So I know your range and nothing about your economics. <b>Three files would do more than
+  thirty.</b>`;
+OB_GRAPH['gap.people'].say = () => {
+  const who = { finance:'someone who signs the spend above your threshold',
+                sales:'someone who owns part of that pipeline',
+                operations:'someone who runs the dispatch floor',
+                executive:'the people you would rather hand decisions to' }[S.ob.branch] || 'someone else';
+  return `Last thing. You have described ${who}, and I have been building all of this for you alone. That
+          queue is theirs, not yours.`;
+};
+
+/* ===========================================================================
+   THE VIEW
+   =========================================================================== */
+
+const OB_PHASES = [['analyse','Read'], ['brief','Brief'], ['converse','You'],
+                   ['persona','Persona'], ['ready','Ready']];
 
 function viewOnboarding() {
-  const step = ONBOARD[S.step];
-  const wide = ['profile', 'connect', 'docs', 'team'].includes(step.key);
-  return `<div class="screen on"><div class="centre" style="align-items:start; padding-top:44px">
-    <div class="rise" style="width:100%; max-width:${wide ? '820px' : '460px'}">
-      <div style="text-align:center; margin-bottom:22px">${logo()}</div>
-      <div class="card" style="padding:26px">
-        ${stepBar()}
-        <div class="between wrap" style="margin-bottom:4px">
-          <h2 style="font-size:21px">${esc(step.title)}</h2>
-          <span class="mono tiny muted">Step ${S.step + 1} of ${ONBOARD.length}</span>
+  return `<div class="screen on">
+    ${obTopBar()}
+    <div class="shell obWrap">
+      <div class="obLeft">
+        <div class="obThread" id="obThread">
+          ${S.ob.thread.map((t, i) => obTurn(t, i)).join('')}
+          ${S.ob.typing ? '<div class="obTurn agent"><div class="face">◆</div><div class="said"><div class="obTyping"><i></i><i></i><i></i></div></div></div>' : ''}
         </div>
-        ${step.sub ? `<p class="sm muted" style="margin-bottom:20px">${esc(step.sub)}</p>` : '<div style="height:12px"></div>'}
-        ${onboardBody(step.key)}
       </div>
+      <aside class="obPanel">${obAccountStrip()}${obBrainCard()}${obPersonaCard()}</aside>
     </div>
+  </div>`;
+}
+
+function obTopBar() {
+  const at = OB_PHASES.findIndex((p) => p[0] === S.ob.phase);
+  return `<header class="obTop"><div class="shell inner">
+    ${logo()}
+    <div class="obRail">
+      ${OB_PHASES.map((p, i) => `<span class="ph ${i < at ? 'done' : i === at ? 'now' : ''}">
+        <span class="dot"></span><span>${esc(p[1])}</span></span>`).join('<span class="tick"></span>')}
+    </div>
+    <button class="obModel" onclick="obToggleModel()" title="ADR 0011 — no language model is a supported state, not a degraded one. The catalogue, the branching and the Brain are identical either way; only the wording changes.">
+      ${S.ob.model ? 'model on' : 'no model configured'}
+    </button>
+  </div></header>`;
+}
+
+function obTurn(t, i) {
+  const live = i === S.ob.thread.length - 1 && !S.ob.typing;
+  if (t.who === 'you') {
+    return `<div class="obTurn you"><div class="face">${esc(obWho().initials)}</div>
+      <div class="said"><div class="bub">${esc(t.text)}</div></div></div>`;
+  }
+  return `<div class="obTurn agent"><div class="face">◆</div><div class="said">
+    ${t.text ? `<div class="bub">${t.text}</div>` : ''}
+    ${t.hint && live ? `<div class="obWhy">${esc(t.hint)}</div>` : ''}
+    ${obBody(t, live)}
   </div></div>`;
 }
 
-function onboardBody(key) {
-  const nav = (label, back) => `
-    <div class="row" style="gap:10px; margin-top:22px">
-      ${back === false ? '' : '<button class="btn ghost" onclick="onboardBack()">Back</button>'}
-      <button class="btn" style="flex:1" onclick="onboardNext()">${esc(label)} →</button>
+function obBody(t, live) {
+  if (t.kind === 'scan')      return obScanBody();
+  if (t.kind === 'brief')     return live ? obBriefBody() : '<div class="obWhy">Confirmed.</div>';
+  if (t.kind === 'note')      return obNoteBody(live);
+  if (t.kind === 'ready')     return obReadyBody();
+  if (!live) return '';
+  if (t.kind === 'question')  return obAskBody(t);
+  if (t.kind === 'connect')   return obConnectBody();
+  if (t.kind === 'verify')    return obVerifyBody();
+  if (t.kind === 'documents') return obDocsBody();
+  if (t.kind === 'invite')    return obInviteBody();
+  if (t.kind === 'persona')   return obPersonaBody();
+  return '';
+}
+
+/* ── analyse ─────────────────────────────────────────────────────────────── */
+
+function obScanBody() {
+  const done = S.ob.scan.i >= OB_SCAN.length;
+  return `<div class="obLog">
+      ${S.ob.scan.lines.map((l) => `<div class="obLogLine">
+        <span class="${l.ok ? 'ok' : 'no'}">${l.ok ? '✓' : '—'}</span><span>${l.line}</span></div>`).join('')}
+      ${!done ? '<div class="obLogLine work"><span>⋯</span><span>reading…</span></div>' : ''}
+    </div>
+    ${!done ? '<button class="btn ghost sm" style="margin-top:11px" onclick="obSkipScan()">Skip ahead — finish reading in the background</button>' : ''}`;
+}
+
+/* ── brief ───────────────────────────────────────────────────────────────── */
+
+function obBriefBody() {
+  const rows = OB_FACTS.company.filter((f) => obFact('company', f.key).status !== 'pending');
+  return `<div class="obBrief">
+      ${rows.map((f) => obFactRow('company', f.key, true)).join('')}
+    </div>
+    ${obAssumeStrip()}
+    <div class="row wrap" style="gap:10px; margin-top:15px">
+      <button class="btn" onclick="obConfirmBrief()">That is right — keep going →</button>
+      <span class="hint" style="flex:1; min-width:180px">Or click any line to correct it. You outrank the website,
+      and your version is what every director works from.</span>
     </div>`;
+}
 
-  if (key === 'verify') return `
-    <div style="text-align:center; padding:12px 0 4px">
-      <div style="width:56px; height:56px; margin:0 auto 14px; border-radius:50%; background:var(--gold-100); display:grid; place-items:center; font-size:24px">✉</div>
-      <p class="sm muted">Click the link in your inbox to continue. Unverified accounts cannot connect
-      a data source.</p>
-      <div class="chip" style="margin-top:14px">Link expires in 24 hours</div>
-    </div>
-
-    <!-- This closes the loop the DNS step used to close. The preview audit holds
-         competitor discovery back until domain ownership is established, so
-         something has to establish it — here, the sign-up address matching the
-         website domain, which is how it is normally done. -->
-    <div class="brief good" style="margin-top:16px">
-      <span class="rail"></span>
-      <div>
-        <div class="sm" style="font-weight:500">${esc(CO.domain)} confirmed automatically</div>
-        <p class="sm muted" style="margin-top:4px">You signed up from an address at this domain, so we do
-        not need a DNS record from you. That is what unlocks the full audit &mdash; competitor discovery
-        and keyword data stay off until ownership is established, because anyone can type someone
-        else&rsquo;s web address.</p>
-      </div>
-    </div>
-    ${nav('I have verified', false)}`;
-
-  if (key === 'scope') {
-    const chosen = [...S.onbDepts];
-    return `
-      <div class="mono tiny muted" style="text-transform:uppercase; letter-spacing:.13em">Which parts of the business are yours?</div>
-      <div class="grid g2" style="margin-top:11px; gap:9px">
-        ${Object.entries(DEPT_QUESTIONS).map(([id, d]) => {
-          const on = S.onbDepts.has(id);
-          return `<button onclick="toggleDept('${id}')" class="card" style="
-            text-align:left; padding:13px; cursor:pointer;
-            border-color:${on ? 'var(--steel-400)' : 'var(--bone-300)'};
-            background:${on ? 'var(--steel-100)' : '#fff'};
-            box-shadow:${on ? 'none' : 'var(--shadow-paper)'}">
-            <div class="between">
-              <span class="sm" style="font-weight:500">${esc(DEPT_SCORES[id].label)}</span>
-              <span class="tickbox" style="${on ? 'background:var(--steel-500); border-color:var(--steel-500); color:#fff' : ''}">✓</span>
-            </div>
-            <div class="tiny muted" style="margin-top:5px">${esc(d.director)}</div>
-          </button>`;
-        }).join('')}
-      </div>
-
-      <div class="mono tiny muted" style="text-transform:uppercase; letter-spacing:.13em; margin-top:22px">Why are you here?</div>
-      <div style="margin-top:10px">
-        ${PURPOSES.map(([id, label, effect]) => {
-          const on = S.onbPurpose === id;
-          return `<button onclick="setPurpose('${id}')" class="queueRow" style="
-            width:100%; text-align:left; cursor:pointer;
-            border-color:${on ? 'var(--gold-400)' : 'var(--bone-200)'};
-            background:${on ? 'var(--gold-100)' : '#fff'}">
-            <span class="tickbox" style="border-radius:50%; ${on ? 'background:var(--gold-500); border-color:var(--gold-500); color:#fff' : ''}">✓</span>
-            <div class="grow">
-              <div class="sm" style="font-weight:500">${esc(label)}</div>
-              <div class="tiny muted" style="margin-top:2px">${esc(effect)}</div>
-            </div>
-          </button>`;
-        }).join('')}
-      </div>
-
-      <div class="brief" style="margin-top:16px">
-        <span class="rail"></span>
-        <div>
-          <div class="sm" style="font-weight:500">
-            ${chosen.length} director${chosen.length === 1 ? '' : 's'} selected
-          </div>
-          <p class="sm muted" style="margin-top:4px">
-            You will be asked
-            <b>${chosen.reduce((a, id) => a + DEPT_QUESTIONS[id].ask.length, 0)} questions</b>
-            &mdash; only the ones NEXUS cannot read from a connected source. The rest it will fetch.
-            ${chosen.length ? '' : 'Select at least one to continue.'}
-          </p>
-        </div>
-      </div>
-      <p class="hint" style="margin-top:10px">Someone you invite later answers only their own
-      department&rsquo;s questions, not all of these.</p>
-      ${chosen.length ? nav('Continue') : `
-        <div class="row" style="gap:10px; margin-top:22px">
-          <button class="btn ghost" onclick="onboardBack()">Back</button>
-          <button class="btn" style="flex:1" disabled>Select a department to continue</button>
-        </div>`}`;
-  }
-
-  if (key === 'profile') {
-    const chosen = [...S.onbDepts];
-    const field = ([label, kind, val]) => `
-      <div class="field" ${kind === 'textarea' ? 'style="grid-column:1/-1"' : ''}>
-        <label>${esc(label)}</label>
-        ${kind === 'select'
-          ? `<select class="input">${val.map((o) => `<option>${esc(o)}</option>`).join('')}</select>`
-          : kind === 'textarea'
-            ? `<textarea class="input">${esc(val)}</textarea>`
-            : `<input class="input" value="${esc(val)}">`}
+function obAssumeStrip() {
+  return `<div class="obAssume">
+    <div class="mono tiny muted" style="text-transform:uppercase; letter-spacing:.13em">Proceeding on two assumptions</div>
+    ${OB_ASSUMPTIONS.map((a) => {
+      const wrong = S.ob.assume[a.id] === 'wrong';
+      return `<div class="between" style="gap:12px; margin-top:9px">
+        <div style="min-width:0"><div class="sm ${wrong ? 'struck' : ''}">${a.text}</div>
+          <div class="tiny muted">${esc(a.why)}</div></div>
+        <button class="btn ghost sm" onclick="obAssume('${a.id}')">${wrong ? 'restore' : 'wrong'}</button>
       </div>`;
+    }).join('')}
+  </div>`;
+}
 
-    return `
-      <!-- Shared facts first. These are true of the company regardless of who is
-           filling the form in, so asking them per department would repeat them. -->
-      <div class="mono tiny muted" style="text-transform:uppercase; letter-spacing:.13em">About the company</div>
-      <div class="grid g2" style="margin-top:10px">
-        ${[['What does the business sell?', 'input', CO.industry],
-           ['Who is the typical customer?', 'input', 'Contractors and facilities teams in Muscat, Sohar and Salalah'],
-           ['Reporting currency', 'select', ['OMR — Omani rial','AED — UAE dirham','SAR — Saudi riyal']],
-           ['Roughly how many people?', 'select', ['Under 10','10–50','50–200','Over 200']]
-          ].map(field).join('')}
-      </div>
+/* ── converse ────────────────────────────────────────────────────────────── */
 
-      ${chosen.map((id) => {
-        const d = DEPT_QUESTIONS[id];
-        return `
-        <div style="margin-top:26px; padding-top:20px; border-top:1px solid var(--bone-200)">
-          <div class="between wrap" style="margin-bottom:11px">
-            <div>
-              <div class="mono tiny" style="text-transform:uppercase; letter-spacing:.13em; color:var(--steel-600)">${esc(DEPT_SCORES[id].label)}</div>
-              <div class="tiny muted" style="margin-top:3px">Asked by your ${esc(d.director)}</div>
-            </div>
-            <span class="chip">${d.ask.length} questions</span>
-          </div>
-          <div class="grid g2">${d.ask.map(field).join('')}</div>
-
-          <!-- The persuasive half: what it will NOT ask, and where it gets it. -->
-          <div class="card tint" style="box-shadow:none; margin-top:12px; padding:12px">
-            <div class="mono tiny muted" style="text-transform:uppercase; letter-spacing:.11em">Not asking &mdash; will be read from a source</div>
-            <div class="row wrap" style="gap:6px; margin-top:9px">
-              ${d.fetched.map(([what, from]) => `
-                <span class="chip src" title="${esc(what)}">${esc(what)} · ${esc(from)}</span>`).join('')}
-            </div>
-          </div>
-        </div>`;
-      }).join('')}
-
-      <p class="hint" style="margin-top:20px">Answers here are stored as L1 and L2 facts and cited whenever a
-      recommendation depends on them. They are the definitions and thresholds NEXUS cannot infer &mdash;
-      what counts as a lead, when a deal is stale, who approves spend &mdash; and they change the numbers
-      downstream, which is why you are asked rather than defaulted.</p>
-      ${nav('Save and continue')}`;
-  }
-
-  if (key === 'connect') return `
-    <div class="grid g2">
-      ${D.integrations.map((x) => {
-        const on = x.status === 'connected', err = x.status === 'error';
-        return `<div class="card" style="padding:14px">
-          <div class="between">
-            <span class="sm" style="font-weight:500">${esc(x.name)}</span>
-            <span class="chip ${on ? 'good' : err ? 'warn' : ''}">${on ? '✓ connected' : err ? '! needs attention' : 'available'}</span>
-          </div>
-          <div class="row wrap" style="gap:6px; margin-top:9px">
-            <span class="chip lock">reads at ${esc(x.scope)}</span>
-            ${on ? `<span class="chip">synced ${esc(x.last)}</span>` : ''}
-          </div>
-          ${!on ? '<button class="btn ghost sm" style="margin-top:11px; width:100%">Connect</button>' : ''}
-        </div>`;
-      }).join('')}
-    </div>
-    <p class="hint">A connection only ever reads. NEXUS never writes to your CRM or accounting system
-    without an explicit, confirmed action. Sources for departments you did not select can be connected
-    later &mdash; nothing here is permanent.</p>
-    ${nav('Continue')}`;
-
-  if (key === 'docs') return `
-    <div class="card tint" style="border-style:dashed; text-align:center; padding:28px; box-shadow:none">
-      <div style="font-size:26px">⇪</div>
-      <div class="sm" style="margin-top:8px; font-weight:500">Drop files here</div>
-      <p class="hint" style="margin-top:4px">PDF, Word, Excel, PowerPoint. A scanned PDF with no text layer
-      will fail visibly rather than be indexed as empty.</p>
-    </div>
-    <div style="margin-top:16px">
-      <div class="between" style="margin-bottom:6px">
-        <span class="mono tiny muted" style="text-transform:uppercase; letter-spacing:.12em">Indexed so far</span>${illus()}
-      </div>
-      ${D.brain.filter((b) => b.kind === 'Document').map((b) => `
-        <div class="between" style="padding:10px 2px; border-bottom:1px solid var(--bone-100)">
-          <div>
-            <div class="sm">${esc(b.title)}</div>
-            <div class="tiny muted mono">${b.chunks} passages indexed</div>
-          </div>
-          <span class="chip ${b.scope >= 4 ? 'warn' : 'lock'}">${esc(SCOPE_NAMES[b.scope])}</span>
-        </div>`).join('')}
-    </div>
-    <p class="hint">Every document is classified on upload. Anything NEXUS is unsure about is held for your
-    review rather than guessed &mdash; the default is the more restrictive level.</p>
-    ${nav('Continue')}`;
-
-  if (key === 'team') return `
-    <div class="grid g2" style="gap:10px">
-      <div class="field" style="margin:0"><label>Email</label><input class="input" placeholder="name@nakhla-trading.om"></div>
-      <div class="field" style="margin:0"><label>Role</label>
-        <select class="input">${ROLE_REACH.map((r) => `<option>${esc(r[0])}</option>`).join('')}</select>
-      </div>
-    </div>
-    <button class="btn ghost sm" style="margin-top:12px">+ Add another</button>
-    <div style="margin-top:18px">
-      <div class="between" style="margin-bottom:9px">
-        <span class="mono tiny muted" style="text-transform:uppercase; letter-spacing:.14em">What each role reaches</span>
-      </div>
-      <table>
-        <thead><tr><th>Role</th><th>Max sensitivity</th><th>Departments</th><th>Their workspace</th></tr></thead>
-        <tbody>
-          ${ROLE_REACH.map(([label, scope, depts, ws]) => `<tr>
-            <td class="sm">${esc(label)}</td>
-            <td class="mono tiny">${scope ? esc(SCOPE_NAMES[scope]) : '<span class="muted">Nothing by role</span>'}</td>
-            <td class="tiny muted">${esc(depts)}</td>
-            <td class="tiny muted">${esc(ws)}</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
-      <p class="hint" style="margin-top:10px">L4 Restricted is deliberately absent from this table. It is not
-      reachable by any role &mdash; not even the Owner&rsquo;s. It is reached only by being named on the item.</p>
-    </div>
-    ${nav('Send invitations')}`;
-
-  /* done */
-  const tasks = [
-    ['Website crawled','47 pages'], ['Documents indexed','584 passages'],
-    ['CRM synced','1,240 records'], ['Accounting synced','18 months of ledger'],
-    ['Department scores computed','7 of 7'], ['Competitors discovered','6 found'],
-    ['First Morning Brief','ready']
-  ];
+function obAskBody(t) {
+  const n = OB_GRAPH[t.node];
+  if (!n) return '';
+  const chips = obChips(n);
+  const bank = obBank(obBankKey(n));
+  const free = !!n.free || (bank && bank.kind !== 'select');
   return `
-    <div style="padding:4px 0">
-      ${tasks.map(([t, d]) => `
-        <div class="between" style="padding:9px 2px">
-          <span class="sm"><span style="color:#3E8259; margin-right:8px">✓</span>${esc(t)}</span>
-          <span class="mono tiny muted">${esc(d)}</span>
-        </div>`).join('')}
+    ${chips.length ? `<div class="obChips">${chips.map((c, i) =>
+      `<button class="obChip" onclick="obAnswer(${i})">${esc(c.label)}</button>`).join('')}</div>` : ''}
+    ${free ? obSayBox(n) : ''}
+    <div class="obScope">
+      ${bank ? `<span class="chip lock">${esc(SCOPE_NAMES[bank.dept === 'executive' ? 2 : 3])}</span>
+        <span class="tiny muted">from the catalogue · asked by your ${esc(bank.director)}</span>` :
+        '<span class="tiny muted">Routing question — the answer picks your directors.</span>'}
+      <button class="obSkipLink" onclick="obSkipQ()">skip this one</button>
+    </div>`;
+}
+
+function obSayBox(n) {
+  const ph = (n.free && n.free.placeholder) || 'Type your answer…';
+  return `<div class="obSay">
+    <textarea id="obField" rows="1" placeholder="${esc(ph)}"
+      oninput="obDraft(this.value)" onkeydown="obKey(event)">${esc(S.ob.draft)}</textarea>
+    <button class="obSend" onclick="obFree()" aria-label="Send">→</button>
+  </div>`;
+}
+
+function obNoteBody(live) {
+  const b = OB_BRANCH[S.ob.branch];
+  if (!b) return '';
+  const f = DEPT_QUESTIONS[b.dept].fetched;
+  return `<div class="obFetched" onmouseleave="obGlow(null)">
+      ${f.map(([what, from]) => `<span class="chip src" onmouseover="obGlow('${esc(b.tool)}')">${esc(what)} · ${esc(from)}</span>`).join('')}
     </div>
-    <div class="brief good" style="margin-top:12px">
+    <div class="obWhy">${esc(String(f.length))} of them, read rather than asked. Not to save you time —
+    a number you type is a number I would then have to trust over a number I can measure.</div>
+    ${live ? '<button class="btn sm" style="margin-top:12px" onclick="obGo(\'gap.tool\')">Understood →</button>' : ''}`;
+}
+
+function obConnectBody() {
+  const t = obTool();
+  return `<div class="obGap">
+    <div class="between"><div>
+      <div class="sm" style="font-weight:500">${esc(t.tool)}</div>
+      <div class="tiny muted">${esc(String(t.loses.length))} locked tiles depend on it</div>
+    </div><span class="chip lock">reads only, never writes</span></div>
+    <div class="row wrap" style="gap:6px; margin-top:10px">
+      ${t.loses.map((x) => `<span class="chip">${esc(x)}</span>`).join('')}</div>
+    <div class="row wrap" style="gap:9px; margin-top:14px">
+      <button class="btn sm" onclick="obConnect()">Connect ${esc(t.tool)}</button>
+      <button class="btn ghost sm" onclick="obSkipTool()">Not now</button>
+    </div>
+  </div>`;
+}
+
+function obVerifyBody() {
+  return `<div class="obGap">
+    <div class="row wrap" style="gap:9px">
+      <button class="btn sm" onclick="obVerified()">I have clicked it</button>
+      <button class="btn ghost sm" onclick="obVerified()">Resend</button>
+      <button class="btn ghost sm" onclick="obSkipTool()">Skip — keep going without it</button>
+    </div>
+    <div class="obWhy" style="margin-top:10px">Verification gates two things and no others: reading a tool that
+    holds company data, and inviting a member. It has never gated your workspace.</div>
+  </div>`;
+}
+
+function obDocsBody() {
+  const want = [
+    ['Your current price list', 'so I can talk about margin instead of range', 3],
+    ['One proposal you were proud of', 'so I write in your format, not a template', 2],
+    ['The supplier agreement you are most exposed to', 'so I know the terms behind your lead times', 4]
+  ];
+  return `<div class="obGap">
+    ${want.map(([n, why, sc]) => `<div class="between" style="gap:12px; padding:8px 0; border-bottom:1px solid var(--bone-100)">
+      <div style="min-width:0"><div class="sm">${esc(n)}</div><div class="tiny muted">${esc(why)}</div></div>
+      <span class="chip ${sc >= 4 ? 'warn' : 'lock'}">${esc(SCOPE_NAMES[sc])}</span></div>`).join('')}
+    <div class="obWhy" style="margin-top:10px">Classified before you hand them over, not after. This one needs
+    nothing from your inbox — it is your file going into your own workspace.</div>
+    <div class="row wrap" style="gap:9px; margin-top:12px">
+      <button class="btn sm" onclick="obUpload()">Add the three</button>
+      <button class="btn ghost sm" onclick="obSkipDocs()">Later</button>
+    </div>
+  </div>`;
+}
+
+function obInviteBody() {
+  const r = obInviteRole();
+  return `<div class="obGap">
+    <div class="grid g2" style="gap:10px">
+      <div class="field" style="margin:0"><label>Email</label>
+        <input class="input" placeholder="name@${esc(CO.domain)}"></div>
+      <div class="field" style="margin:0"><label>Role</label>
+        <select class="input">${ROLE_REACH.map((x) =>
+          `<option ${x[0] === r[0] ? 'selected' : ''}>${esc(x[0])}</option>`).join('')}</select></div>
+    </div>
+    <div class="obRole">
+      <b>${esc(r[0])}</b> reaches ${esc(r[1] ? SCOPE_NAMES[r[1]] : 'nothing by role')} ·
+      ${esc(r[2].toLowerCase())} · ${esc(r[3].toLowerCase())}.
+      <button class="obSkipLink" onclick="tog('obroles')">${S.open.has('obroles') ? 'hide all six' : 'all six roles'}</button>
+    </div>
+    ${S.open.has('obroles') ? `<table style="margin-top:10px">
+      <thead><tr><th>Role</th><th>Max sensitivity</th><th>Departments</th></tr></thead>
+      <tbody>${ROLE_REACH.map((x) => `<tr><td class="sm">${esc(x[0])}</td>
+        <td class="mono tiny">${x[1] ? esc(SCOPE_NAMES[x[1]]) : '<span class="muted">Nothing by role</span>'}</td>
+        <td class="tiny muted">${esc(x[2])}</td></tr>`).join('')}</tbody></table>
+      <div class="obWhy">L4 Restricted is deliberately absent. No role reaches it — not even yours. It is
+      reached only by being named on the item.</div>` : ''}
+    <div class="row wrap" style="gap:9px; margin-top:13px">
+      <button class="btn sm" onclick="obInvite()">Invite them</button>
+      <button class="btn ghost sm" onclick="obSkipPeople()">Just me for now</button>
+    </div>
+  </div>`;
+}
+
+/* ── persona ─────────────────────────────────────────────────────────────── */
+
+function obPersonaBody() {
+  return `<div class="obBrief">
+      ${OB_FACTS.you.map((f) => obFactRow('you', f.key, true)).join('')}
+    </div>
+    <div class="brief" style="margin-top:14px">
       <span class="rail"></span>
       <div>
-        <div class="sm" style="font-weight:500">Your Company Brain is live</div>
-        <p class="sm muted" style="margin-top:4px">Seven directors are now working from the same set of
-        facts, so they cannot contradict each other.</p>
+        <div class="sm" style="font-weight:500">What is deliberately not here</div>
+        <p class="sm muted" style="margin-top:4px">Your role, your seniority and which departments you reach.
+        None of those are persona fields. They were set when the workspace was created, they decide what you
+        are <i>allowed</i> to see, and no answer you give me can widen them.</p>
       </div>
     </div>
-    <button class="btn wide" style="margin-top:20px" onclick="signIn('layla')">Open my Chief of Staff →</button>
-    <button class="btn ghost wide" style="margin-top:9px" onclick="go('signin')">Or sign in as someone else</button>`;
+    <button class="btn" style="margin-top:15px" onclick="obToReady()">That sounds like me →</button>`;
+}
+
+/* ── ready ───────────────────────────────────────────────────────────────── */
+
+const OB_READY = {
+  finance:    { q:'Should we extend 60-day terms to win bigger accounts?',
+                a:`You told me anything over <b>OMR 1,000</b> needs sign-off and that under six months of runway
+                   would change your plans. So the question is not whether 60 days is normal — it is how many
+                   accounts you can carry at 60 days before you hit that line.` },
+  sales:      { q:'Should I drop price to stop losing to the Sohar distributors?',
+                a:`You defined a dead deal as one with no budget holder, and you gave me your five stages. So
+                   before price: how many of those losses reached <b>Proposal</b> at all? Discounting a deal
+                   that died at Qualified fixes nothing.` },
+  operations: { q:'Should we open a stock point in Sohar?',
+                a:`You already deliver to Sohar, and your depot is on your own contact page — so the question is
+                   <b>stocking</b> it, not opening it. You also told me lateness is what you would regret most,
+                   which makes this the right thing to be asking.` },
+  executive:  { q:'Should we open a stock point in Sohar?',
+                a:`You said you do not trust the margin figure, and this decision turns on it. So the honest
+                   answer is that I will not model it until your accounting is connected — and your Sohar depot
+                   is already on your contact page, so the question is stocking it, not opening it.` }
+};
+
+function obReadyBody() {
+  const r = OB_READY[S.ob.branch] || OB_READY.operations;
+  const b = OB_BRANCH[S.ob.branch] || OB_BRANCH.operations;
+  const answers = S.ob.thread.filter((t) => t.who === 'you').length;
+  const skipped = DEPT_QUESTIONS[b.dept].fetched.length + DEPT_QUESTIONS.executive.fetched.length;
+  const stillLocked = OB_FACTS.company.filter((f) => obFact('company', f.key).status === 'pending')
+    .map((f) => f.label)
+    .concat(OB_LOCKED.filter((l) => S.ob.locked[l.key] !== 'connected').map((l) => l.label));
+
+  return `<div class="obQ">&ldquo;${esc(r.q)}&rdquo;</div>
+    <div class="vs">
+      <div class="side dim">
+        <div class="mono tiny muted" style="text-transform:uppercase; letter-spacing:.13em">What any AI would say</div>
+        <p class="sm" style="margin-top:9px">Expanding capacity can improve service levels and market reach.
+        Consider evaluating demand, costs and logistics in the target region, and monitor your key performance
+        indicators regularly.</p>
+        <p class="sm" style="margin-top:9px">Businesses in your sector typically see a 20&ndash;30% improvement.</p>
+      </div>
+      <div class="side">
+        <div class="mono tiny muted" style="text-transform:uppercase; letter-spacing:.13em; color:var(--steel-600)">What yours says</div>
+        <p class="sm" style="margin-top:9px">${r.a}</p>
+        <div class="row wrap" style="gap:5px; margin-top:8px">
+          <span class="chip src">read · your website</span><span class="chip good">from you</span></div>
+        <p class="sm" style="margin-top:12px">I cannot tell you what it would cost yet.</p>
+        <div class="row wrap" style="gap:5px; margin-top:6px"><span class="chip lock">locked · connect accounting</span></div>
+        <p class="sm" style="margin-top:12px"><b>I will not give you that 20&ndash;30%.</b> Nobody measured it.</p>
+        <div class="row wrap" style="gap:5px; margin-top:6px"><span class="chip warn">refused</span></div>
+      </div>
+    </div>
+
+    <div class="obSum">
+      Built from <b>47 pages</b> read · <b>${esc(String(S.ob.docs))} documents</b> ·
+      <b>${esc(String(answers))} answers</b> you gave · <b>${esc(String(skipped))} questions I did not ask</b> ·
+      <b>2 assumptions</b>, both shown to you.
+      ${S.ob.model ? '' : ' Assembled with <b>no language model</b> — the Brain is the same either way.'}
+    </div>
+    ${stillLocked.length ? `<div class="obWhy" style="margin-top:10px"><b>Still locked:</b>
+      ${stillLocked.map(esc).join(' · ')}. Each names its own unlock in your workspace, and none of them
+      shows a zero.</div>` : ''}
+
+    <div class="row wrap" style="gap:10px; margin-top:18px">
+      <button class="btn" onclick="obFinish()">Open my Chief of Staff →</button>
+      <button class="btn ghost" onclick="go('signin')">Or sign in as someone else</button>
+    </div>`;
+}
+
+/* ===========================================================================
+   THE LIVE PANEL — everything the agent learns, as it learns it
+   ---------------------------------------------------------------------------
+   Every row is editable, because a fact the person cannot correct is a fact they
+   cannot trust. Progress is the tally growing and the locked rows converting;
+   there is no percentage, because its denominator would be a guess at how much
+   there is to know about a company.
+   =========================================================================== */
+
+function obAccountStrip() {
+  const p = obWho();
+  return `<div class="obAcct">
+    <div class="avatar">${esc(p.initials)}</div>
+    <div style="min-width:0">
+      <div class="sm" style="font-weight:500">${esc(p.name)} · ${esc(p.role)}</div>
+      <div class="tiny muted">Set when the workspace was created. Not something this conversation can change.</div>
+    </div>
+  </div>`;
+}
+
+function obChipFor(st) {
+  if (st === 'read')     return '<span class="chip src">read</span>';
+  if (st === 'inferred') return '<span class="chip gold">inferred</span>';
+  if (st === 'you')      return '<span class="chip good">from you</span>';
+  return '';
+}
+
+function obFactRow(set, key, wide) {
+  const f = obFact(set, key);
+  const id = set + ':' + key;
+  if (S.ob.editing === id) {
+    return `<div class="obFact editing"><div style="flex:1; min-width:0">
+      <div class="k">${esc(f.label)}</div>
+      <input class="input" id="obEdit" value="${esc(S.ob.edraft || '')}"
+        oninput="obEditDraft(this.value)" onkeydown="obEditKey(event)">
+      <div class="row" style="gap:7px; margin-top:8px">
+        <button class="btn sm" onclick="obEditSave()">Save</button>
+        <button class="btn ghost sm" onclick="obEditCancel()">Cancel</button>
+      </div></div></div>`;
+  }
+  const mark = { read:'◆', inferred:'≈', you:'✓', pending:'' }[f.status];
+  return `<div class="obFact ${f.status} ${wide ? 'wide' : ''} ${S.ob.glow === id ? 'lit' : ''}">
+    <span class="st">${mark}</span>
+    <div style="flex:1; min-width:0">
+      <div class="k">${esc(f.label)}</div>
+      <div class="v">${f.value ? esc(f.value) : esc(f.unlock)}</div>
+      ${f.value ? `<div class="obSrc">${obChipFor(f.status)}${f.source
+        ? `<span class="tiny muted">${esc(f.source)}</span>` : ''}</div>` : ''}
+      ${f.was ? `<div class="tiny muted" style="margin-top:3px">was: &ldquo;${esc(f.was)}&rdquo; — you corrected this</div>` : ''}
+    </div>
+    <button class="pen" onclick="obEditOpen('${esc(set)}','${esc(key)}')">${f.value ? 'edit' : 'tell me'}</button>
+  </div>`;
+}
+
+function obBrainCard() {
+  const fs = OB_FACTS.company.map((f) => obFact('company', f.key));
+  const n = (st) => fs.filter((f) => f.status === st).length;
+  const known = fs.length - n('pending');
+  return `<div class="pan">
+    <div class="between">
+      <h4>Company Brain</h4>
+      <span class="mono tiny muted">v1 draft</span>
+    </div>
+    <div class="tiny muted" style="margin-top:2px">${esc(CO.domain)}</div>
+    <div class="obRibbon">${fs.map((f) =>
+      `<span class="${f.status !== 'pending' ? 'on' : ''}"></span>`).join('')}</div>
+    <div class="mono tiny muted" style="margin-top:7px">${esc(String(known))} facts ·
+      ${esc(String(n('read')))} read · ${esc(String(n('inferred')))} inferred · ${esc(String(n('you')))} from you</div>
+
+    <div style="margin-top:10px">${OB_FACTS.company.map((f) => obFactRow('company', f.key)).join('')}</div>
+
+    ${S.ob.rules.length ? `<div class="obSub">Rules you have set</div>
+      ${S.ob.rules.map((r) => `<div class="obRule">
+        <div style="min-width:0"><div class="k">${esc(r.label)}</div>
+          <div class="v">${esc(String(r.value))}</div></div>
+        <span class="chip lock">${esc(SCOPE_NAMES[r.scope])}</span></div>`).join('')}` : ''}
+
+    <div class="obSub">Not scored yet — what each one needs</div>
+    ${OB_LOCKED.map((l) => {
+      const st = S.ob.locked[l.key] || 'locked';
+      return `<div class="obFact obLocked ${st}" data-k="${esc(l.key)}">
+        <span class="st">${st === 'connected' ? '✓' : ''}</span>
+        <div style="flex:1; min-width:0"><div class="k">${esc(l.label)}</div>
+          <div class="v">${st === 'connected' ? esc(l.tool) + ' — reading'
+            : st === 'skipped' ? 'waiting on you' : esc(l.unlock)}</div></div>
+        ${st === 'skipped' ? '<span class="chip warn">resume</span>' : ''}</div>`;
+    }).join('')}
+
+    <div class="obPrec">from you &rsaquo; connected &rsaquo; read &rsaquo; inferred</div>
+  </div>`;
+}
+
+function obPersonaCard() {
+  const fs = OB_FACTS.you.map((f) => obFact('you', f.key));
+  const known = fs.filter((f) => f.status !== 'pending').length;
+  return `<div class="pan">
+    <div class="between"><h4>Your Persona</h4>
+      <span class="mono tiny muted">${esc(String(known))}/${esc(String(fs.length))}</span></div>
+    <div class="obBound">This changes what NEXUS shows you first. It never changes what you are allowed to see.</div>
+    <div style="margin-top:4px">${OB_FACTS.you.map((f) => obFactRow('you', f.key)).join('')}</div>
+    <button class="obSkipLink" onclick="tog('obreach')" style="margin-top:8px">
+      ${S.open.has('obreach') ? 'hide' : 'what decides what I can see? →'}</button>
+    ${S.open.has('obreach') ? `<table style="margin-top:9px">
+      <thead><tr><th>Role</th><th>Reaches</th></tr></thead>
+      <tbody>${ROLE_REACH.map((x) => `<tr><td class="sm">${esc(x[0])}</td>
+        <td class="tiny muted">${x[1] ? esc(SCOPE_NAMES[x[1]]) : 'Nothing by role'} · ${esc(x[2].toLowerCase())}</td>
+        </tr>`).join('')}</tbody></table>` : ''}
+  </div>`;
+}
+
+/** Hover highlight, done by touching the class list rather than re-rendering —
+ *  a render on mouseover would drop focus out of the composer mid-sentence. */
+function obGlow(k) {
+  const all = document.querySelectorAll('.obLocked');
+  for (let i = 0; i < all.length; i++) all[i].classList.remove('lit');
+  if (!k) return;
+  const el = document.querySelector('.obLocked[data-k="' + k + '"]');
+  if (el) el.classList.add('lit');
 }
 
 /* ===========================================================================
@@ -1497,6 +2576,7 @@ function viewSignIn() {
 }
 
 function signIn(id) {
+  obCancel();                       /* onboarding exits through here */
   S.me = PEOPLE.find((p) => p.id === id);
   S.section = S.me.nav[0][0];
   S.route = 'app';
@@ -2962,10 +4042,14 @@ function render() {
   /* `app` is the only route that needs somebody signed in. Falling back to the
      picker rather than erroring means a stale deep link cannot dead-end. */
   const route = S.route === 'app' && !S.me ? 'signin' : S.route;
+  /* Built here rather than in go(), so a reload straight onto #onboarding and a
+     click through from sign-up take exactly the same path. */
+  if (route === 'onboarding' && !S.ob) obEnter();
   $('#screens').innerHTML = (VIEWS[route] || viewLanding)();
+  if (route === 'onboarding') obAfterRender();
 
   const TITLES = { landing:'NEXUS OS — Your AI executive team', signup:'Create your workspace',
-                   onboarding:'Set up your workspace', signin:'Choose an account' };
+                   onboarding:'Your AI onboarding', signin:'Choose an account' };
   document.title = route === 'app' && S.me
     ? `${S.me.deptLabel} · ${CO.name} — NEXUS OS`
     : (TITLES[route] || 'NEXUS OS');
@@ -2975,8 +4059,13 @@ function render() {
 }
 
 function go(route) {
+  /* Onboarding runs a chain of timers, every one of which calls render(). Left
+     alive they re-render whichever screen you moved to — which wipes text out of
+     the landing page's address field once a second — and re-entering would start
+     a second chain racing the first. Cancel whenever onboarding is on either side
+     of the move, and drop the state so render() rebuilds it cleanly. */
+  if (S.route === 'onboarding' || route === 'onboarding') { obCancel(); S.ob = null; }
   S.route = route;
-  if (route === 'onboarding') S.step = 0;
   render();
   window.scrollTo(0, 0);
 }
@@ -2991,16 +4080,19 @@ window.addEventListener('hashchange', () => {
 
 Object.assign(window, {
   go, signIn, signOut, exitToSite, goSection, tog, render, runPreview,
-  onboardNext, onboardBack, toggleDept, setPurpose,
+  obAnswer, obFree, obSkipQ, obGo, obDraft, obKey, obSkipScan, obConfirmBrief, obAssume,
+  obConnect, obVerified, obSkipTool, obUpload, obSkipDocs, obInvite, obSkipPeople,
+  obEditOpen, obEditDraft, obEditSave, obEditCancel, obEditKey, obGlow,
+  obToReady, obToggleModel, obFinish, obCoverage,
   askOpen, askClose, ask, askSubmit, askKey,
-  S, PEOPLE, SECTIONS, D, VIEWS, ONBOARD, DEPT_QUESTIONS, ASK
+  S, PEOPLE, SECTIONS, D, VIEWS, DEPT_QUESTIONS, OB_GRAPH, OB_BRANCH, ASK
 });
 
 (function boot() {
   const h = location.hash.slice(1);
   const person = PEOPLE.find((x) => x.id === h);
   if (person) { signIn(person.id); return; }
-  if (VIEWS[h]) S.route = h;
+  if (VIEWS[h]) { go(h); return; }
   render();
 })();
 

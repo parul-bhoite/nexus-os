@@ -2,12 +2,14 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Field } from '@/components/auth/Field'
 import { ArrowRight, Button } from '@/components/ui/Button'
 import {
   AuthError,
+  type DepartmentChoice,
   DomainTakenError,
+  fetchDepartments,
   registerCompany,
   requestToJoin,
   type JoinOffer,
@@ -38,7 +40,46 @@ export function RegisterCompanyForm() {
   const [name, setName] = useState('')
   const [websiteUrl, setWebsiteUrl] = useState('')
   const [designation, setDesignation] = useState('')
+  /**
+   * The department **key** — `hr`, not "People".
+   *
+   * This stored the label first, on the reasoning that both readers of
+   * `stated_department` were prose: the onboarding greeting renders it into a
+   * sentence, and the agent's grounding hands it to a model. That reasoning
+   * ended the same day. A question-catalogue audit found the agent binding 26%
+   * of its questions to another department's fields, and the fix —
+   * `askable_fields(department)` — narrows the catalogue by matching this value
+   * against the `Department` enum. That needs the key.
+   *
+   * The greeting still says "in People": `_viewer` resolves the key to its
+   * label in the one place the sentence is built, and passes free text from
+   * before this was a dropdown through untouched.
+   */
   const [department, setDepartment] = useState('')
+  const [departments, setDepartments] = useState<DepartmentChoice[]>([])
+  const [departmentsError, setDepartmentsError] = useState<string | null>(null)
+
+  // Fetched rather than listed here. The seven labels live in the API's
+  // catalogue, and a copy in this file is how "People" became "Hr" on one
+  // surface and not the others (finding F13).
+  //
+  // A failure is not fatal and must not block the form: Department is optional,
+  // so the select stays disabled with the reason in its own placeholder while
+  // every required field still submits. Losing an optional field beats losing
+  // the company.
+  useEffect(() => {
+    let live = true
+    fetchDepartments()
+      .then((choices) => {
+        if (live) setDepartments(choices)
+      })
+      .catch(() => {
+        if (live) setDepartmentsError('Department list unavailable — skip this')
+      })
+    return () => {
+      live = false
+    }
+  }, [])
   const [state, setState] = useState<State>({ status: 'idle' })
 
   const busy = state.status === 'submitting'
@@ -196,8 +237,14 @@ export function RegisterCompanyForm() {
           label="Department"
           value={department}
           onChange={setDepartment}
-          disabled={busy}
-          placeholder="Executive, Finance…"
+          disabled={busy || departments.length === 0}
+          // Short because the field is half-width in this grid: "Select your
+          // department…" was clipped to "Select your departme…". The label
+          // directly above it already says which department.
+          placeholder={departmentsError ?? 'Select…'}
+          // Value is the key, label is what is shown. The server narrows the
+          // question catalogue by this value, so it has to be the enum member.
+          options={departments}
         />
       </div>
       <p className="-mt-2 text-sm text-ink-500">

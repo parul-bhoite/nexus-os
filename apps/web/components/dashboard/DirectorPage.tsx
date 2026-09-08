@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { OfferingTile } from '@/components/dashboard/OfferingTile'
-import { Button } from '@/components/ui/Button'
 import { Logo } from '@/components/ui/Logo'
 import { AuthError } from '@/lib/auth-client'
 import {
@@ -167,12 +166,14 @@ function Ready({ director, all }: { director: Director; all: Dashboards }) {
           </p>
           <p className="mt-2 max-w-prose text-[0.95rem] leading-relaxed text-ink-800">
             <strong>{unanswered}</strong> question{unanswered === 1 ? '' : 's'} about how this
-            department works {unanswered === 1 ? 'is' : 'are'} still unanswered. Each one is
-            named with what it changes, so none of them is a form field.
+            department works {unanswered === 1 ? 'is' : 'are'} still unanswered, which is why
+            this department is thinner than the others.
           </p>
-          <div className="mt-4">
-            <Button href={`/onboarding/${director.department}`}>Answer them</Button>
-          </div>
+          {/* The button here pointed at `/onboarding/[department]`, a per-department
+              questionnaire that has been removed. The count stays because it is true
+              and it explains the gap — but it no longer offers a route, because there
+              is not one. Answering these needs a way back into the conversation, and
+              that does not exist yet. */}
         </div>
       ) : null}
 

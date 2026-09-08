@@ -10,7 +10,8 @@ It lives in `prototype/`, deliberately outside `apps/web/`, and must stay there.
 ## 1. The journey it covers
 
 ```
-Landing page  →  preview audit  →  sign up  →  onboarding (7 steps)
+Landing page  →  preview audit  →  sign up  →  the agent takes over
+              →  reads the site, briefs you, interviews you, builds a persona
               →  choose an account  →  that person's own workspace  →  admin
 ```
 
@@ -43,48 +44,117 @@ Two consequences worth pointing at:
 
 ---
 
-## 3. Onboarding asks different questions per department
+## 3. Onboarding is a conversation, and the agent goes first
 
-Seven steps: verify email → what are you responsible for → the questions that
-follow → connect sources → documents → invite the team → done.
+Five phases, none numbered on screen: **read → brief → you → persona → ready**.
 
-**There is no DNS-record step.** Domain ownership is taken from the sign-up
-address instead: Layla signs up from `layla@nakhla-trading.om`, so
-`nakhla-trading.om` is confirmed automatically and step 1 says so. The manual
-claim step was removed as friction.
+The old flow was seven steps and it asked the person to supply. This one asks them
+to *adjudicate*. The agent reads `nakhla-trading.om` first, states what it found,
+and every screen after that is the user correcting it. That inversion is the whole
+design, and it is the honest shape too, because the product's claim is that it
+reads before it asks.
 
-The restriction it guarded is unchanged, and still worth explaining — until
-ownership is established the audit stays reduced, with no competitor discovery and
-no keyword data, because anyone can type a competitor's address. The preview's two
-locked tiles now read *"Confirm this domain is yours"* rather than naming a DNS
-record.
+**There is no "verify your email" step, and its absence is the spec, not a
+shortcut.** D19 (`doc/09` §4.1) made verification non-blocking: it gates exactly
+two acts — connecting a tool that holds company data, and inviting a member. So it
+appears at those two moments, inline in the conversation rather than as a modal,
+because a modal *is* a block and would contradict the decision it implements. The
+line to read out is the one on screen: *"Nothing else is waiting on this."*
 
-Worth knowing: the API still has the manual path (`/domains`,
-`/domains/{id}/check`) and it is still needed for the case the email domain does
-not match the website — a free-mail sign-up, or an agency setting up a client.
-That path now has no UI, in the prototype or in `apps/web`.
+**Domain ownership is still taken from the sign-up address**, not a DNS record.
+The manual path (`/domains`, `/domains/{id}/check`) still exists in the API and is
+still needed for a free-mail or agency sign-up; it has no UI here.
 
-Step 2 asks two things: **which parts of the business are yours**, and **why you
-are here**. Step 4 then asks only the questions that follow from that answer.
-Pick Marketing and you are asked what counts as a lead; pick Operations and you
-are asked what lead time you promise. Selecting all seven produces 39 fields;
-selecting one produces 9.
+### What makes it not a form
 
-Two rules shaped the question bank, and both come from the grounding discipline
-rather than from wanting to look thorough:
+- **The opening question is the router.** *"If the next twelve months went badly,
+  what would have gone wrong?"* Negative framing gets specifics where "what are
+  your goals" gets platitudes — and the answer selects the branch, so the
+  department set is derived from a sentence instead of ticked in a grid. The grid
+  was a form however it was phrased, and it asked a founder to translate her own
+  business into our taxonomy.
+- **Follow-ups quote her literal words**, escaped, never paraphrased.
+- **The scan names artefacts and one step visibly fails.** The Google Business
+  Profile line returns nothing. A scan where everything succeeds reads as theatre;
+  the one clean failure is what makes the other seven believable. The log stays in
+  the transcript as the receipt, and it ends by naming its own ignorance — which
+  reframes the interview as the agent's shortfall rather than the user's homework.
+- **The three practical asks are folded in**, each raised at the moment the
+  agent's own answer is blocked by it. Skipping never says "less value"; it names
+  the artefacts and counts them, and leaves a visible `waiting on you` scar in the
+  panel.
 
-- **Only ask what cannot be fetched.** Each department block ends with a
-  *"Not asking — will be read from a source"* strip listing what NEXUS will pull
-  instead: sessions and conversion from GA4, deal values from the CRM, balances
-  from the accounting system. Showing what it *won't* ask is more persuasive than
-  asking would be.
+### The two catalogues, and why they are separate
+
+ADR 0019 is the governing decision: the model chooses *how* to ask — phrasing,
+order, follow-ups, and what to skip — and **never introduces a question that is
+not in the catalogue**, because a generated question has no scope tag and its
+answer has nowhere honest to go.
+
+So `DEPT_QUESTIONS` says what must be known and `OB_GRAPH` says only how it is
+asked. Every `ask` entry now carries a fourth element, a stable key such as
+`'sales.stale_days'`, and a graph node references that key rather than an array
+index. **`obCoverage()` in the console reports it:**
+
+- `unbacked` — nodes asking something the catalogue does not contain. **Must be
+  empty.** It is currently `[]`, and it is the only check this file can make
+  against ADR 0019.
+- `notDemoed` — bank questions no branch reaches. Currently **21 of 35**, and that
+  is expected: the graph walks three questions per branch plus two shared, and
+  marketing, People and Strategy have no branch. In the real product that list is
+  the coverage gap, and P7 owes it a test.
+
+Two rules still shape the bank itself:
+
+- **Only ask what cannot be fetched.** The *"here is what I am not going to ask
+  you"* beat now lands mid-conversation, straight after the first effortful
+  answer, where it reads as reciprocation. At the end of a block it read as an
+  apology. The chips are `DEPT_QUESTIONS[dept].fetched`, and hovering one lights
+  the locked panel row it would fill.
 - **Ask what only this person knows.** Thresholds, definitions and intent are in
-  no API. "What counts as a lead" and "after how many days of silence should a
-  deal be flagged" change every number downstream, which is why they are asked
-  rather than defaulted.
+  no API.
 
-A note on the screen states that an invited team member answers only their own
-department's questions, not all of them.
+### The live panel
+
+Two cards, both editable, because a fact the person cannot correct is a fact they
+cannot trust. Company Brain is keyed to the real `company_brain` columns
+(migration 0019); the persona card holds five rows and matches the real `persona`
+columns (migration 0002).
+
+Statuses are `read` / `inferred` / `from you` / `needs you`, which map onto the
+fact layer's `source_kind`, and that order is its precedence — rendered as a mono
+line at the card foot. An inferred row is dashed-underlined so it is not accepted
+by default. A pending row is locked with the step that unlocks it, never blank and
+never a zero.
+
+**Progress is the fact tally growing and locked rows converting. There is no
+percentage**, because its denominator would be a guess at how much there is to
+know about a company — the invented number the product exists to refuse.
+
+### Persona is not authorisation
+
+`persona_chat.py` carries `never_asked = ("seniority", "role", "departments")`,
+because `doc/06` §2.6 says conflating presentation preference with authorisation
+is how access-control bugs get written. The UI expresses the same absence:
+
+- Role sits **outside both cards**, in an account strip, with **no edit control**.
+  The missing pencil where every other row has one is the argument.
+- The agent says the boundary out loud once, at the moment breaking it would be
+  tempting: *"If you told me you were the CFO, I would write down that finance
+  matters to you. I would not give you the ledger."*
+- Responsibilities are recorded as **interests** — `Wants first: deals at risk,
+  then margin` — not as departments.
+
+A greyed, lock-iconed `Role` row inside the persona card was rejected: a disabled
+field still teaches that role is a persona field, more emphatically.
+
+### No model is a supported state
+
+The `MODEL ON` chip in the header toggles it, mid-conversation, keeping every
+answer. Only the wording changes — branching is a lookup, not a model — and the
+no-model renderer asks the catalogue's questions verbatim. That is ADR 0011 and
+"two renderers, one catalogue" demonstrated rather than asserted; if a flip ever
+loses an answer, the catalogues have diverged.
 
 ---
 
@@ -193,9 +263,14 @@ the original markers everywhere is also one line.
 |---|---|---|
 | 1 | Landing → **Analyse my business** | A reduced audit arrives before any account exists. The score reads **69 across 3 of 10 categories** — never a whole-business number built from part of the evidence. |
 | 2 | The seven locked tiles beneath it | Missing data is shown as *locked with the step that unlocks it*, never as a zero. A zero would read as a real, bad result. |
-| 3 | **Claim this audit** → onboarding **step 1** | The domain is confirmed from the sign-up address, no DNS record required. Worth saying out loud that this is what unlocks competitor discovery — anyone can type a rival's address, so ownership has to be established somehow. |
-| 3b | Onboarding **step 2, what are you responsible for** | Toggle departments on and off. The question count changes live. Then step 4 — note the strip showing what it will *not* ask because a connector answers it. |
-| 4 | Onboarding **step 5, invite team** | The role table is real. Point out that L4 is absent: no role reaches it, not even the Owner's. It is reached only by being named on the item. |
+| 3 | **Claim this audit** → sign up → **the agent takes over** | Nothing to fill in on the first frame. It reads the site and narrates what it finds, including the one lookup that fails. It ends by naming what it could not get — which is why the interview exists. |
+| 3b | The **brief**, then *"If the next twelve months went badly…"* | Correct a line and watch the agent notice in the conversation. Then answer the opening question: it picks the branch, so the departments come from a sentence rather than a grid of tick boxes. |
+| 3c | Two answers in, the **"what I am not going to ask you"** beat | Hover a chip and the locked row it would fill lights up in the panel. Then the connector ask lands — connecting now reads as avoiding work, not doing it. |
+| 3d | **Skip the connector** | It names what stays locked and counts it, and the panel row changes to `waiting on you`. Skipping leaves a visible scar rather than silently degrading. |
+| 3e | Toggle **MODEL ON → NO MODEL CONFIGURED** mid-conversation | Every answer survives; the questions become the catalogue's own wording. ADR 0011, demonstrated. |
+| 4 | The **invite** ask | One role, not six — six rows at that moment is a form, one row is a decision. Expand it and point out L4 is absent: no role reaches it, not even the Owner's. |
+| 4b | The **persona card**, and the account strip above it | Five rows, and no Role row. Role sits outside with no edit control. This is the subtle one: persona changes what you see first, never what you may see. |
+| 4c | The **finale** | Same question asked of a generic assistant and of hers. The third row is the one that lands — the generic column produces a plausible statistic, and hers refuses to. |
 | 5 | Finish → lands in **Layla's** Chief of Staff | The morning brief says what changed, what it means, what to do — each with its source named. This is the product; the tiles below are supporting evidence. |
 | 6 | Any tile → **"+ why this number"** | Opens the method, the inputs and the arithmetic. This is what "every number is auditable" means in practice. |
 | 7 | **Switch person** (sidebar, bottom left) → **Yousuf** → Pipeline | A sales tool. Clay edge on anything silent longer than *their own* median cycle — not a generic 30-day rule. |
@@ -230,7 +305,8 @@ than a pretty picture:
 
 ### Verified in-browser
 
-Landing, preview audit, sign-up, all 7 onboarding steps, the persona picker, and
+Landing, preview audit, sign-up, all five onboarding phases across all four
+branches, the persona picker, and
 38 sections across 8 personas. Plus both exit paths, and a stale `#app` deep link
 with nobody signed in, which falls back to the picker rather than dead-ending.
 Console clean throughout.
@@ -254,7 +330,10 @@ without the work below.
 | All eight workspaces | M7–M9 | **No data source exists.** GA4, CRM, accounting and HRIS connectors are unbuilt, so every figure would render as a locked state today. |
 | "Why this number" trails | M6 | Real calculators with real inputs. `calculators/` holds the Preview audit only. |
 | Per-person navigation | M1 | The nav must be derived server-side from the session's scope. Assembling it in the client is a convenience, not a boundary. |
-| Onboarding question branching | M4 | The question bank must live server-side and be keyed to the workspace's departments; answers must be written as cited L1/L2 facts, not form state. |
+| Onboarding question branching | M4 | `OB_GRAPH` must live server-side and be keyed to the workspace's departments; answers must be written as cited L1/L2/L3 facts, not client state. The scope tag shown beside each question is real in the catalogue and decorative here. |
+| Two renderers, one catalogue | P7 | `obCoverage().unbacked` is empty, which is the containment half of ADR 0019. The coverage half — every bank question reachable by both renderers — is a real test P7 owes, and `notDemoed` is currently 21 of 35. |
+| The Company Brain panel | P13 | Rows are keyed to `company_brain` (migration 0019) but nothing writes to it. `provenance` is NOT NULL there for the reason the panel dramatises: a brain that cannot say where a claim came from is the thing this product exists not to be. |
+| The persona | P6/P7 | `persona` (migration 0002) has been empty since M1. The five rows here match its columns, and the role-is-not-persona rule is enforced by layout rather than by `never_asked`. ADR 0019 says both P6 and P7 briefs need rewriting for this; that rewrite has not happened. |
 | The assistant | M12 | Server-side scoping, untrusted-content boundary, action gating with the exact payload shown, and subagent return-path filtering against the end user's scope. Refusing in the client proves nothing. |
 | Admin portal | M13 | Impersonation with time-boxing and reason logging, access-controlled audit log, deletion fan-out across embeddings, cache, storage and artifacts. |
 
@@ -290,3 +369,13 @@ Per doc 07 §5.3, for anything touching permissions or grounding the test comes
   simple; the real product should use a charting library.
 - Web fonts load from Google Fonts. With no internet it falls back to Georgia and
   system sans — acceptable, not identical.
+- **The assistant loses focus and draft text on every render.** `askSubmit()`
+  rewrites the whole of `#screens`, so anything half-typed in the assistant's box
+  is lost. The onboarding solves this — `S.ob.draft` mirrors the composer on every
+  keystroke without re-rendering, and `obAfterRender()` restores focus and caret —
+  but the fix was deliberately **not** applied to the assistant: `viewAsk()`
+  renders inside all 38 workspace sections, and that is too wide a blast radius
+  for a prototype edit. Worth doing when the assistant becomes real.
+- The onboarding transcript scrolls the page, not itself, so the panel beside it
+  can stay sticky. It follows the conversation only when the thread grows, which
+  is what stops a timer yanking someone who scrolled up to re-read.

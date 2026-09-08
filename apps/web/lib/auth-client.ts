@@ -188,6 +188,38 @@ export type CompanyDetails = {
   department?: string | null
 }
 
+/**
+ * One option for the Department field, as the server names it.
+ *
+ * `label` is served rather than derived. Title-casing `value` in the browser
+ * renders "Hr" for the department the rest of the product calls "People", which
+ * is finding F13 — three spellings for one thing, because three surfaces each
+ * capitalised the enum themselves.
+ */
+export type DepartmentChoice = {
+  value: string
+  label: string
+}
+
+/**
+ * The seven departments, for a form that runs before any workspace exists.
+ *
+ * Not `CurrentScope`-guarded and not cached here: it is one small request on a
+ * page the user spends a while filling in, and a stale copy in a module-level
+ * variable would outlive a deploy that changed the list.
+ */
+export async function fetchDepartments(): Promise<DepartmentChoice[]> {
+  const response = await fetch('/api/departments', {
+    credentials: 'same-origin',
+    cache: 'no-store',
+  })
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    throw new AuthError(messageFrom(payload, 'Could not load the department list.'), response.status)
+  }
+  return (await response.json()) as DepartmentChoice[]
+}
+
 export type RegisteredCompany = {
   workspace_id: string
   domain: string

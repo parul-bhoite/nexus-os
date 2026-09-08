@@ -98,14 +98,23 @@ export type ProxyOptions = {
   body?: unknown
   /** Shown if the API cannot be reached at all. */
   unavailable: string
+  /**
+   * Override the default ceiling for one route.
+   *
+   * The default is sized for a database round trip. Guided onboarding's `start`
+   * is a site crawl followed by two model calls at high effort, which is a
+   * different order of magnitude — left at the default it aborts mid-think and
+   * the browser reports the API as unreachable when it is simply still working.
+   */
+  timeoutMs?: number
 }
 
 export async function proxyToApi(
   request: Request,
-  { path, method, body, unavailable }: ProxyOptions,
+  { path, method, body, unavailable, timeoutMs }: ProxyOptions,
 ): Promise<NextResponse> {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  const timeout = setTimeout(() => controller.abort(), timeoutMs ?? TIMEOUT_MS)
 
   try {
     const upstream = await fetch(`${API_BASE}${path}`, {

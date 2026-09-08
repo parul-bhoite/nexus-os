@@ -55,12 +55,36 @@ class Membership:
     departments: frozenset[Department]
 
 
+def _blank_to_none(value: str | None) -> str | None:
+    """An empty optional field is absent, not present-and-empty.
+
+    The check constraints reject `''`, so a form that posts a skipped field as
+    the empty string would 500 on a value the user never entered.
+    """
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
 # ── Registration ──────────────────────────────────────────────
 
 
 async def register_user(
-    db: AsyncSession, *, email: str, password: str, display_name: str | None = None
+    db: AsyncSession,
+    *,
+    email: str,
+    password: str,
+    display_name: str | None = None,
+    phone: str | None = None,
 ) -> UUID:
+    """Create the account.
+
+    `phone` is stored and nothing more: not verified, not an identifier, and not
+    a second way to sign in. Email remains the only unique key, because a phone
+    number is reassigned between people and reformatted between countries, and a
+    second identity column is a second way for two humans to become one row.
+    """
     normalised = email.strip().lower()
     password_hash = await hash_password_async(password)
 
@@ -86,10 +110,15 @@ async def register_user(
     try:
         row = await db.execute(
             text(
-                "INSERT INTO app_user (email, password_hash, display_name)"
-                " VALUES (:email, :hash, :name) RETURNING id"
+                "INSERT INTO app_user (email, password_hash, display_name, phone)"
+                " VALUES (:email, :hash, :name, :phone) RETURNING id"
             ),
-            {"email": normalised, "hash": password_hash, "name": display_name},
+            {
+                "email": normalised,
+                "hash": password_hash,
+                "name": _blank_to_none(display_name),
+                "phone": _blank_to_none(phone),
+            },
         )
     except IntegrityError as exc:
         raise EmailAlreadyRegisteredError(normalised) from exc

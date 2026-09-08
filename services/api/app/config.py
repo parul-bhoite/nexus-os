@@ -101,9 +101,31 @@ class Settings(BaseSettings):
     """Bounds *waiting* for a lock, which the statement timeout does not: a
     statement blocked on a lock has not begun executing."""
 
-    db_idle_in_transaction_timeout: str = "30s"
+    db_idle_in_transaction_timeout: str = "180s"
     """Bounds an open transaction doing nothing — the shape a request that died
-    mid-flight leaves behind, and the one that blocks every later migration."""
+    mid-flight leaves behind, and the one that blocks every later migration.
+
+    **It was 30s, which is shorter than the model calls this application makes
+    inside a transaction.** `scoped_connection` opens one transaction around a
+    whole handler, and onboarding's handlers then spend tens of seconds waiting
+    on a provider with that transaction sitting idle. Measured on one `/read`:
+    27.7s for `company-research` plus 8.0s for `company-summary`, so the session
+    was idle-in-transaction for 35.7s — and Postgres closed the connection
+    underneath it. The `UPDATE` that followed raised `InterfaceError: connection
+    is closed`, the request 500'd, and both model calls were paid for and
+    discarded.
+
+    180s clears every stage measured so far (the slowest is a ~45s assembly
+    call) and stays well under the client's 240s proxy timeout, so the proxy
+    remains the outer bound rather than this.
+
+    **This is a mitigation, not the fix.** The fix is to stop holding a
+    transaction across a third-party network call at all — do the model work,
+    *then* open the transaction to write. Until that happens this number has to
+    stay above the slowest skill, which is a coupling between a database setting
+    and a provider's latency that nobody should have to remember. The cost of
+    raising it is real: a genuinely abandoned transaction now holds its locks
+    for three minutes instead of thirty seconds."""
 
     db_command_timeout_seconds: float = 20.0
     """asyncpg's own, client-side. It still fires when the server is
@@ -112,6 +134,84 @@ class Settings(BaseSettings):
     db_pool_timeout_seconds: float = 10.0
     """How long a request waits for a connection from the pool before failing.
     SQLAlchemy's default is 30s, which is longer than most callers will wait."""
+
+    # ── The pool itself (finding B1/B5) ───────────────────────
+    #
+    # These four were hardcoded in `get_engine`, which made them untunable in
+    # the one place tuning matters: the cost of every one of them is a function
+    # of the round trip to the database, and that number is a deployment fact
+    # rather than a code fact. Measured against the Neon instance in `.env`
+    # (us-east-2, from a laptop):
+    #
+    #     cold connect + first statement   7,148 ms
+    #     warm statement                     529 ms
+    #     one argon2 hash                     19 ms
+    #
+    # The third line is the one that matters for the breaking-point report:
+    # a password hash is 1/370th of a connection, so login latency under load
+    # was never argon2 serialising on CPU. It was connections.
+
+    db_pool_size: int = 10
+    """Connections kept open per process.
+
+    Was 5. At ~0.5s per statement a single connection sustains about two
+    statements a second, so five of them capped this API at roughly ten — and a
+    request that runs four or five statements is then one of two concurrent
+    requests before the sixth waits. Ten doubles the ceiling and stays far
+    below any managed provider's per-role limit for one process.
+
+    **Raising it is not free and not a substitute for co-location.** Each
+    connection is server-side memory, and twenty of them against a database
+    500ms away still gives every request a 500ms floor. This buys concurrency,
+    not latency."""
+
+    db_pool_max_overflow: int = 10
+    """Extra connections allowed above `db_pool_size` under burst, then closed.
+
+    Was 5. Kept equal to the pool size so a burst can double capacity briefly
+    without the overflow becoming the steady state — an overflow connection is
+    discarded on return rather than pooled, so it pays the full connect cost
+    every time and is a worse deal than a larger pool for sustained load."""
+
+    db_pool_recycle_seconds: int = 120
+    """Discard a pooled connection older than this, without asking the server.
+
+    Was 300, which sits right on the boundary a managed provider is likely to
+    close an idle connection at — so the recycle was as likely to run after the
+    provider had already gone as before. 120s is comfortably inside it.
+
+    **This is the cheap half of staying ahead of a dead connection.** It costs
+    nothing at all: no round trip, no ping, just an age check in the pool. It is
+    what makes `db_pool_pre_ping` optional rather than mandatory."""
+
+    db_pool_pre_ping: bool = True
+    """Test a pooled connection before handing it to a request.
+
+    **Correct on a co-located database and very expensive on a remote one**,
+    because what it costs is round trips. Measured on a warm pool, checkout plus
+    one statement:
+
+        pre_ping on    2,249 ms
+        pre_ping off     977 ms
+
+    ~1.27s per request, on every request, and that single line is most of the
+    "4s to return a 409" in the breaking-point report. On a database in the same
+    region — where a round trip is a millisecond or two — the same setting costs
+    about 2ms and is obviously worth it.
+
+    So it stays **on by default**, because the default has to be the safe one
+    and production is meant to be co-located (ADR 0008's region choice is the
+    real fix). Set `NEXUS_DB_POOL_PRE_PING=false` when the database is a long
+    way away and you would rather have the latency back.
+
+    What you give up by turning it off: `db_pool_recycle_seconds` still discards
+    connections *before* a provider's idle timeout, so the ordinary
+    idle-close case is covered without it. The case it does not cover is a
+    provider suspending its compute — Neon scales to zero — which kills
+    connections of any age. There, the first request after a suspend fails once
+    while the pool invalidates, and then recovers. That is a fair trade for a
+    busy service and a bad one for a demo box that idles, which is exactly why
+    this is a setting and not a constant."""
 
     # ── Sessions ──────────────────────────────────────────────
     #
@@ -218,7 +318,19 @@ class Settings(BaseSettings):
     # supported operating state. `app/ai/registry.py` returns a provider that
     # reports `unconfigured` and the product runs without AI features.
     anthropic_api_key: SecretStr = Field(default=SecretStr(""))
-    anthropic_model: str = "claude-sonnet-4-5"
+
+    anthropic_model: str = "claude-sonnet-5"
+    """The fallback tier, for any call that does not pin one.
+
+    Every skill pins its own model in `manifest.toml` (`app/ai/skills/*`), and a
+    skill's tier is part of its definition — the eval that approved it on one
+    tier says nothing about another. So this is reached only by calls made
+    outside the skill runtime.
+
+    Kept current deliberately. A stale default is not a neutral choice: Opus 4.7
+    and later, and Sonnet 5, reject `temperature` outright, so a default left on
+    an older id quietly changes which request shape the provider builds.
+    """
     ai_enabled: bool = True
     """Environment-level off switch, separate from the key being absent.
     Distinguishes "not configured yet" from "deliberately switched off"."""

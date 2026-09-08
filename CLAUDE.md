@@ -52,6 +52,12 @@ services/api/.venv/bin/python -m uvicorn app.main:app --port 8001 --app-dir serv
 services/api/.venv/bin/python -m pytest services/api/tests -q --no-cov
 ```
 
+**For the whole suite, export the jobs URL first or three tests always fail:**
+
+```bash
+export NEXUS_JOBS_DATABASE_URL="$(grep -E '^NEXUS_JOBS_DATABASE_URL=' .env | cut -d= -f2-)" && services/api/.venv/bin/python -m pytest services/api/tests -q
+```
+
 ```bash
 apps/web/node_modules/.bin/tsc --noEmit -p apps/web/tsconfig.json
 ```
@@ -60,8 +66,8 @@ apps/web/node_modules/.bin/tsc --noEmit -p apps/web/tsconfig.json
 apps/web/node_modules/.bin/vitest run --root apps/web
 ```
 
-All three were got wrong on the first attempt while writing this section, so
-they are spelled out rather than shortened:
+These were all got wrong on the first attempt, so they are spelled out rather
+than shortened:
 
 - **`services/api/tests`, not `tests/`.** pytest is run from the repo root but
   the suite lives under the service. `tests/` there is "file or directory not
@@ -74,6 +80,22 @@ they are spelled out rather than shortened:
 - **`--no-cov` on a partial pytest run.** `pyproject.toml` sets a 75% coverage
   gate, so running one file fails on coverage after every test in it passed.
   Leave it off only when running the whole suite.
+- **`NEXUS_JOBS_DATABASE_URL` has to be *exported*, not merely present in
+  `.env`.** Without it the three `test_domain_claim_isolation` tests that use
+  the `nexus_jobs` role fail on `assert JOBS_URL is not None`, so the bare
+  command above can never be green on this machine — and it looks like a
+  defect in the maintenance role rather than a missing shell variable.
+
+  This is deliberate and must not be "fixed" by adding a `.env` fallback.
+  `tests/dburl.jobs_database_url` reads the environment *only*, and its own
+  docstring says why: the suites that use it assert what `nexus_jobs`
+  **cannot** reach, and silently falling back to `nexus_app` would make every
+  one of them pass while proving the opposite. The three tests hard-assert
+  rather than skip because ADR 0018 makes the role non-optional.
+
+  It is the inverse of the drift lesson at the bottom of this file — red
+  locally, green in CI, for a reason that reads as broken code. Twenty minutes
+  were spent on it once.
 
 Prefer the Browser pane's `preview_start` over either server command — the root
 `.claude/launch.json` already defines `nexus-web` (:3001) and `nexus-api`
@@ -112,6 +134,7 @@ Windows machine again. Do not apply these on macOS.
 | `doc/09-NEW-APPLICATION-FLOW.md` | **The new flow.** The nine-stage journey. Supersedes doc 06 §0 and doc 04 §5 |
 | `doc/11-FLOW-DECISIONS.md` | **Every flow decision Parul has made**, and the four still open. Answers `doc/10` |
 | `doc/12-IMPLEMENTATION-PLAN.md` | **The executable plan.** Twenty-two phases, each with an acceptance test. Supersedes `VISION-AND-PLAN.md` §6 |
+| `doc/13-DASHBOARD-DESIGN.md` | **The dashboard, settings and agents.** Sections, blocks, states, the day-one surface per department, the settings portal, the tool ledger, and every director as a skill. Shape only — `doc/12` still owns sequence |
 | `ARCHITECTURE-HLD.md` | System shape, trust model, untrusted boundary, execution modes, deployment |
 | `ARCHITECTURE-LLD.md` | Modules, schema, RLS, endpoint contracts, sequences, failure paths |
 | `BUILD-STATUS.md` | Where the code actually stands, with the prioritised work list. Regenerated per phase |

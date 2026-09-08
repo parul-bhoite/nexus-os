@@ -10,7 +10,7 @@
         "--prefix",
         "apps/web"
       ],
-      "port": 3000
+      "port": 3001
     },
     {
       "name": "nexus-api",
@@ -22,11 +22,27 @@
         "--host",
         "127.0.0.1",
         "--port",
-        "8000",
+        "8001",
         "--app-dir",
         "services/api"
       ],
-      "port": 8000
+      "port": 8001
+    },
+    {
+      "name": "nexus-api-posix",
+      "runtimeExecutable": "services/api/.venv/bin/python",
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8001",
+        "--app-dir",
+        "services/api"
+      ],
+      "port": 8001
     },
     {
       "name": "nexus-web-verify",

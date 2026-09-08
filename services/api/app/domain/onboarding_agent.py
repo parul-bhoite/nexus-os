@@ -15,6 +15,23 @@ in what order, and when there is nothing left worth asking. That is the split AD
 `discovery` is the loop. It runs `generate-questions` until the skill says it is
 done or the safety limit trips, and each accepted turn is written with the field
 it targeted and the scope that field carries.
+
+**The four log keys an operator should care about, and which one to alert on.**
+An earlier round asked for alerting on `onboarding.rejections_exhausted`; that
+key now fires only when there is nothing left to ask at all, which is a clean
+finish. Anyone who wired it got silence for the failure they meant to catch.
+
+- `onboarding.fallback_served` (warning) — **the model failed repeatedly** and
+  hand-written wording was used instead. This is the degraded case, and the one
+  worth alerting on.
+- `onboarding.floor_served` (warning) — the interview was about to end with
+  nothing from the person's own department, so one was insisted on.
+- `onboarding.ceiling` (info) — the interview ran its full length. Normal.
+- `onboarding.rejections_exhausted` (warning) — every field with hand-written
+  wording is already answered. Rare, and not a failure.
+
+There is still no counter or metric behind any of these — they are log lines, so
+rate has to come from the log backend rather than from the application.
 """
 
 from __future__ import annotations
@@ -25,25 +42,53 @@ from typing import Any
 from uuid import UUID
 
 from app.ai.runtime.commands import CommandContext, get_commands
+from app.ai.runtime.fields import BRAIN_GROUPS, next_fallback
 from app.ai.runtime.hooks import HookEvent, HookPoint
 from app.domain.onboarding_sessions import Phase, TurnRole
 from app.logging import get_logger
 
 log = get_logger(__name__)
 
-MAX_QUESTIONS = 14
+MAX_QUESTIONS = 5
 """A hard ceiling on the interview, independent of what the model wants.
 
-Not a quality lever — a termination guarantee. Without it a skill that never
-returns `done` walks a person through the entire catalogue, and the failure looks
-like the product being tedious rather than like a bug.
+Primarily a termination guarantee. Without it a skill that never returns `done`
+walks a person through the entire catalogue — roughly twenty-three askable
+fields — and the failure looks like the product being tedious rather than like a
+bug.
+
+It was 14, which was a ceiling nobody expected to reach and which the model
+therefore reached: `question-generation` is asked "what should we ask next" and
+there is always a defensible next field, so the ceiling became the *length*. A
+person signing up met fifteen prose questions before seeing the product, which
+is the point at which onboarding stops collecting better answers and starts
+collecting shorter ones.
+
+Five, plus the opening free-text turn, is the interview. Everything else is a
+question the workspace can ask later, in context, when it has a reason to —
+which is a better question anyway, because by then the person has seen what the
+answer is for. Nothing is lost by not asking now: an unanswered field is a
+`known_gap` with its own unlock, and that is what the gap list is for.
 """
 
-MAX_REJECTIONS = 3
-"""Consecutive undeclared-target rejections before the loop gives up.
+MAX_REJECTIONS = 8
+"""Consecutive rejected questions before the loop stops asking the model.
 
-A model that cannot name a declared field three times running is not going to on
-the fourth, and each attempt costs a call.
+**It was 3, and three validators now share it.** The undeclared-target gate it
+was sized for, plus the compound check and the shape check added later — all
+three firing against `claude-haiku-4-5`. An audit of six interviews found half
+of them ending here: Finance after one question, Chief of Staff after two,
+Operations after **none**, each presented to the person as a considered
+decision to stop.
+
+Eight, because the arithmetic was wrong rather than the idea. A rejection is
+one Haiku call of about a second and the failure reason is fed back, so
+attempts are cheap and get better; an interview that asks a Head of Operations
+nothing is not cheap at all. The question ceiling stays at `MAX_QUESTIONS` — a
+rejected question is not a question asked, and conflating the two is what made
+this a lost turn instead of a retry.
+
+Exhausting these no longer ends the interview either. See `next_question`.
 """
 
 
@@ -159,18 +204,108 @@ class OnboardingAgent:
             state.answers["persona.stated_purpose"] = str(purpose["value"])
         return result
 
-    async def next_question(self, state: AgentState) -> Mapping[str, Any] | None:
-        """One turn of the interview, or None when the interview is over.
+    def _floor(self, state: AgentState) -> Mapping[str, Any] | None:
+        """One own-department fact, or the interview does not get to end.
 
-        Returns None on three distinct conditions — the skill said done, the
-        ceiling tripped, or the model could not name a declared field often
-        enough. All three end the loop; only the first is a clean finish, and the
-        others are logged so a degraded run is visible rather than silent.
+        **The floor used to be on the rejection path only.** `next_fallback`
+        prefers the answerer's department, so exhausting the retries could not
+        leave Operations with nothing — but the *other two* exits, the model
+        saying `done` and the ceiling tripping, both returned without looking at
+        what had been collected. With five questions and twelve fields offered
+        (nine shared plus three own), a model can legitimately spend every turn
+        on shared narrative and leave `_record_facts` writing zero rows.
+
+        So this is checked at all three exits now: if nothing in the person's own
+        department has been answered and there is hand-written wording for one,
+        it is asked. It costs at most one extra question and it is the
+        difference between a workspace that knows an operational threshold and
+        one that knows none.
+
+        Returns None when there is nothing to insist on — no department, or the
+        department already has an answer, or nothing left with a fallback — so
+        the caller's own exit runs unchanged.
+        """
+        department = self._department()
+        if department is None:
+            return None
+        if any(key.startswith(f"fact.{department}.") for key in state.answers):
+            return None
+
+        fallback = next_fallback(department, state.answers)
+        if fallback is None or fallback.department != department:
+            # Nothing of theirs left to ask. `next_fallback` falls through to the
+            # shared set once a department is exhausted, and a shared field does
+            # not satisfy a floor that exists to guarantee a departmental one.
+            return None
+
+        log.warning(
+            "onboarding.floor_served",
+            workspace_id=state.workspace_id,
+            department=department,
+            target=fallback.key,
+            asked=state.asked,
+        )
+        state.asked += 1
+        state.turns.append(
+            Turn(
+                role=TurnRole.AGENT,
+                text=fallback.fallback_question,
+                target_field=fallback.key,
+                scope=fallback.scope,
+                skill="floor",
+            )
+        )
+        return {
+            "done": False,
+            "question": fallback.fallback_question,
+            "target": fallback.key,
+            "scope": fallback.scope,
+            "choices": [],
+            "skill": "floor",
+            "skill_version": "1",
+        }
+
+    def _department(self) -> str | None:
+        """The answerer's department, from the grounding every skill receives.
+
+        The same value `generate-questions` narrows the catalogue with, read the
+        same way, so the fallback cannot offer a field the model was never shown.
+        """
+        context = dict(self._ctx.grounding).get("user_context") or {}
+        return str(context.get("department") or "").strip() or None
+
+    async def next_question(self, state: AgentState) -> Mapping[str, Any]:
+        """One turn of the interview, or a `done` verdict carrying its reason.
+
+        The interview ends on three distinct conditions — the skill said done,
+        the ceiling tripped, or the model could not name a declared field often
+        enough. All three end the loop; only the first is a clean finish, and
+        the others are logged so a degraded run is visible rather than silent.
+
+        **It used to return None for all three, and the reason died with it.**
+        The route then supplied its own closing line, so every interview in an
+        audit of seven — all seven — ended on the literal string "nothing
+        further worth asking", which is the one phrasing the skill's own prompt
+        forbids: *"Say what you have enough of — not 'no further questions'."*
+        The model was writing a real reason and it was being discarded one
+        function above where it was needed. Each exit now names itself.
         """
         if state.asked >= MAX_QUESTIONS:
+            floor = self._floor(state)
+            if floor is not None:
+                return floor
             log.info("onboarding.ceiling", workspace_id=state.workspace_id, asked=state.asked)
             state.phase = Phase.PERSONA
-            return None
+            return {
+                "done": True,
+                # The ceiling is a product decision, not a failure, and saying
+                # so is more use than "nothing further worth asking" — it tells
+                # the person why it stopped while they were still talking.
+                "reason": (
+                    f"that is the {MAX_QUESTIONS} questions I get to ask. "
+                    "Anything else your workspace can ask later, in context."
+                ),
+            }
 
         rejections = 0
         while rejections < MAX_REJECTIONS:
@@ -182,8 +317,18 @@ class OnboardingAgent:
                 conversation=state.conversation,
             )
             if result.get("done"):
+                floor = self._floor(state)
+                if floor is not None:
+                    return floor
                 state.phase = Phase.PERSONA
-                return None
+                # The skill's own words. It is told to say what it has enough
+                # of, and it does; the fallback is for a `done` with an empty
+                # reason, which the schema permits.
+                return {
+                    "done": True,
+                    "reason": str(result.get("reason", "")).strip()
+                    or "I have enough to build on.",
+                }
             if result.get("rejected"):
                 rejections += 1
                 continue
@@ -201,9 +346,48 @@ class OnboardingAgent:
             )
             return result
 
+        # **Exhausted, but not finished.** Ending here is what produced the
+        # worst outcome in the round-two audit: three of six interviews closed
+        # early, one having asked nothing at all, each reported to the person as
+        # a decision rather than a failure. A validator without a fallback
+        # trades the defect it prevents for a blank interview, which is worse.
+        #
+        # So the hand-written wording is served instead. It cannot be rejected
+        # by the gates that got us here — `fallback_question` says why, and a
+        # test asserts it — so this terminates.
+        fallback = next_fallback(self._department(), state.answers)
+        if fallback is not None:
+            log.warning(
+                "onboarding.fallback_served",
+                workspace_id=state.workspace_id,
+                target=fallback.key,
+                asked=state.asked,
+            )
+            state.asked += 1
+            state.turns.append(
+                Turn(
+                    role=TurnRole.AGENT,
+                    text=fallback.fallback_question,
+                    target_field=fallback.key,
+                    scope=fallback.scope,
+                    skill="fallback",
+                )
+            )
+            return {
+                "done": False,
+                "question": fallback.fallback_question,
+                "target": fallback.key,
+                "scope": fallback.scope,
+                "choices": [],
+                "skill": "fallback",
+                "skill_version": "1",
+            }
+
+        # Nothing left with hand-written wording either — every field this
+        # person can answer is answered. That is a real finish.
         log.warning("onboarding.rejections_exhausted", workspace_id=state.workspace_id)
         state.phase = Phase.PERSONA
-        return None
+        return {"done": True, "reason": "I have asked everything I can usefully ask."}
 
     async def submit_answer(self, state: AgentState, *, target: str, text: str) -> AgentState:
         """Record an answer against the field the question declared.
@@ -276,9 +460,19 @@ class OnboardingAgent:
         )
 
     async def build_brain(
-        self, state: AgentState, *, deep_research: Mapping[str, Any] | None = None
+        self,
+        state: AgentState,
+        *,
+        group: str,
+        so_far: Mapping[str, Any] | None = None,
+        deep_research: Mapping[str, Any] | None = None,
     ) -> Mapping[str, Any]:
-        """Stage two. The expensive one. Moves the phase to `assembling`.
+        """Stage two, one **group** at a time. Moves to `assembling` on the last.
+
+        The expensive stage, and it was one call for all seven Brain fields —
+        which took 242 seconds against a real site and was killed by the proxy
+        both times it was measured. `BRAIN_GROUPS` is the split and its docstring
+        is the reasoning; this signature is what carries it through.
 
         `state.company_name` has to be real here — the skill declares
         `company_name` in `requires_grounding`. The old single-call path
@@ -293,6 +487,8 @@ class OnboardingAgent:
             answers=state.answers,
             company_name=state.company_name,
             domain=state.domain,
+            group=group,
+            so_far=so_far,
             deep_research=deep_research,
         )
 
@@ -334,6 +530,21 @@ class OnboardingAgent:
             )
         )
         return context
+
+
+def next_brain_group(context: Mapping[str, Any]) -> str | None:
+    """The first group not yet committed, or None when the Brain is whole.
+
+    Read off the session row rather than held in memory, which is what makes a
+    part-built Brain resumable: a run killed between groups comes back, sees
+    which names are in `groups_done`, and starts at the one that did not finish.
+
+    Order comes from `BRAIN_GROUPS`, not from the stored list — so inserting a
+    group runs it for journeys already part-way through, instead of skipping it
+    for anyone whose row predates it.
+    """
+    done = set(context.get("groups_done", []))
+    return next((g.name for g in BRAIN_GROUPS if g.name not in done), None)
 
 
 def _scope_of(key: str) -> int:

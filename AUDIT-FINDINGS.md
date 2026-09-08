@@ -170,6 +170,47 @@ rolled back, with fresh UUIDs - but ad-hoc scripts doing DDL under fixed names o
 a shared database are. Recorded because the fix is a habit, not a patch: one Neon
 instance serves several sessions.
 
+### The crawler read one page and reported success
+
+`crawl_site` looked like a breadth-first site crawl — a sitemap read, a priority
+order over `/about`, `/services`, `/pricing`, `/blog`, a twenty-page budget and a
+five-minute soft cap. It fetched the home page and stopped.
+
+```python
+for url in targets:
+    ...
+    targets = site.plan(targets + site.links_in(html, base_url=url), origin=origin)
+```
+
+`for` binds the list object once. The last line built a *new* list and rebound
+the name; the loop kept iterating the original. On any site whose `sitemap.xml`
+is missing — which is most small companies — `targets` was `[home page]`, the
+loop ran once, every internal link was discovered, planned, and never visited.
+
+**The symptom was silence.** The outcome was `succeeded`, the source went green,
+the founder was told their site had been read, and the Company Brain was built
+from a single page. Nothing failed and nothing was logged; the budget message
+`crawl.budget_spent` never fired because the budget was never spent. Measured
+after the fix on the same site: **1 page and 1,851 characters became 20 pages and
+34,111** — eighteen times the grounding behind every claim in the Brain.
+
+Now a worklist that takes the best unvisited target each pass, so a better page
+found on the home page is still fetched before a worse one from the sitemap.
+`crawl_site` also grew a `limit`, because the two callers want opposite things:
+onboarding has somebody waiting and takes three pages, the background run has
+nobody waiting and takes twenty.
+
+Found while wiring the background research the product had been promising since
+company registration — which is also when it emerged that `research_run` rows
+were being enqueued at signup with **no `research_source` rows**, so no worker
+ever claimed one, and that the worker discarded fetched pages instead of writing
+`result_json`. Three defects in one pipeline, none of which produced an error:
+the queue looked healthy, the run looked finished, and the result was empty.
+
+The lesson is the one this register keeps writing down in different words: **a
+green state that nobody diffs against reality is not evidence.** A crawl reports
+how many pages it read; nothing compared that number to how many the site has.
+
 ## Open - real, and scheduled
 
 Reconciled with `BUILD-STATUS.md` in Phase 2. Four rows (#6, #7, #8, and the

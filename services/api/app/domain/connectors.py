@@ -26,6 +26,25 @@ from app.domain.dashboards import WidgetState
 
 
 class ConnectionState(StrEnum):
+    """The lifecycle of one workspace's relationship with one tool.
+
+    One enum rather than two because it is one lifecycle: a tool is named, then
+    reached, and then possibly lost. `ck_workspace_connection_state` is this
+    list, and `test_constraint_enum_parity` holds the two together.
+    """
+
+    DECLARED = "declared"
+    """The customer told us they run this system. We have never reached it.
+
+    The state every row starts in, and — until the OAuth half below lands — the
+    only state any row is in. It exists because *knowing* a company's pipeline
+    is in HubSpot is worth something on its own: it grounds what the Brain says
+    about how they work, and it turns an empty tile into a named gap with a
+    named unlock rather than an absence. What it must never do is imply we can
+    read anything, which is why it is a state on the row and not the row's mere
+    existence — see `app/domain/connections.py`.
+    """
+
     CONNECTED = "connected"
     REVOKED = "revoked"
     """The customer or the provider withdrew access. Not an error on their part
