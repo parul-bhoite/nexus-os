@@ -104,7 +104,7 @@ export function Pricing() {
 
                 <div className="mt-auto pt-8">
                   <Button
-                    href="#cta"
+                    href={t.href}
                     size="lg"
                     variant={t.featured ? 'onDark' : 'secondary'}
                     icon={<ArrowRight />}

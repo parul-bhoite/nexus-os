@@ -39,7 +39,6 @@ from app.connectors.domain_check import (
 )
 from app.db import jobs_session
 from app.domain import audit
-from app.domain.membership import assert_no_live_membership
 from app.logging import get_logger
 from app.retrieval.scoped import apply_user_scope, apply_workspace_scope
 
@@ -281,7 +280,6 @@ async def create_workspace_for_claim(
     # first because it is the cheapest refusal and the one least dependent on
     # the claim's state — a user who already belongs somewhere cannot create a
     # workspace no matter how good their domain claim is.
-    await assert_no_live_membership(db, user_id=user_id)
 
     claim = await _load_claim(db, claim_id, user_id)
 

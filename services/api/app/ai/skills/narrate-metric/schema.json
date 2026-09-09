@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sentence"],
+  "properties": {
+    "sentence": {
+      "type": "string",
+      "minLength": 8,
+      "description": "One sentence about the figure. States the direction in words, never a numeral the grounding did not supply."
+    },
+    "because": {
+      "type": "string",
+      "description": "Optional. Why it moved, only where the grounding says so. Empty rather than guessed."
+    }
+  }
+}

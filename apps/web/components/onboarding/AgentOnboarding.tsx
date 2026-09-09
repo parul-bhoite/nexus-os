@@ -7,6 +7,7 @@ import {
   type AgentState,
   ModelUnavailableError,
   type NextQuestion,
+  type Turn,
   ASSEMBLY_LABEL,
   SCOPE_LABEL,
   type Viewer,
@@ -446,7 +447,7 @@ export function AgentOnboarding() {
             />
           )}
 
-          {state.turns.map((turn, index) => (
+          {transcript(state.turns, question).map((turn, index) => (
             <Bubble key={index} turn={turn} />
           ))}
 
@@ -779,7 +780,7 @@ function CheckMark() {
  * recited them would be the first place in the product where a permission is
  * treated as small talk.
  *
- * No name, no greeting. An inbox is not a name and "Hallo there" is worse than
+ * No name, no greeting. An inbox is not a name and "Hello there" is worse than
  * opening with the finding, which is what the next bubble does anyway.
  */
 function Greeting({ viewer }: { viewer?: Viewer }) {
@@ -788,21 +789,50 @@ function Greeting({ viewer }: { viewer?: Viewer }) {
   return <AgentBubble>{line}</AgentBubble>
 }
 
+/**
+ * The transcript, minus the question the composer is already asking.
+ *
+ * The agent's question is **stored as a turn** and also handed back as the live
+ * question — so rendering `state.turns` in full and the composer under it
+ * showed the same sentence twice, in two identical bubbles, for every discovery
+ * question after the first. (The first escapes it: its wording is the one
+ * string the model does not produce, and it is asked before any turn exists,
+ * which is why the duplication went unnoticed.)
+ *
+ * The composer wins, because it is the copy a person can answer. Dropping it
+ * and keeping the transcript's would leave the question on screen with no input
+ * under it.
+ *
+ * Only a **trailing** agent turn is dropped, and only on an exact text match. A
+ * question genuinely asked twice earlier — which happens when an answer does
+ * not resolve the field — stays in the transcript, where it is a true record of
+ * what was asked.
+ */
+export function transcript(turns: Turn[], asking: NextQuestion | null): Turn[] {
+  const live = asking && !asking.done ? asking.question : null
+  if (!live) return turns
+
+  const last = turns[turns.length - 1]
+  if (last?.role === 'agent' && last.text === live) return turns.slice(0, -1)
+  return turns
+}
+
+
 export function greetingFor(viewer?: Viewer): string | null {
   const name = viewer?.name?.trim()
   if (!name) return null
-  // First name only, once. "Hallo Parul Bhoite" is how a mail merge talks.
+  // First name only, once. "Hello Parul Bhoite" is how a mail merge talks.
   const first = name.split(/\s+/)[0]
 
   const company = viewer?.company?.trim()
   const designation = viewer?.designation?.trim()
   const department = viewer?.department?.trim()
-  if (!company) return `Hallo ${first}.`
+  if (!company) return `Hello ${first}.`
 
   let where = `you work at ${company}`
   if (designation) where += ` as ${designation}`
   if (department) where += `, in ${department}`
-  return `Hallo ${first} — ${where}.`
+  return `Hello ${first} — ${where}.`
 }
 
 function AgentBubble({ children }: { children: React.ReactNode }) {

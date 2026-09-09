@@ -33,13 +33,14 @@ from app.deps import CurrentScope
 from app.deps_scope import enforce_department
 from app.domain.dashboards import (
     BY_DEPARTMENT,
-    DELIVERED,
     DIRECTORS,
     Director,
     Offering,
     Source,
     landing_department,
     state_for,
+    state_from_sources,
+    unlock_for_sources,
     unlock_sentence,
 )
 from app.domain.department_answers import BINDING_ONLY_SQL
@@ -48,8 +49,25 @@ from app.domain.departments import label_for, runs_department, selected_departme
 # Aliased: `BY_DEPARTMENT` already means the dashboard *offerings* here, and two
 # dictionaries with one name is how the wrong one gets read.
 from app.domain.question_bank import BY_DEPARTMENT as QUESTIONS_BY_DEPARTMENT
-from app.domain.registry import completeness, score_denominator
+from app.domain.registry import (
+    Capability,
+    CapabilityKind,
+    canonical_id,
+    capabilities_for,
+    completeness,
+    is_reachable,
+    openable_count,
+    score_denominator,
+)
 from app.domain.scopes import Department
+from app.domain.sections import (
+    ASSISTANT_QUESTIONS,
+    NOT_ASKED,
+    WATCH_ITEMS,
+    Section,
+    sections_for,
+)
+from app.grounding.context import CompanyContext, assemble
 from app.retrieval.scoped import apply_workspace_scope, scoped_connection
 
 router = APIRouter(prefix="/dashboards", tags=["dashboards"])
@@ -73,6 +91,15 @@ def connected_sources() -> frozenset[Source]:
 
 class OfferingOut(BaseModel):
     id: str
+    """Doc 05's numbering, which is what the tile shows as its traceability
+    label — `3.4` points at the paragraph that specified it."""
+
+    key: str
+    """The canonical capability id — `marketing.growth_planner`. The join to the
+    question bank, the tool ledger and (later) the skill that narrates it. Both
+    are here because they answer different questions: one traces the tile to a
+    document, the other traces it to the rest of the system."""
+
     name: str
     shows: str
     state: str
@@ -83,6 +110,84 @@ class OfferingOut(BaseModel):
     note: str
 
 
+class BlockOut(BaseModel):
+    """One capability, as the rail renders it.
+
+    Deliberately not `OfferingOut` with a field added. An offering is a row in
+    `doc/05`; a block is a thing on a screen, and it carries the two facts an
+    offering has no opinion about — which tab it is on and which of the nine
+    components draws it.
+    """
+
+    key: str
+    doc05_id: str
+    name: str
+    shows: str
+    block: str
+    state: str
+    unlock: str
+    needs: list[str]
+
+
+class FactOut(BaseModel):
+    """One answer, read back with everything needed to check it."""
+
+    key: str
+    question: str
+    answer: str
+    answered_at: str
+    reads_it: str
+    """The capability that consumes this answer, in words. An answer whose
+    consumer cannot be named is a form field (Q33), and this is where a founder
+    can see that it is not."""
+
+
+class WatchOut(BaseModel):
+    """One stated risk, and what would confirm or refute it."""
+
+    key: str
+    label: str
+    stated: str
+    answered_at: str
+    measured_by: str
+    needs: str
+
+
+class SectionOut(BaseModel):
+    """One tab, with what is on it."""
+
+    key: str
+    label: str
+    blocks: list[BlockOut]
+
+    available: int
+    """How many of this tab's blocks are not `planned`.
+
+    The page opens on the first tab where this is non-zero. On a day-one
+    dashboard that is Setup, because it is the only tab with content — and the
+    alternative, always opening on Overview, would greet a new customer with
+    five tiles that all say "not built yet"."""
+
+
+class NotAskedOut(BaseModel):
+    what: str
+    source: str
+
+
+class AssistantOut(BaseModel):
+    """The reserved panel's honest empty state (Q67).
+
+    It names the director and the questions it will answer rather than saying
+    "coming soon": a reserved region that says what it will do is a preview of
+    value, a blank one reads as a bug, and a fake one reads as a lie.
+    """
+
+    director: str
+    questions: list[str]
+    available: bool = False
+    """False everywhere today. The panel is reserved, not built (P20)."""
+
+
 class DirectorOut(BaseModel):
     department: str
     title: str
@@ -90,6 +195,25 @@ class DirectorOut(BaseModel):
     scoreable: bool
     path: str
     offerings: list[OfferingOut]
+    """The flat catalogue, kept while the web adopts `sections`. Two shapes of
+    the same list, and the older one goes when nothing reads it."""
+
+    sections: list[SectionOut]
+    """The rail. Only tabs with something on them — `doc/08` draws five that no
+    capability fills yet, and a tab somebody clicks into to find nothing is
+    worse than a tab that is not there."""
+
+    catalogue: list[BlockOut]
+    not_asked: list[NotAskedOut]
+    """`doc/08` §2B to §8B. The figures NEXUS refuses to ask for, and where each
+    comes from instead — a product surface rather than an internal rule, and the
+    highest-intent place in the application for a Connect button."""
+
+    """Capabilities in this director's remit that `doc/08`'s cut has no section
+    for (§11's deliberate gaps). Shown apart from the rail and labelled as
+    planned, because they are neither locked nor coming."""
+
+    assistant: AssistantOut
 
 
 class DirectorSummary(BaseModel):
@@ -124,8 +248,12 @@ class DashboardsOut(BaseModel):
     happens to a Viewer, and is a state to render rather than a redirect."""
 
     delivered_count: int
-    """How many offerings across the whole product have an implementation. Zero
-    today. Shown so the page cannot imply more than exists."""
+    """How many offerings across the whole product a person can actually open.
+
+    Zero today. Counts `reachable` rather than `implemented`: two Marketing
+    capabilities have a real calculation behind them and no route serving it,
+    and counting those here would imply the page has something on it that it
+    does not."""
 
 
 def _path(department: Department) -> str:
@@ -135,9 +263,10 @@ def _path(department: Department) -> str:
 def _offering_out(offering: Offering, connected: frozenset[Source]) -> OfferingOut:
     return OfferingOut(
         id=offering.id,
+        key=canonical_id(offering.id),
         name=offering.name,
         shows=offering.shows,
-        state=state_for(offering, connected=connected).value,
+        state=state_for(offering, connected=connected, reachable=is_reachable(offering.id)).value,
         unlock=unlock_sentence(offering, connected=connected),
         needs=[source.value for source in offering.needs],
         phase=offering.phase,
@@ -277,7 +406,7 @@ async def list_dashboards(
             for d in visible
         ],
         landing=_path(landing) if landing else None,
-        delivered_count=len(DELIVERED),
+        delivered_count=openable_count(),
     )
 
 
@@ -412,7 +541,10 @@ async def company_dashboard(
             # connected*, and hard-coding "planned" here would stop telling the
             # truth the first time something is delivered.
             offerings_planned=sum(
-                1 for o in d.offerings if state_for(o, connected=connected).value == "planned"
+                1
+                for o in d.offerings
+                if state_for(o, connected=connected, reachable=is_reachable(o.id)).value
+                == "planned"
             ),
             is_yours=d.department in scope.departments,
         )
@@ -446,6 +578,55 @@ async def company_dashboard(
         if visible
         else None,
     )
+
+
+def _facts_for(department: Department, context: CompanyContext) -> list[FactOut]:
+    """The department's answers, joined to the questions that produced them.
+
+    Only answers that are **bound** reach here — a Contributor's proposal waits
+    for a manager at the review gate (Q31/D22), and quoting one back as "what
+    you told us" would present one person's suggestion as the department's
+    position.
+
+    An answer with no question in the bank is skipped rather than shown with a
+    blank prompt. That happens when a question is cut: the row survives and the
+    thing that gives it meaning does not.
+    """
+    prompts = {question.key: question for question in QUESTIONS_BY_DEPARTMENT.get(department, ())}
+    return [
+        FactOut(
+            key=fact.key,
+            question=prompts[fact.key].prompt,
+            answer=fact.value,
+            answered_at=fact.answered_at,
+            reads_it=prompts[fact.key].consumed_by,
+        )
+        for fact in context.department_facts.get(department.value, ())
+        if fact.key in prompts
+    ]
+
+
+def _watch_for(department: Department, context: CompanyContext) -> list[WatchOut]:
+    """The stated risks this department named, with what will test them.
+
+    Empty until the question is answered — a watch card for a risk nobody
+    described would be the product inventing a worry. Sales and Finance have
+    none at all, and that is a property of their questions rather than an
+    oversight: every one of theirs is a threshold or a definition.
+    """
+    answers = {fact.key: fact for fact in context.department_facts.get(department.value, ())}
+    return [
+        WatchOut(
+            key=item.question_key,
+            label=item.label,
+            stated=answers[item.question_key].value,
+            answered_at=answers[item.question_key].answered_at,
+            measured_by=item.measured_by,
+            needs=item.needs,
+        )
+        for item in WATCH_ITEMS
+        if item.department is department and item.question_key in answers
+    ]
 
 
 @router.get("/{department}", response_model=DirectorOut)
@@ -483,6 +664,40 @@ async def director_dashboard(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
 
     connected = connected_sources()
+    tiles = [
+        capability
+        for capability in capabilities_for(director.department)
+        if capability.kind is CapabilityKind.TILE
+    ]
+
+    def block_out(capability: Capability) -> BlockOut:
+        state = state_from_sources(
+            capability.required_sources,
+            connected=connected,
+            reachable=capability.reachable,
+        )
+        return BlockOut(
+            key=capability.id,
+            doc05_id=capability.doc05_id,
+            name=capability.name,
+            shows=capability.shows,
+            # Non-null for every tile, and the registry refuses to build
+            # otherwise — so this is a type narrowing rather than a default.
+            block=capability.block.value if capability.block else "",
+            state=state.value,
+            unlock=unlock_for_sources(capability.required_sources, connected=connected),
+            needs=[source.value for source in capability.required_sources],
+        )
+
+    def section_out(section: Section) -> SectionOut:
+        blocks = [block_out(c) for c in tiles if c.section == section.key]
+        return SectionOut(
+            key=section.key,
+            label=section.label,
+            blocks=blocks,
+            available=sum(1 for block in blocks if block.state != "planned"),
+        )
+
     return DirectorOut(
         department=director.department.value,
         title=director.title,
@@ -490,4 +705,77 @@ async def director_dashboard(
         scoreable=director.scoreable,
         path=_path(director.department),
         offerings=[_offering_out(offering, connected) for offering in director.offerings],
+        not_asked=[
+            NotAskedOut(what=entry.what, source=entry.source)
+            for entry in NOT_ASKED.get(director.department, ())
+        ],
+        sections=[
+            section_out(section)
+            for section in sections_for(director.department)
+            # A tab with nothing on it is not rendered. `EMPTY_SECTIONS` names
+            # the five and `test_sections.py` holds the list, so this filter is
+            # the consequence of a known gap rather than a silent skip.
+            if any(c.section == section.key for c in tiles)
+        ],
+        catalogue=[block_out(c) for c in tiles if not c.section],
+        assistant=AssistantOut(
+            director=director.title,
+            questions=list(ASSISTANT_QUESTIONS.get(director.department, ())),
+        ),
+    )
+
+
+class SetupOut(BaseModel):
+    """What the Setup and Watchlist tabs render.
+
+    **Its own endpoint, not part of the director payload.** The rail is served
+    without touching the database beyond what it already reads; this costs a
+    context assembly, and most visits to a director page never open Setup.
+    Finding #23 is that `GET /dashboards` already spends 25 to 30 round trips, and
+    the fix for that is not to add four more to every page load.
+    """
+
+    department: str
+    facts: list[FactOut]
+    watch: list[WatchOut]
+
+
+@router.get("/{department}/setup", response_model=SetupOut)
+async def director_setup(
+    department: Department, scope: CurrentScope, chosen: RunningDepartments
+) -> SetupOut:
+    """The department's own answers, and the risks it named.
+
+    The same two refusals as the director page, in the same order, because a
+    caller who cannot open Finance must not be able to read Finance's answers
+    through a second door — which is exactly the shape of bug a lazily-loaded
+    tab invites.
+
+    Read through `grounding.context.assemble`, which is the single path (P14).
+    A query of this route's own would be the second context the assembler exists
+    to prevent: the one that forgets the superseded-fact filter and quotes last
+    month's answer beside this month's.
+    """
+    director = BY_DEPARTMENT.get(department)
+    if director is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+
+    if director.executive_only and not scope.can_see_executive_surface:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "The Chief of Staff view requires an Owner or Executive role.",
+        )
+
+    enforce_department(scope, director.department)
+
+    if not runs_department(chosen, director.department):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+
+    async with scoped_connection(scope) as db:
+        context = await assemble(db, scope)
+
+    return SetupOut(
+        department=director.department.value,
+        facts=_facts_for(director.department, context),
+        watch=_watch_for(director.department, context),
     )

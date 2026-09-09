@@ -1,18 +1,8 @@
 import { NextResponse } from 'next/server'
 import { proxyToApi } from '@/lib/auth-proxy'
+import { DEPARTMENTS } from '@/lib/departments'
 
 export const dynamic = 'force-dynamic'
-
-/** The seven department keys. Anything else never reaches the API. */
-const DEPARTMENTS = new Set([
-  'marketing',
-  'sales',
-  'finance',
-  'operations',
-  'hr',
-  'strategy',
-  'executive',
-])
 
 export async function GET(request: Request, { params }: { params: { department: string } }) {
   // Checked before interpolation, for the same reason the invitation id is: an

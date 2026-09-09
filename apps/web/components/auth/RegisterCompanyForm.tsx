@@ -194,8 +194,9 @@ export function RegisterCompanyForm() {
         </div>
       ) : null}
 
-      <Field label="Company name" value={name} onChange={setName} disabled={busy} />
+      <Field required label="Company name" value={name} onChange={setName} disabled={busy} />
       <Field
+        required
         label="Website"
         value={websiteUrl}
         onChange={setWebsiteUrl}

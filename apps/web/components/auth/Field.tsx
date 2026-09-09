@@ -21,6 +21,7 @@ export function Field({
   placeholder,
   revealable,
   options,
+  required,
 }: {
   label: string
   /**
@@ -39,6 +40,25 @@ export function Field({
   disabled?: boolean
   placeholder?: string
   revealable?: boolean
+  /**
+   * Whether the field must be filled.
+   *
+   * **Nothing carried this until a browser run went looking**, so every form in
+   * the product — register, register the company, sign in — validated only on
+   * the server. Two things were missing rather than one: the browser did no
+   * constraint check, and a screen reader announced an optional field where the
+   * form would refuse without it.
+   *
+   * `required` sets both, because `aria-required` and the native attribute are
+   * not interchangeable: the attribute is what blocks a submit, and the ARIA
+   * property is what a screen reader reads. Setting one is the mistake that
+   * looks fixed.
+   *
+   * Optional fields say so in their **label** — "Phone (optional)" — which is
+   * the existing convention here, so this is the inverse of it and not a second
+   * way of saying the same thing.
+   */
+  required?: boolean
   /**
    * Render a `<select>` over these instead of a text input.
    *
@@ -75,6 +95,8 @@ export function Field({
         {options ? (
           <select
             id={id}
+            required={required}
+            aria-required={required || undefined}
             value={value}
             onChange={(event) => onChange(event.target.value)}
             disabled={disabled}
@@ -107,6 +129,8 @@ export function Field({
             onChange={(event) => onChange(event.target.value)}
             autoComplete={autoComplete}
             disabled={disabled}
+            required={required}
+            aria-required={required || undefined}
             placeholder={placeholder}
             aria-invalid={error ? true : undefined}
             aria-describedby={describedById}

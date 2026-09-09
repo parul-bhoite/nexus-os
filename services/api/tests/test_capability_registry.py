@@ -9,7 +9,9 @@ different answer has found a reason to distrust every other number we show.
 from __future__ import annotations
 
 from app.domain.registry import (
+    BY_ID,
     REGISTRY,
+    TILES,
     capabilities_for,
     completeness,
     consumers_of,
@@ -89,9 +91,19 @@ def test_a_company_without_sales_is_not_scored_on_customers() -> None:
 def test_completeness_returns_a_pair_not_a_percentage() -> None:
     """A percentage hides the denominator, and the denominator is the part that
     makes the claim checkable."""
-    delivered, total = completeness(frozenset(Department))
-    assert total == len(REGISTRY)
-    assert delivered == 0, "nothing is implemented yet, and the meter must say so"
+    openable, total = completeness(frozenset(Department))
+    assert total == len(TILES), (
+        "the meter counts tiles. A rule shapes what other capabilities say and is"
+        " not something a customer acquires, so it must not sit in the denominator"
+        " making the meter unreachable by one for ever."
+    )
+    # Non-zero for the first time, and it is step D's ten. The meter read `0 of
+    # 89` for the whole build until something a founder could actually open
+    # existed — which is the honest number and a poor first impression, and the
+    # reason the day-one sections were worth building before the first
+    # connector.
+    assert openable == len([c for c in TILES if c.reachable])
+    assert openable > 0
 
 
 def test_completeness_counts_only_what_the_company_can_reach() -> None:
@@ -104,26 +116,86 @@ def test_completeness_counts_only_what_the_company_can_reach() -> None:
     assert finance_only == len(capabilities_for(Department.FINANCE))
 
 
-def test_the_registry_is_derived_from_the_offerings() -> None:
+def test_every_offering_has_exactly_one_capability() -> None:
     """Two hand-maintained lists of the same thing is the failure this module
     prevents. Adding an offering must update the registry, the denominator and
-    the completeness meter at once."""
+    the completeness meter at once.
+
+    The registry is now **larger** than the offering list, and deliberately: the
+    doc-08-only capabilities are the ones the narrower cut specified and doc 05
+    never did. So the invariant is one-to-one on the offerings rather than an
+    equal count, and `test_capability_ids.py` holds the other direction —
+    nothing in the registry claims a doc 05 number that no offering has.
+    """
     from app.domain.dashboards import DIRECTORS
 
-    assert len(REGISTRY) == sum(len(d.offerings) for d in DIRECTORS)
+    offerings = sum(len(d.offerings) for d in DIRECTORS)
+    from_doc05 = [c for c in REGISTRY if not c.doc08_only]
+
+    assert len(from_doc05) == offerings
+    assert len({c.doc05_id for c in from_doc05}) == offerings, "one capability per offering"
 
 
-def test_nothing_is_delivered_yet_and_the_registry_says_so() -> None:
-    """`DELIVERED: frozenset[str] = frozenset()` was the old mechanism —
-    honest, and a second place to remember. The honesty of every "planned" label
-    now rests on this flag staying accurate."""
-    assert not any(c.delivered for c in REGISTRY)
+def test_the_only_openable_capabilities_are_the_two_that_read_answers_back() -> None:
+    """The first thing in this product a person can open, and what it is.
+
+    Everything computed is still `planned`: no route serves a figure. Setup and
+    the Watchlist are different in kind — they read answers the founder has
+    already given, so there is nothing to connect and nothing to calculate.
+
+    There were three mechanisms for this one fact once —
+    `dashboards.DELIVERED`, `registry.Capability.delivered` and
+    `marketing.DELIVERED_MARKETING` — and they disagreed. One flag now, and the
+    honesty of every "planned" label rests on it.
+    """
+    openable = {c.id for c in REGISTRY if c.reachable}
+
+    assert openable, "step D's sections are openable, and the meter should say so"
+    assert all(c.endswith((".setup", ".watchlist")) for c in openable), sorted(openable)
+    assert "marketing.setup" in openable
+    assert "executive.setup" not in openable, (
+        "the Chief of Staff has no question block — it consumes the other"
+        " directors rather than asking anything of its own"
+    )
+
+
+def test_the_marketing_audits_are_implemented_and_still_not_reachable() -> None:
+    """The gap the unification exposed, kept as a test so closing it is deliberate.
+
+    `calculators/audit.py` scores brand and technical SEO, and
+    `domain/marketing.py` decides their state — but `marketing_state` is called
+    from its own test and from nowhere else, so no user can open either tile.
+    That is why `implemented` and `reachable` are two flags: a completeness
+    meter counting the first would tell a founder they have two capabilities
+    they cannot open.
+
+    When the wiring lands, this test changes on purpose.
+    """
+    audits = {"marketing.seo_gaps", "marketing.brand_intelligence"}
+
+    assert audits <= {c.id for c in REGISTRY if c.implemented}
+    # Asserted about the audits specifically rather than about everything
+    # implemented. Step D's sections are both implemented **and** reachable, so
+    # the global form of this assertion stopped being the claim worth making the
+    # moment anything shipped.
+    assert not any(BY_ID[capability].reachable for capability in audits)
 
 
 def test_impact_is_a_declared_dependency_not_a_guess() -> None:
     """Q59's input. A fact matters because things depend on it, and the
-    dependency is declared rather than inferred from how often it is mentioned."""
+    dependency is declared rather than inferred from how often it is mentioned.
+
+    Both halves, because for a while only the first was true: every call
+    returned `()` because the question bank's ids and the registry's ids were
+    different namespaces, and a ranking that scores everything zero looks
+    exactly like a working feature.
+    """
     assert consumers_of("a_fact_nothing_uses") == ()
+    assert consumers_of("stale_deal_days") == ("sales.stale_deal_alert",)
+    assert consumers_of("people_risk") == ("executive.risk_register",), (
+        "a People question feeding an Executive capability — the cross-department"
+        " case, which is most of why this mapping is worth having"
+    )
 
 
 # ── The shell carries its denominator (P15) ───────────────────

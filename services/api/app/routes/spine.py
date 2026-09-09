@@ -45,6 +45,7 @@ from app.domain.onboarding import (
 )
 from app.domain.progress import STAGES, complete_stage, progress_for
 from app.domain.question_bank import BY_DEPARTMENT
+from app.domain.registry import consumers_of
 from app.domain.scopes import Department
 from app.domain.session import ScopedSession
 from app.logging import get_logger
@@ -721,7 +722,26 @@ async def answer_department_block(
         )
 
     async with scoped_connection(scope) as db:
+        # Read what is there **before** the upsert. `store_answer` is an upsert
+        # by design — onboarding is revisitable — so after it runs there is no
+        # way to tell a first answer from a correction, and only the second is a
+        # restatement (`doc/13` §10).
+        held = {
+            row.question_key: row.value
+            for row in (
+                await db.execute(
+                    text("SELECT question_key, value FROM onboarding_answer WHERE department = :d"),
+                    {"d": target.value},
+                )
+            ).all()
+        }
+
+        changed: list[str] = []
         for answer in payload.answers:
+            before = held.get(answer.key)
+            if before is not None and before != answer.value:
+                changed.append(answer.key)
+
             await store_answer(
                 db,
                 caller=scope,
@@ -730,10 +750,43 @@ async def answer_department_block(
                 answer_state=binding.value,
             )
 
+        # **The restate rule** (`doc/13` §10). A first answer is an answer; a
+        # changed one moves figures somebody may already have acted on, so it is
+        # recorded with the capabilities that read it named.
+        #
+        # Named rather than counted, because `consumers_of` can say exactly
+        # which — the question bank declares each question's consumer and the
+        # registry inverts it. "Three tiles were affected" is a number nobody
+        # can check; "finance.receivables_ageing was" is one they can open.
+        #
+        # Marking those tiles stale and re-deriving them is P14's, and there is
+        # nothing computed to mark today. What lands now is the record a later
+        # derivation compares itself against — the same cut step A made for the
+        # reporting settings, for the same reason.
+        for key in changed:
+            reads_it = consumers_of(key)
+            await audit.record(
+                db,
+                workspace_id=scope.workspace_id,
+                action=audit.AuditAction.ANSWER_WRITTEN,
+                actor_user_id=scope.user_id,
+                target_type="onboarding_answer",
+                target_id=f"{target.value}:{key}",
+                reason=(
+                    f"restated; read by {', '.join(reads_it)}"
+                    if reads_it
+                    else "restated; no capability reads it yet"
+                ),
+            )
+
+        if changed:
+            await db.commit()
+
     log.info(
         "onboarding.block.answered",
         department=target.value,
         binding=binding.value,
         count=len(payload.answers),
+        restated=len(changed),
     )
     return await read_department_block(target.value, scope)

@@ -1,7 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { AgentOnboarding, greetingFor, sentence } from '@/components/onboarding/AgentOnboarding'
+import {
+  AgentOnboarding,
+  greetingFor,
+  sentence,
+  transcript,
+} from '@/components/onboarding/AgentOnboarding'
 import * as client from '@/lib/agent-onboarding-client'
 import { AuthError } from '@/lib/auth-client'
 import * as docs from '@/lib/documents-client'
@@ -276,7 +281,7 @@ describe('AgentOnboarding greeting', () => {
     render(<AgentOnboarding />)
 
     expect(
-      await screen.findByText('Hallo Parul — you work at Xebia as Lead Designer, in Design.'),
+      await screen.findByText('Hello Parul — you work at Xebia as Lead Designer, in Design.'),
     ).toBeInTheDocument()
     releaseRead(interviewing([]))
     await waitFor(() => expect(mocked.read).toHaveBeenCalledOnce())
@@ -287,13 +292,13 @@ describe('AgentOnboarding greeting', () => {
     // Filling a gap from a neighbouring field is how a greeting starts telling
     // somebody something they never said, on the first line they ever read.
     expect(greetingFor({ name: 'Parul Bhoite', company: 'Xebia' })).toBe(
-      'Hallo Parul — you work at Xebia.',
+      'Hello Parul — you work at Xebia.',
     )
     expect(greetingFor({ name: 'Parul', company: 'Xebia', department: 'Design' })).toBe(
-      'Hallo Parul — you work at Xebia, in Design.',
+      'Hello Parul — you work at Xebia, in Design.',
     )
-    expect(greetingFor({ name: 'Parul' })).toBe('Hallo Parul.')
-    // An inbox is not a name, and "Hallo there" is worse than opening with the
+    expect(greetingFor({ name: 'Parul' })).toBe('Hello Parul.')
+    // An inbox is not a name, and "Hello there" is worse than opening with the
     // finding — which the next bubble does anyway.
     expect(greetingFor({ company: 'Xebia', designation: 'Lead Designer' })).toBeNull()
     expect(greetingFor(undefined)).toBeNull()
@@ -838,5 +843,63 @@ describe('AgentOnboarding documents and tools', () => {
 
     expect(await screen.findByText(/it does not connect it/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^connect/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('transcript', () => {
+  /**
+   * The duplicate-bubble bug, found by walking onboarding in a browser.
+   *
+   * The agent's question is stored as a turn **and** handed back as the live
+   * question, so the transcript and the composer both rendered it — two
+   * identical bubbles, for every discovery question after the first. The first
+   * escaped it because its wording is the one string the model does not
+   * produce, which is why nobody had seen this.
+   */
+  const asked = (text: string) => ({ role: 'agent' as const, text, target: null, scope: null })
+  const said = (text: string) => ({ role: 'user' as const, text, target: null, scope: null })
+  const live = (question: string | null, done = false) => ({
+    done,
+    question,
+    target: null,
+    scope: null,
+    choices: [] as string[],
+    reason: null,
+  })
+
+  it('drops the trailing agent turn the composer is already asking', () => {
+    const turns = [asked('What are you responsible for?'), said('Everything.'), asked('Who do you lose to?')]
+
+    expect(transcript(turns, live('Who do you lose to?'))).toHaveLength(2)
+  })
+
+  it('keeps every turn when the composer is asking nothing', () => {
+    const turns = [asked('Who do you lose to?')]
+
+    expect(transcript(turns, null)).toHaveLength(1)
+    expect(transcript(turns, live(null))).toHaveLength(1)
+    expect(transcript(turns, live('Who do you lose to?', true))).toHaveLength(1)
+  })
+
+  it('keeps an earlier copy of the same question', () => {
+    // Asked twice because the first answer did not resolve the field. The
+    // transcript is a record of what was asked, and the earlier one happened.
+    const turns = [
+      asked('Who do you lose to?'),
+      said('Not sure.'),
+      asked('Who do you lose to?'),
+    ]
+
+    const kept = transcript(turns, live('Who do you lose to?'))
+
+    expect(kept).toHaveLength(2)
+    expect(kept[0].text).toBe('Who do you lose to?')
+  })
+
+  it('keeps a trailing user turn', () => {
+    // Only an agent turn can duplicate the composer's question.
+    const turns = [asked('Who do you lose to?'), said('Who do you lose to?')]
+
+    expect(transcript(turns, live('Who do you lose to?'))).toHaveLength(2)
   })
 })

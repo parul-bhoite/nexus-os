@@ -54,6 +54,7 @@ from app.deps import CurrentScope, CurrentSession
 from app.domain import audit
 from app.logging import get_logger
 from app.mail import Email, Mailer, build_mailer, send_safely
+from app.retrieval.scoped import scoped_connection
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 log = get_logger(__name__)
@@ -382,8 +383,34 @@ async def login(
         memberships = await memberships_for_user(db, user_id=user_id)
         email = await _email_for(db, user_id)
         # Only auto-select when there is no ambiguity. Picking one of several on
-        # the user's behalf risks acting in the wrong client's workspace.
+        # the user's behalf risks acting in the wrong client's workspace — the
+        # reasoning was written before multi-entity existed and it still holds.
+        #
+        # **But resuming is not picking** (ADR 0026). The sign-in screen says
+        # *"your workspace and everything in it stays exactly where you left
+        # it"*, and carrying the pointer forward from this person's most recent
+        # session is that sentence being true. Without it, somebody holding two
+        # companies logs in with no active entity and `current_scope` refuses
+        # everything with "No workspace selected" — which the dashboard reads as
+        # a dead session and bounces to sign-in. A loop.
+        #
+        # Filtered against live memberships, so a revoked entity is not resumed
+        # into.
         active = memberships[0].workspace_id if len(memberships) == 1 else None
+        if active is None and memberships:
+            held = {m.workspace_id for m in memberships}
+            previous = (
+                await db.execute(
+                    text(
+                        "SELECT active_workspace_id FROM user_session"
+                        " WHERE user_id = :u AND active_workspace_id IS NOT NULL"
+                        " ORDER BY created_at DESC LIMIT 1"
+                    ),
+                    {"u": str(user_id)},
+                )
+            ).scalar_one_or_none()
+            if previous is not None and UUID(str(previous)) in held:
+                active = UUID(str(previous))
 
         issued = await issue_session(
             db,
@@ -544,3 +571,252 @@ async def me(scope: CurrentScope) -> SessionResponse:
         ],
         active_workspace_id=scope.workspace_id,
     )
+
+
+# ── Panel 2: how NEXUS talks to you (`doc/13` §14) ────────────
+
+
+class PreferencesOut(BaseModel):
+    """This person's presentation preferences. **Never authorisation.**
+
+    Every field here is a `persona.*` column, and `doc/06` §2.6 is the rule that
+    governs the whole panel: *"no persona field is ever an input to the retrieval
+    predicate."* `fields.py` enforces it at import —
+    `assert_persona_is_not_authorisation` fails the process if a role-shaped key
+    is ever added — and this endpoint is the surface over the same columns.
+
+    So it is scoped per workspace **and** per person, and changing anything here
+    cannot widen what anybody sees. That is why it needs no administrator check
+    while every other settings panel does.
+    """
+
+    language: str
+    timezone: str
+    communication_style: str | None
+    default_landing_screen: str | None
+    priority_topics: list[str]
+
+
+class PreferencesIn(BaseModel):
+    language: str = Field(min_length=2, max_length=16)
+    timezone: str = Field(min_length=1, max_length=64)
+    communication_style: str | None = Field(default=None, max_length=32)
+    default_landing_screen: str | None = Field(default=None, max_length=32)
+
+
+_PREFERENCE_COLUMNS = (
+    "language, timezone, communication_style, default_landing_screen, priority_topics"
+)
+
+
+@router.get("/preferences", response_model=PreferencesOut)
+async def read_preferences(scope: CurrentScope) -> PreferencesOut:
+    """What this person has told us about how to talk to them.
+
+    A row may not exist: the persona is written during onboarding and a person
+    who joined by invitation has not been through it. Absent is answered with
+    the defaults the columns carry rather than a 404 — the question *"what
+    language do you read in?"* has an answer either way, and it is the one the
+    product is already using.
+    """
+    async with scoped_connection(scope) as db:
+        row = (
+            await db.execute(
+                text(
+                    f"SELECT {_PREFERENCE_COLUMNS} FROM persona"  # noqa: S608
+                    " WHERE user_id = :u"
+                ),
+                {"u": str(scope.user_id)},
+            )
+        ).first()
+
+    if row is None:
+        return PreferencesOut(
+            language="en",
+            timezone="Asia/Muscat",
+            communication_style=None,
+            default_landing_screen=None,
+            priority_topics=[],
+        )
+
+    return PreferencesOut(
+        language=row.language,
+        timezone=row.timezone,
+        communication_style=row.communication_style,
+        default_landing_screen=row.default_landing_screen,
+        priority_topics=list(row.priority_topics or []),
+    )
+
+
+@router.put(
+    "/preferences",
+    response_model=PreferencesOut,
+    dependencies=[Depends(require_csrf)],
+)
+async def update_preferences(payload: PreferencesIn, scope: CurrentScope) -> PreferencesOut:
+    """Change them. An upsert, because the row may not exist yet.
+
+    **Not audited**, and that is deliberate rather than an omission. The audit
+    trail records what reaches beyond the person doing it — a domain verified, a
+    member invited, a department removed, a figure restated. A preference for
+    shorter answers reaches nobody, and filling the log with them would bury the
+    rows somebody reads it for.
+
+    `priority_topics` is not writable here. It is what the persona interview
+    inferred from what the founder said would go wrong, and a checkbox list
+    would turn a considered answer into a shopping basket. It is shown, and it
+    is changed by talking to the product.
+    """
+    async with scoped_connection(scope) as db:
+        await db.execute(
+            text(
+                "INSERT INTO persona"
+                " (workspace_id, user_id, language, timezone,"
+                "  communication_style, default_landing_screen)"
+                " VALUES (:ws, :u, :lang, :tz, :style, :landing)"
+                " ON CONFLICT (workspace_id, user_id) DO UPDATE"
+                "    SET language = EXCLUDED.language,"
+                "        timezone = EXCLUDED.timezone,"
+                "        communication_style = EXCLUDED.communication_style,"
+                "        default_landing_screen = EXCLUDED.default_landing_screen,"
+                "        updated_at = now()"
+            ),
+            {
+                "ws": str(scope.workspace_id),
+                "u": str(scope.user_id),
+                "lang": payload.language,
+                "tz": payload.timezone,
+                "style": payload.communication_style,
+                "landing": payload.default_landing_screen,
+            },
+        )
+        await db.commit()
+
+    return await read_preferences(scope)
+
+
+# ── Switching entity (ADR 0026) ───────────────────────────────
+
+
+class WorkspaceChoiceOut(BaseModel):
+    workspace_id: UUID
+    name: str
+    role: str
+    active: bool
+
+
+class WorkspacesOut(BaseModel):
+    workspaces: list[WorkspaceChoiceOut]
+
+
+class SwitchIn(BaseModel):
+    workspace_id: UUID
+
+
+async def _workspaces_for(user_id: UUID, active: UUID | None) -> WorkspacesOut:
+    """The list, with `active` computed against an id the caller passes in.
+
+    Split out because `switch_workspace` cannot use the session's own pointer:
+    `CurrentSession` is resolved at the start of the request, so after the
+    `UPDATE` its `active_workspace_id` still holds the entity being *left*. The
+    first version returned that, and the response said the switch had not
+    happened while the audit row and the next request both said it had.
+
+    Found by switching in a browser rather than by a test — every test asserted
+    the write or the refusal, and none asserted the flag in the reply.
+    """
+    async with _unscoped_session() as db:
+        memberships = await memberships_for_user(db, user_id=user_id)
+        rows = {
+            row.id: row.name
+            for row in (
+                await db.execute(
+                    text("SELECT id, name FROM workspace WHERE id = ANY(:ids)"),
+                    {"ids": [str(m.workspace_id) for m in memberships]},
+                )
+            ).all()
+        }
+
+    return WorkspacesOut(
+        workspaces=[
+            WorkspaceChoiceOut(
+                workspace_id=membership.workspace_id,
+                name=rows.get(membership.workspace_id, "Your company"),
+                role=membership.role.value,
+                active=membership.workspace_id == active,
+            )
+            for membership in memberships
+        ]
+    )
+
+
+@router.get("/workspaces", response_model=WorkspacesOut)
+async def list_workspaces(session: CurrentSession) -> WorkspacesOut:
+    """The entities this person holds. **Exactly their memberships.**
+
+    Depends on `CurrentSession` rather than `CurrentScope`, because somebody
+    switching *away* from a revoked workspace has no valid scope and still needs
+    this list — refusing them would trap them on a workspace they cannot open.
+    """
+    return await _workspaces_for(session.user_id, session.active_workspace_id)
+
+
+@router.post(
+    "/workspace",
+    response_model=WorkspacesOut,
+    dependencies=[Depends(require_csrf)],
+)
+async def switch_workspace(payload: SwitchIn, session: CurrentSession) -> WorkspacesOut:
+    """Move the session's pointer to another entity this person holds.
+
+    ADR 0026 brings this route back. It was deleted with `doc/11` Q9 — one
+    person, one company — along with `_teardown_on_switch` and, with it, **I5's
+    cache-invalidation-on-switch requirement**.
+
+    **The membership is re-read here, not trusted from the request.** The
+    pointer is only a preference; `current_scope` re-validates it against live
+    memberships on every request, so a stale or forged `workspace_id` cannot
+    grant anything. Checking it here as well is not redundant — it is the
+    difference between a 403 now and a confusing "Workspace access revoked" on
+    the next page load.
+
+    **Nothing is cached across the switch, and that is currently true by
+    construction.** The only process-level caches are `get_settings`,
+    `get_engine` and `get_sessionmaker`, all workspace-agnostic; `scope`,
+    including its departments, is rebuilt per request from the active
+    membership. `test_nothing_is_cached_across_an_entity_switch` is what stops
+    that from silently stopping being true — because entity A's figures under
+    entity B's name is the worst failure this product can have, and it would
+    look completely normal on screen.
+    """
+    async with _unscoped_session() as db:
+        memberships = await memberships_for_user(db, user_id=session.user_id)
+        if not any(m.workspace_id == payload.workspace_id for m in memberships):
+            # 403 and not 404: the caller knows this workspace exists, because
+            # they named it. What they do not have is a live membership in it.
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "You do not have access to that company.",
+            )
+
+        await db.execute(
+            text(
+                "UPDATE user_session SET active_workspace_id = :w"
+                " WHERE id = :s AND revoked_at IS NULL"
+            ),
+            {"w": str(payload.workspace_id), "s": str(session.session_id)},
+        )
+        await audit.record(
+            db,
+            workspace_id=payload.workspace_id,
+            action=audit.AuditAction.WORKSPACE_SWITCHED,
+            actor_user_id=session.user_id,
+            target_type="workspace",
+            target_id=str(payload.workspace_id),
+            reason="session pointer moved",
+        )
+        await db.commit()
+
+    log.info("auth.workspace.switched", workspace_id=str(payload.workspace_id))
+    # The *new* pointer, not the session's. See `_workspaces_for`.
+    return await _workspaces_for(session.user_id, payload.workspace_id)

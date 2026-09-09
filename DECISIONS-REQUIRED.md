@@ -321,6 +321,36 @@ so it is written and tested rather than remembered later.
 
 ---
 
+### D24 — How does somebody reach a human? *(blocks two of the three pricing CTAs)*
+
+The Growth and Enterprise tiers are priced **"Let's talk"** and their buttons read
+*"Book a walkthrough"* and *"Talk to us"*. The pricing disclaimer makes the same
+offer in prose: *"talk to us and it will be honest about where it stands."*
+
+**There is no mechanism.** No booking system, no `/contact` route, no support
+address anywhere in the repository. The buttons scrolled to the final section,
+whose own button goes to `/register` — so the two tiers that require a
+conversation led to a self-serve signup form two clicks later.
+
+The nav and the Starter tier are fixed (they are genuinely self-serve, and now
+link straight to `/register`). These two are not fixable without a fact about the
+business, and the content rule forbids inventing one — an invented support
+address is a worse failure than a scroll, because mail sent to it disappears.
+
+**What I need:** one of —
+
+1. **An address.** Anything real: `hello@…`, a personal inbox for now. The
+   buttons become `mailto:` links and this closes.
+2. **A form.** A `/contact` route that writes somewhere you will read. Half a
+   day, and it needs a destination anyway, so it reduces to (1).
+3. **A booking link.** Calendly or equivalent — an external URL, no build.
+4. **Drop the promise.** Relabel both to the self-serve trial and delete the
+   "talk to us" line from the disclaimer. Honest, and loses the enterprise
+   conversation the tiers exist to start.
+
+Until then both stay on `#cta`, commented in `lib/content.ts` so the next reader
+does not "fix" it by inventing an address.
+
 ## 5e. Raised by Phase 5, 3 September 2026
 
 ### ~~D25 — Should onboarding be an AI questionnaire instead of a form?~~ — **answered: wrap, not replace**

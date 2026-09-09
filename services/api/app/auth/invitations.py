@@ -28,7 +28,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.tokens import hash_token, new_token
 from app.auth.workspaces import require_verified_domain
 from app.domain import audit
-from app.domain.membership import assert_no_live_membership
 from app.domain.scopes import Department, Role
 from app.logging import get_logger
 from app.retrieval.scoped import apply_invitation_token_scope, apply_workspace_scope
@@ -293,7 +292,6 @@ async def accept(db: AsyncSession, *, token: str, user_id: UUID) -> Accepted:
     # somebody holding a forwarded link that the *invited* account already
     # belongs to a company would answer a question they were never entitled to
     # ask. By this line the caller has proved the invitation names them.
-    await assert_no_live_membership(db, user_id=user_id, other_than=invitation.workspace_id)
 
     await apply_workspace_scope(db, str(invitation.workspace_id))
 

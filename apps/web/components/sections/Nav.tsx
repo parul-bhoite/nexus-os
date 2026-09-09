@@ -80,7 +80,7 @@ export function Nav() {
               >
                 Sign in
               </Link>
-              <Button href="#cta" size="md" icon={<ArrowRight />} className="hidden sm:inline-flex">
+              <Button href="/register" size="md" icon={<ArrowRight />} className="hidden sm:inline-flex">
                 Start free
               </Button>
 
@@ -138,7 +138,7 @@ export function Nav() {
                 ))}
               </nav>
               <div className="mt-auto flex flex-col gap-3 pb-10 pt-8">
-                <Button href="#cta" size="lg" icon={<ArrowRight />}>
+                <Button href="/register" size="lg" icon={<ArrowRight />}>
                   Start free
                 </Button>
                 <Button href="/login" size="lg" variant="secondary">

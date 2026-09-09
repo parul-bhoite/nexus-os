@@ -243,13 +243,25 @@ def test_every_skill_schema_is_itself_walkable(registry: SkillRegistry) -> None:
 # ── No dead skills ────────────────────────────────────────────
 
 
-def test_every_skill_is_reachable_from_a_command(registry: SkillRegistry) -> None:
-    """A skill no command reaches is maintained for nothing."""
-    from app.ai.runtime.commands import get_commands
+def test_every_skill_has_a_caller(registry: SkillRegistry) -> None:
+    """A skill nothing reaches is maintained for nothing.
 
-    reachable = get_commands().skills_used()
+    Commands were the only callers until the grounding path arrived. The
+    narrator is reached from `app/grounding/answer.py` instead — a metric is
+    phrased on a dashboard, not during onboarding — and registering a fake
+    command to satisfy this test would have put a verb in the agent's vocabulary
+    that no journey uses.
+
+    `NARRATOR` is **imported rather than spelled**, so renaming the skill breaks
+    this test at the import and not at the assertion. A string here would let
+    the guard keep passing over a skill that no longer exists.
+    """
+    from app.ai.runtime.commands import get_commands
+    from app.grounding.answer import NARRATOR
+
+    reachable = get_commands().skills_used() | {NARRATOR}
     orphans = sorted(set(registry.names()) - reachable)
-    assert not orphans, f"skills on disk that no command invokes: {orphans}"
+    assert not orphans, f"skills on disk that nothing invokes: {orphans}"
 
 
 # ── Present but empty ─────────────────────────────────────────

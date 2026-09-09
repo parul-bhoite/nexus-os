@@ -23,6 +23,7 @@ from enum import StrEnum
 from typing import Final
 
 from app.domain.dashboards import WidgetState
+from app.domain.registry import BY_ID
 
 
 class ConnectionState(StrEnum):
@@ -61,12 +62,27 @@ class ConnectionState(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class Capability:
-    """One thing a connector could compute, and the fields it needs."""
+class FieldRequirement:
+    """What one capability needs from the connected system, field by field.
 
-    id: str
-    name: str
+    **Keyed by the capability's canonical id, not by a name of its own.** This
+    was a third capability namespace — `stale_deals`, `pipeline_value`,
+    `loss_analysis`, `conversion` — beside doc 05's numbers and doc 08's dotted
+    names, and it produced a specific failure at the customer's eye level: the
+    connect screen said *"Stale deal detection is unsupported"* and the tile it
+    referred to was called *"Stale and at-risk deals"*. Two names for one thing
+    reads as two features, one of which is broken.
+
+    So the name is read from `domain/registry.py` and cannot drift from the
+    tile's, and `_validate` refuses an id that is not a capability.
+    """
+
+    capability_id: str
     required_fields: tuple[str, ...]
+
+    @property
+    def name(self) -> str:
+        return BY_ID[self.capability_id].name
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,9 +91,10 @@ class Completeness:
 
     supported: tuple[str, ...]
     unsupported: tuple[tuple[str, str], ...]
-    """`(capability name, why)`. The reason names the missing field, because
-    "unavailable" tells a customer nothing they can act on and a field name
-    tells them exactly what to fix."""
+    """`(capability name, why)`, and the name is the tile's own.
+
+    The reason names the missing field, because "unavailable" tells a customer
+    nothing they can act on and a field name tells them exactly what to fix."""
 
     @property
     def fully_supported(self) -> bool:
@@ -87,16 +104,35 @@ class Completeness:
 # The CRM capabilities that depend on fields a system may or may not carry.
 # `last_activity_at` is the one that most often does not exist, which is why
 # doc 05 §9 names stale-deal detection specifically.
-CRM_CAPABILITIES: Final[tuple[Capability, ...]] = (
-    Capability("stale_deals", "Stale deal detection", ("last_activity_at",)),
-    Capability("pipeline_value", "Pipeline value", ("amount", "stage_canonical")),
-    Capability("loss_analysis", "Why deals are lost", ("loss_reason",)),
-    Capability("conversion", "Stage conversion", ("stage_canonical",)),
+#
+# Stage conversion sits under the forecast because that is where doc 08 §3C puts
+# it: *"the stage-conversion table those weights come from"*. It is not a tile of
+# its own, and inventing one to hold a field requirement would put a box on a
+# screen to satisfy a mapping.
+CRM_FIELD_REQUIREMENTS: Final[tuple[FieldRequirement, ...]] = (
+    FieldRequirement("sales.stale_deal_alert", ("last_activity_at",)),
+    FieldRequirement("sales.pipeline_board", ("amount", "stage_canonical")),
+    FieldRequirement("sales.win_loss", ("loss_reason",)),
+    FieldRequirement("sales.forecast", ("stage_canonical",)),
 )
 
 
+def _validate(requirements: tuple[FieldRequirement, ...]) -> None:
+    """Every id names a capability. Import-time, for `skills.py`'s reason."""
+    for requirement in requirements:
+        if requirement.capability_id not in BY_ID:
+            raise ValueError(
+                f"{requirement.capability_id!r} is not a capability, so the connect"
+                " screen would refuse a tile that does not exist."
+            )
+
+
+_validate(CRM_FIELD_REQUIREMENTS)
+
+
 def check_completeness(
-    available_fields: frozenset[str], capabilities: tuple[Capability, ...] = CRM_CAPABILITIES
+    available_fields: frozenset[str],
+    requirements: tuple[FieldRequirement, ...] = CRM_FIELD_REQUIREMENTS,
 ) -> Completeness:
     """What this connection can compute. **Run at connect, reported immediately.**
 
@@ -107,17 +143,17 @@ def check_completeness(
     supported: list[str] = []
     unsupported: list[tuple[str, str]] = []
 
-    for capability in capabilities:
-        missing = [f for f in capability.required_fields if f not in available_fields]
+    for requirement in requirements:
+        missing = [f for f in requirement.required_fields if f not in available_fields]
         if missing:
             unsupported.append(
                 (
-                    capability.name,
+                    requirement.name,
                     f"needs {', '.join(missing)}, which this system does not provide",
                 )
             )
         else:
-            supported.append(capability.name)
+            supported.append(requirement.name)
 
     return Completeness(supported=tuple(supported), unsupported=tuple(unsupported))
 

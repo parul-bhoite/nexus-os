@@ -93,7 +93,7 @@ function forwardCookies(from: Response, to: Headers): void {
 export type ProxyOptions = {
   /** Path on the API, e.g. `/auth/login`. */
   path: string
-  method: 'GET' | 'POST'
+  method: 'GET' | 'POST' | 'PUT'
   /** Body to send. Omit for GET. */
   body?: unknown
   /** Shown if the API cannot be reached at all. */

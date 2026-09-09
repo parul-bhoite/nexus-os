@@ -20,11 +20,28 @@ from typing import Final
 
 from app.calculators.audit import CategoryScore
 from app.domain.dashboards import Source, WidgetState
+from app.domain.registry import CAPABILITIES
+from app.domain.scopes import Department
 
 # The Marketing offerings that are real once a crawl has happened. Both read
 # only crawl signals, which is why they need no connector — and why they are the
 # first two capabilities in the product that can honestly say `live`.
-DELIVERED_MARKETING: Final[frozenset[str]] = frozenset({"3.7", "3.8"})
+#
+# **Derived, not written down.** This was a third hand-maintained set beside
+# `dashboards.DELIVERED` and `registry.Capability.delivered`, and the three of
+# them disagreed: this one said `3.7` and `3.8` were live while the other two
+# rendered them planned. `domain/registry.py` now holds the one answer.
+#
+# It reads `implemented` rather than `reachable` on purpose. The calculation
+# behind these two exists — that is what this module is about — and the route
+# that would serve it does not, which is what `reachable` records. When the
+# wiring lands, `marketing_state` becomes reachable through
+# `state_for` and this function goes away.
+DELIVERED_MARKETING: Final[frozenset[str]] = frozenset(
+    c.doc05_id
+    for c in CAPABILITIES
+    if c.implemented and c.department is Department.MARKETING and c.doc05_id
+)
 
 # The keyword half of SEO Intelligence stays Locked until D2 (Q53). Recording it
 # as a named absence rather than omitting the section: a founder who expects

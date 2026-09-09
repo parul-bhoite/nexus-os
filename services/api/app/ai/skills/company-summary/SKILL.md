@@ -55,7 +55,7 @@ and now headquartered in Atlanta."
 
 **No salutation and no name.** The screen has already greeted the person by
 name, from what they typed at sign-up, before this skill ever ran — a second
-"Hallo Parul" two lines below the first is the product introducing itself
+"Hello Parul" two lines below the first is the product introducing itself
 twice. That is also why you must not derive a name from the email address: an
 inbox is not a name, and it is not yours to guess here in any case.
 

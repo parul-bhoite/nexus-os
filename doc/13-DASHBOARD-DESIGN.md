@@ -68,7 +68,10 @@ Three things follow, and they are the whole design:
 |---|---|---|
 | Seven directors, ~60 offerings, source map | `app/domain/dashboards.py` | Real, as data, from `doc/05` |
 | Seven render states + `state_for` ordering | `app/domain/dashboards.py` | Real, and only `PLANNED` is reachable |
-| Capability registry, derived denominators | `app/domain/registry.py` | Real; `consumes_facts` empty for every entry |
+| **The capability table, one id space** | `app/domain/registry.py` | **Built (step A).** 80 capabilities, dotted ids, doc 05 numbers as provenance, `consumes_facts` inverted from the bank, validated at import |
+| Derived denominators and the completeness meter | `app/domain/registry.py` | Real, in the same module as the table — separating them is what let them drift |
+| **The source ledger** | `app/domain/sources.py` | **Built (step A).** One row per `Source`, `unlocks` derived, `PROVIDER_SOURCES` joining it to the nine declarable providers |
+| **Reporting settings** | `app/domain/reporting.py` · migration 0027 · `GET/PUT /companies/current/reporting` · `ReportingCard.tsx` | **Built (step A).** Fiscal year, reporting week, report timezone, scale, decimals, and the restate stamp |
 | Question bank, 29 questions, each naming its consumer | `app/domain/question_bank.py` | Real |
 | Fact layer (department rules), brain, persona | migration 0022 · `ai/runtime/fields.py` | Real, and the Setup section reads it |
 | One company page, segregated by omission | `GET /dashboards/company` | Real, 59 checks green (`GOAL-STATUS.md`) |
@@ -77,7 +80,7 @@ Three things follow, and they are the whole design:
 | **Director agents** | `app/ai/agents/` | **Empty.** Part V fills it |
 | Grounding pipeline, `generation` rows | `app/grounding/pipeline.py` | Stub — `doc/12` P14 |
 | Connector state | `routes/dashboards.py::connected_sources` | Returns `frozenset()`, honestly, and takes no workspace |
-| **Settings** | `apps/web/app/settings/page.tsx` | **Two panels: domain and invitations.** Nine more are owed (Part III) |
+| **Settings** | `apps/web/app/settings/page.tsx` | **Three panels: domain, invitations and reporting.** The rest of Part III is owed |
 | `disabled_ai_skills` kill switch | `config.py` → `anthropic_provider.py:104` | **Enforced.** No surface to set it, and `pipeline.py`'s docstring says otherwise |
 
 **Nothing in the product is dishonest today.** Everything below adds value without
@@ -205,7 +208,7 @@ Neither set of strings resolves in the other. So:
 
 ### The fix, and it is small
 
-One capability table, keyed by the **dotted name** (`doc/08`'s space, because it is the
+One capability table in `domain/registry.py`, keyed by the **dotted name** (`doc/08`'s space, because it is the
 newer, narrower cut and is already what the question bank declares), with the `doc/05`
 id retained for provenance:
 
@@ -513,11 +516,11 @@ connect screen with no second edit.
 | **Crawl** (built) | Brand · technical SEO · performance scores · competitor pages · tech landscape | Anything about visitors, money or people | Ours | **Live** |
 | **Documents** (built) | Price list → Proposal Studio (**every price cited to a page**) · budget → budget-vs-actual · policies → HR library | Anything not in a file you uploaded | Ours | **Live** |
 | **Roster** (P17) | People directory | **Headcount** — the roster is who uses NEXUS | Ours | P17 |
-| **GA4** | 6 Marketing capabilities + Marketing scoreability + 1 Strategy | Enquiry **value** — that is Sales' to hold. Offline leads | Free | **First** |
-| **Search Console** | Impressions, positions, content-and-pages, share of search | Anything about sessions or conversion | Free | **First** |
-| **PageSpeed** | Performance score (already in the audit) | Anything about traffic | Free | Live |
-| **CRM** (Zoho / HubSpot) | All of Sales — pipeline, forecast, win rate, stale deals, accounts, attainment — plus the **Customers** unit and Executive revenue | Marketing attribution before the enquiry. Cash | HubSpot free tier / Salesforce | **Second** |
-| **Accounting** (Xero / QuickBooks / Zoho) | All of Finance — cash, runway, margin, ageing, payables — plus Executive revenue and runway, and project profitability with Ops | Anything about pipeline or delivery | Wave free / QuickBooks | **Second** |
+| **GA4** | 4 Marketing capabilities, and Marketing scoreability | Enquiry **value** — that is Sales' to hold. Offline leads | Free | **First** |
+| **Search Console** | ⚠ **Nothing, today.** No capability requires it — see §26 defect 10 | Anything about sessions or conversion | Free | **First** |
+| **PageSpeed** | ⚠ **Nothing, today.** The audit computes a performance score and no capability holds it — §26 defect 10 | Anything about traffic | Free | Live |
+| **CRM** (Zoho / HubSpot) | 6 by itself; feeds 12 in all — pipeline, forecast, stale deals, routing, attainment, and the **Customers** unit with accounting beside it | Marketing attribution before the enquiry. Cash | HubSpot free tier / Salesforce | **Second** |
+| **Accounting** (Xero / QuickBooks / Zoho) | 7 by itself; feeds 20 in all — cash, runway, ageing, budget-versus-actual, approvals, and project profitability with Ops | Anything about pipeline or delivery | Wave free / QuickBooks | **Second** |
 | **Ads** (Google / Meta) | Spend, CPC, cost per enquiry, campaign rows | Organic anything | Native free | Third |
 | **LinkedIn** | Social reach — `doc/08`'s single locked Marketing tile | Paid social on other networks | Native free | Third |
 | **HRIS** | Headcount, start dates, contract types, leave balances, requisitions, attrition; **visa and document expiry** (opt-in, answer 6.5) | Utilisation — that needs Ops | Manatal-class | Fourth |
@@ -529,6 +532,18 @@ connect screen with no second edit.
 | **Tender feed** | Opportunity Radar | — | **No provider identified** (`doc/05` §12) | Blocked, and it is a decision (§25) |
 | **Visitor identification** (RB2B / Warmly) | Who is on your site now, feeding Sales | Individuals, reliably, under GCC privacy expectations | Free to 500/mo | Needs a privacy decision |
 | **Voice** (Retell / Vapi / ElevenLabs) | Voice CEO (owner talks to NEXUS) and, separately, outbound AI calls | — | Whisper self-host / Retell | Labs, and gated by §19 |
+
+**Every count in that table is now computed**, by inverting `required_sources`
+against what a workspace already has. Two of the numbers in this document's
+first version were hand-written and wrong: GA4 turns on **four** Marketing
+capabilities rather than six, and none on Strategy — `strategy.market_position`
+needs the crawl and keyword data, not analytics. That is exactly the failure the
+derivation exists to prevent, and it was found by writing the derivation.
+
+**A tool "unlocks" only what it completes on its own.** A CRM *feeds* twelve
+capabilities and *turns on* six; the other six also need accounting or history.
+The connect screen may only ever promise the second number, or a founder
+connects two systems and finds the tile still locked.
 
 ### Three rules the ledger enforces
 
@@ -687,12 +702,12 @@ thing `skills.py`'s docstring was written to prevent.
 
 | Step | Lands in | Work | Days |
 |---|---|---|---|
-| **A** | now | **Registry unification (§5)** · the tool ledger as data (§16) · **settings panel 5, Reporting** — everything downstream states a window (ADR 0025), and nothing can state one today | **+4, new** |
+| ~~**A**~~ | **done, 9 Sep** | **Registry unification (§5)** · the source ledger (§16) · **settings panel 5, Reporting** with migration 0027 and the restate stamp. Five defects fixed, five more found and recorded (§26). 1,171 API tests and 54 web tests green; 3 pre-existing failures unrelated to it, logged as M20–M22 | 4 |
 | **B** | **P14** | Grounding, `generation` rows, the working drawer's backing, **the numeral guard (§20 rule 1)**, `narrate-metric`. Extend `calculators/`: deltas, weighting, composite. Reserve the finding schema | 8 (planned) |
 | **C** | **P15** | Sections + rail · the eight blocks · all seven states with a component test each · derived denominators · gap banner · assistant panel reserved | 6 (planned) |
-| **D** | **P15** | **Setup · Watchlist · "what we will not ask you"** — the three day-one sections, all six departments | **+3, new** |
-| **E** | **P15** | **Settings panels 2, 3, 7, 10, 12** and the restate rule (§10) | **+3, new** |
-| **F** | **P15/17** | **ADR 0026 — multi-entity.** Panel 4b · the switcher · `POST /auth/workspace` restored · **I5 cache invalidation on switch** · per-entity department resolution · the group read path and its two tests (§4.1) | **+6, new** |
+| ~~**D**~~ | **done, 9 Sep** | **Setup · Watchlist · "what we will not ask you"**, all six departments with a question block. The first ten capabilities a person can open, so the completeness meter stops reading zero. `FACTS` — the last unused block kind — is what Setup renders as | 3 |
+| ~~**E**~~ | **done, 9 Sep** | **All five panels.** 2 preferences · 3 the department block, where the restate rule is actually triggered by a person · 7 departments, with its own endpoint · 10 the Brain, read-only · 12 the audit log. Plus the restate rule extended to a department answer, naming the capabilities that read it | 3 |
+| ~~**F**~~ | **done, 9 Sep** | **ADR 0026, end to end.** The constraint lifted (a deletion, no migration) · `GET /auth/workspaces` and `POST /auth/workspace` · `domain/group.py`'s per-entity read path · panel 4b · the shell switcher, which **reloads rather than re-renders** · nine guard tests. Two companies on one login, verified in a browser | 3 of 6 |
 | **G** | **P16** | Marketing end to end, and **`marketing-director` as the first director on a skill**. Its data is ADR 0023's, so this now depends on H | 8 (planned) |
 | **H** | **P18, pulled early** | **GA4 + Search Console + PageSpeed** (ADR 0023) · OAuth and token encryption · **field-completeness at connect** · revocation → `STALE`. D3 is the blocker | 4 of the planned 10 |
 | **I** | **P17** | Members · People directory from the roster · settings panel 8 | 5 (planned) |
@@ -770,16 +785,102 @@ the reversal is visible from the original decision rather than only from here.
 | 10 | **`doc/11` §5.3** — headcount band or headquarters as the fifth company field | Headcount band, so People has a self-reported figure rather than a locked tile |
 | 11 | **Group-level billing and seats**, now that one login holds several entities | Out of scope at MVP with billing itself, but ADR 0026 makes it a question that will arrive with the first paying multi-entity customer |
 
-## 26. Defects found while writing this
+## 26. Defects — five closed by step A, and five it found
+
+### Closed by step A (9 September)
+
+| | Defect | How |
+|---|---|---|
+| 1 | `consumed_by` strings resolved to no capability, so Q33's guard proved only that a string exists | One id space in `domain/registry.py`, keyed by the bank's own dotted names, **validated at import**. `test_capability_ids.py` holds both directions and proves the guard by breaking it |
+| 2 | `consumes_facts=()` for every entry, so `consumers_of()` always returned empty and the review gate's impact ranking (Q59) was inert | Inverted from the question bank at import. `consumers_of("stale_deal_days")` now answers, and a People question feeding an Executive capability is asserted |
+| 3 | **Three** delivery mechanisms, not two, and they disagreed: `marketing.py` rendered 3.7/3.8 **live** while `state_for` said **planned** and `completeness()` reported **0 delivered** | One flag pair on the capability, `dashboards.DELIVERED` deleted, `state_for` takes `reachable` as an argument. `marketing.DELIVERED_MARKETING` derives from it |
+| 4 | `score_denominator`'s docstring said five where its body returns six (M14) | Rewritten when the table and the counting were brought into one module |
+| 5 | Four of `doc/05` §1's seven required global assumptions had no home, so no drawer could state its window | Migration 0027, `domain/reporting.py`, the endpoint and the panel. Each field states what it changes and **how many of this company's tiles move**, derived |
+
+### Found while building it, and open
 
 | | Defect | Where |
 |---|---|---|
-| 1 | `consumed_by` strings resolve to no capability, so Q33's guard proves only that a string exists | `question_bank.py` ↔ `registry.py` |
-| 2 | `consumes_facts=()` for every entry, so `consumers_of()` always returns empty and the review gate's impact ranking (Q59) is inert | `registry.py::_from_directors` |
-| 3 | `state_for` gates on the `DELIVERED` frozenset; `registry.py` documents `Capability.delivered` as having replaced it. Two mechanisms, one fact | `dashboards.py:772` |
-| 4 | `score_denominator`'s docstring says five; its body returns six. This is M14, and the docstring is the wrong half to keep | `registry.py::score_denominator` |
-| 5 | `connected_sources()` takes no workspace, so per-workspace connection state is not expressible. Deliberate until P18, which must change the signature before any tile reads it | `routes/dashboards.py:58` |
-| 6 | **Four of `doc/05` §1's seven required global assumptions have no home in the product** — fiscal year start, reporting week, report timezone, units. Every window in every drawer depends on them | no reporting panel exists |
-| 7 | **Department selection has no post-onboarding home**, so a company that adds a department cannot add its director | settings panel 7 |
-| 8 | The `disabled_ai_skills` kill switch **is** enforced (`anthropic_provider.py:104`), but two things around it are wrong: `grounding/pipeline.py:52` still documents it as "read … without any caller consulting it", and there is no surface for a customer or an operator to set it | `pipeline.py:52` · settings panel 11 |
-| 9 | `doc/08` asks Finance 4.1 (financial year end); ADR 0020 cut it because the company stage asks when the year *starts*. `doc/08` §4C still leans on it | `doc/08` §4A |
+| 6 | **`implemented` and `reachable` are not the same thing, and Marketing is the proof.** `calculators/audit.py` scores brand and technical SEO and `marketing_state` decides their state — but `marketing_state` is called **from its own test and nowhere else**. P16's "first real dashboard numbers" are not reachable by any user | `domain/marketing.py` ↔ `routes/dashboards.py`. Asserted in `test_capability_registry.py` so closing it is deliberate |
+| 7 | **`state_for` and `marketing_state` disagree about 3.7.** SEO Intelligence needs `dataforseo` **and** `crawl`, so the generic function says `PARTIAL` on a crawl alone while Marketing's says `LIVE`. Both are defensible and only one can be on screen. The likely fix is splitting the market half from the keyword half into two capabilities — P16 already describes them as separable | `domain/marketing.py` |
+| 8 | **A third capability namespace existed in `connectors.py`** — `stale_deals`, `pipeline_value`, `loss_analysis`, `conversion` — so the connect screen said *"Stale deal detection is unsupported"* about a tile called *"Stale and at-risk deals"*. Two names for one thing reads as two features, one broken. **Fixed in step A**: `FieldRequirement` is keyed by capability id and reads the tile's own name | was `domain/connectors.py` |
+| 9 | **`connections.Tool` and the ledger's row were two classes called the same thing for different concepts** — a *provider* you connect (nine, DB-constrained) versus a *source* a capability requires (sixteen). Four CRMs collapse to one source. **Fixed in step A** by naming them apart and adding `PROVIDER_SOURCES` as the join | `domain/sources.py` |
+| 10 | ⚠ **Two connectors turn nothing on, and one of them is promised to the customer during onboarding.** No capability requires `SEARCH_CONSOLE`, and onboarding's tools step shows *"Telling you which searches you already rank for, from your own data."* **ADR 0023 makes it one of the first two connectors to build.** `PAGESPEED` is the same shape without the promise: the audit computes a performance score and no capability holds it. Either `marketing.content_pages` and `marketing.site_performance` arrive with step D, or ADR 0023 is GA4 alone | asserted in `test_source_ledger.py` |
+| 11 | **Stripe is mapped to accounting because there is no payments source.** *"Revenue as it lands"* is honourable against a ledger, but payments and bookkeeping are not the same system and no capability distinguishes them | `PROVIDER_SOURCES` |
+| 12 | `connected_sources()` takes no workspace, so per-workspace connection state is not expressible — and `workspace_connection` rows already exist to read. P18 must change the signature before any tile reads it | `routes/dashboards.py:58` |
+| 13 | The `disabled_ai_skills` kill switch **is** enforced (`anthropic_provider.py:104`), but `grounding/pipeline.py:52` still documents it as never consulted, and there is no surface to set it | `pipeline.py:52` · settings panel 11 |
+| 14 | Department selection has no post-onboarding home, so a company that adds a department cannot add its director | settings panel 7 |
+| 15 | `doc/08` asks Finance 4.1 (financial year end); ADR 0020 cut it because the company stage asks when the year *starts*. `doc/08` §4C still leans on it — and 0027 now stores the start on the workspace, which is where a window can actually read it | `doc/08` §4A |
+
+### Found in step B
+
+The pattern in all of these is one thing: **P14 was built and never joined.** The
+pipeline, the numeral guard, eleven evals and four calculators were all real,
+and nothing called any of them. That is a harder failure to see than an absent
+feature, because every test passes and the phase reads as done.
+
+| | Defect | Where |
+|---|---|---|
+| 16 | **`pipeline.run` had no callers.** The guard that makes I1 testable was a pure function nothing invoked, so the phase's central claim held in eleven evals and nowhere a customer could reach | `grounding/pipeline.py` |
+| 17 | **`generation` had zero rows**, two indexes and three check constraints. One of those indexes carries the comment *"the daily budget reads this"* — and nothing read it | migration 0023 |
+| 18 | **Both token budgets were still unread.** `tenant_daily_token_budget` and `user_daily_token_budget` have been in `config.py` since M0, and the pipeline took a `Budgets` value object that nothing built | `config.py` ↔ `pipeline.py` |
+| 19 | **The runner and the pipeline each retried once.** Composed at their defaults that is **four** provider calls where P14 specifies two, and the second pair is indistinguishable from the first in the log. `invoke` now takes `attempts`, and the narrator passes 1 | `ai/runtime/runner.py` |
+| 20 | **`UnavailableReason` had no member for an absent API key.** ADR 0011 makes that a first-class supported state, so it would have rendered as `SCHEMA_INVALID` — *"the model wrote something malformed"* shown for *"the product is misconfigured"*, on the one screen where somebody is deciding whether to trust us. `MODEL_UNAVAILABLE` and `PROVIDER_FAILED` are the two states that were missing | `grounding/pipeline.py` |
+| 21 | **There was no Company Context assembler.** P14's *"the single path, no widget builds its own context"* was a sentence in a plan rather than a module anything had to go through | `grounding/context.py` |
+| 22 | `test_every_skill_is_reachable_from_a_command` assumed a command is the only thing that can call a skill. True until one was called from a dashboard instead of from onboarding — widened by importing `NARRATOR` rather than by adding a string exception | `tests/test_skill_runtime.py` |
+| 23 | **`calculators/deltas.py` is written and uncalled.** Delta, weighted, exposure and composite are pure and tested, and no capability computes with them yet. They are what `narrate` takes as `computed`; the first tile closes it (M23) | `calculators/deltas.py` |
+
+### Found in step D
+
+| | Defect | Where |
+|---|---|---|
+| 24 | ⚠ **`context.assemble` read the membership where it should have read the reach.** An Owner reaches every department by role and has none on their membership, so a founder who had just registered opened Finance and Setup told them nobody had answered anything — with three answers in the table. The page was right about their access and wrong about their data. **Found in the browser**, invisible to every test because each one constructed a scope with the department already on it | `grounding/context.py` |
+| 25 | **An Owner's snapshot was tagged `L3:finance`** while their context held seven departments' answers. Understating a snapshot's scope is the direction that matters, and the retention and export queries read that column | `context.scope_key` |
+| 26 | **`doc/13` §9's Watchlist describes five cards and four exist.** The fifth reads question 8.3 — *"what decision have you been putting off?"* — which `doc/08` §8A asks and **the question bank never did**: ADR 0020 cut it to six departments with a block, and the Chief of Staff asks nothing of its own. Either the bank gains an executive block or the card leaves the design | `sections.WATCH_ITEMS` |
+| 27 | **The Setup tab was `locked` on *"needs your setup answers"*** when it declared `ONBOARDING` as a required source — an instruction to supply the very thing it exists to show back. It needs no source: it computes nothing, and an empty Setup is a fact about the answers rather than about our access | fixed in `_our_sections` |
+| 28 | `connected_sources()` returns an empty set while `sources.DAY_ONE` says a workspace holds four sources before it connects anything. The two disagree because the first cannot see a workspace (defect 12) — so no first-party source can currently be reported as present | `routes/dashboards.py` ↔ `domain/sources.py` |
+
+### Found in step E
+
+| | Defect | Where |
+|---|---|---|
+| 29 | **The department-block answer route audited nothing.** The *company* questions have been audited since P4; correcting a department threshold — the stale-deal window, what counts as late — wrote a row and left no trace. Fixed, and the audit row **names the capabilities that read the answer** rather than counting them: "three tiles were affected" is a number nobody can check | `routes/spine.py` |
+| 30 | **`POST /onboarding/departments` calls `complete_stage`**, so it cannot serve a settings screen — pointing panel 7 at it would re-advance a finished spine every time somebody changed their mind, and the change would read as onboarding progress in the audit trail. Panel 7 has its own endpoint | `routes/companies.py` |
+| 31 | ⚠ **The audit log is readable by an Executive.** `GET /audit-log` gates on `require_executive_surface`; `doc/08` §8C says the log is **Owner-visible only**. Narrowing a permission belongs where the permission is decided, and P21 owns making the log access-controlled in its own right — so this is recorded rather than changed | `routes/audit.py` |
+| 32 | **The audit log shows no actor.** It stores `actor_user_id` and the endpoint returns the UUID; resolving it to a person needs a join the route does not make. A UUID is useless to a human, so the panel names the gap rather than printing one | `routes/audit.py` |
+| 33 | **The settings screen now fans out to eight independent endpoints**, each with its own round trip to `us-east-2`, and the slowest decides when the page is complete. Measured in the browser: the Departments and Brain panels were still loading twenty seconds after the rest had rendered. Finding #23's shape on a new screen — and the reason each panel loads on its own is that a combined endpoint would put a view's shape into the API | `components/settings/` |
+| 34 | **`doc/13` §14 asks the Brain panel for per-item sensitivity, passage counts and a delete, and it has none of the three.** `GET /onboarding/brain` serves the assembled brain with its provenance; the per-fact view is the `fact` table, which no endpoint exposes. Deletion is P21's and must not be approximated — a button that removed the row and left the embeddings would say a fact was gone while it stayed retrievable | `BrainCard.tsx` |
+
+### Found in step F
+
+The headline is what was **not** found. ADR 0026 predicted the reversal would be
+affordable because `membership` was left many-to-many and the scoping
+consolidation had just landed, and that held: lifting one-person-one-company was
+a deletion of one function and three call sites, with **no migration**.
+
+| | Defect | Where |
+|---|---|---|
+| 35 | **The guard was already inert at two of its three sites.** `assert_no_live_membership`'s docstring said it was *"called by `create_workspace_for_claim` and by `invitations.accept`"*; it was in fact called from `auth/companies.py`, `auth/domains.py` and `auth/invitations.py`, and the docstring named neither of the first two. A guard whose own comment cannot locate its callers is one nobody could have reasoned about before changing | was `domain/membership.py` |
+| 36 | **I5's cache-invalidation requirement is currently satisfied by there being nothing to invalidate.** Every `lru_cache` in the application is keyed by the *process* — settings, three engines, the provider, the embedder — and `current_scope` rebuilds the scope and its departments per request. So the guard is a census: `test_nothing_is_cached_across_an_entity_switch` walks the AST for every cache decorator and compares it against that list. **Writing it found a sixth I had missed** (`get_embedder`), which is the argument for a census over a hand-kept list |
+| 37 | **Three tests in `test_identity_flow.py` asserted the rule ADR 0026 reversed.** Replaced rather than deleted: `test_multi_entity.py` holds the four guards that matter now, and what stays in the identity file is the one claim it is the right home for — that `membership` is unique on `(workspace_id, user_id)` and never on `user_id` alone, read from the live catalogue rather than from migration `0002` | `tests/test_identity_flow.py` |
+| 38 | ⚠ **Nothing yet aggregates a group figure.** `read_across_entities` is the read path and it is generic over the value on purpose — deciding what an entity's figure *is* would make it a second place numbers come from. The group composite that `doc/13` §4.1 describes (*"four entities, three scored"*) needs a capability to compute per entity first, and none is reachable yet | `domain/group.py` |
+
+### Found finishing step F
+
+Three of these came from a browser and none from a test, which is the pattern
+worth noticing: every one is about what happens *between* two entities, and a
+test that constructs one scope cannot see between anything.
+
+| | Defect | Where |
+|---|---|---|
+| 39 | ⚠ **The switch reply named the entity being left.** `CurrentSession` resolves at the start of the request, so after the `UPDATE` its `active_workspace_id` still held the old workspace — and the route returned the list computed against it. The write landed and the audit row proved it; the reply said it had not happened. Every test asserted the write or the refusal; **none asserted the flag a client actually reads** | `routes/auth.py::_workspaces_for` |
+| 40 | ⚠ **Login left a two-entity account with no active company**, and `current_scope` answers that with *"No workspace selected"* — which the dashboard read as a dead session and bounced to sign in. A loop. The existing comment is right that picking one of several risks acting in the wrong client's workspace, so the fix is not to pick: login now **resumes** the pointer from that person's most recent session, filtered against live memberships, which is what the sign-in screen already promises. A genuine first sign-in gets a chooser | `routes/auth.py` · `DirectorPage` |
+| 41 | **The switcher vanished when its own fetch failed.** The first version caught the error and set `[]`, which renders nothing — so a 503 under load left somebody holding two companies with no way to move and nothing saying why. It now falls back to a route into panel 4b, which reports its own errors properly. Found when the proxy timed out while the suite was running | `EntitySwitcher.tsx` |
+| 42 | **`/dashboard` redirects an Owner to `/dashboard/executive`**, so a switch that navigates to `/dashboard` appears to leave the URL unchanged. Not a defect — but it made a browser check read as a failed switch for several minutes, and the next person to verify this deserves the sentence |  |
+| 43 | **The reporting panel could not set the currency or the country**, so every figure in the product rendered in the `OMR` fallback `context.assemble` hard-codes — for a Dubai or a Riyadh company, a wrong unit on a correct number. Both are now on `ReportingIn`/`ReportingOut` and both are **audited**, because relabelling every figure is a restatement of the record even though it recomputes nothing. Note the currency is the third `Consequence` case: it restates and moves **zero** tiles, and a screen that only knew "restates ⇒ moves N tiles" would have said *"moves 0 tiles"* | `routes/companies.py` · `domain/reporting.py` · `ReportingCard.tsx` |
+| 44 | **Not one auth or company field was marked `required`**, so a screen reader announced every one of them as optional and the browser's own pre-submit prompt never fired — the first feedback on an empty email was a round trip to `us-east-2` and a red box. `Field` now takes `required` and sets both the attribute and `aria-required` on the input and the select | `components/auth/Field.tsx` and its five forms |
+| 45 | **The landing page's one concrete promise was the one thing the product cannot do.** *"Seven minutes from now, you could be reading an honest audit of your own business"*, a `Minute 7 — The audit` moment, a pricing bullet and an FAQ answer all promised the onboarding audit; `calculators/audit.py` scores a crawl and **no route serves it** (M19). All four now describe the Brain and the per-tile honesty — which is built, and is the better promise: the audit is a number, and the gap-instead-of-a-guess is the argument | `lib/content.ts` |
+| 46 | **The primary CTA did not convert.** *"Start free"* in the nav — desktop and mobile — and *"Start free trial"* on the Starter tier all pointed at `#cta`, an anchor further down the same page whose own button then goes to `/register`. Two clicks to sign up and the first only scrolled. Destination is per-tier data now, because the three tiers genuinely differ: Starter is self-serve at a stated price, and the other two are priced *"Let's talk"* with **no channel to talk through** — no booking system, no `/contact`, no address in the repo. Those two stay on the scroll and the missing channel is **D24**, because inventing a support address is inventing a fact about the business | `Nav.tsx` · `Pricing.tsx` · `lib/content.ts` |
+| 47 | **Settings gated all eight panels on a fetch six of them did not need.** The screen blocked on `fetchCompany` + `fetchState`, and only then did the six prop-less panels mount and start their own requests — one serial round trip to `us-east-2` in front of everything, which is what made the audit log still be loading after 10s. Only the identity line, the domain card, the invite form and the per-department blocks need that data; the rest now mount immediately and fetch in parallel. **Reduces M27 rather than closing it** — it is still eight requests, but they are no longer eight-after-one | `SettingsPanel.tsx` |
+| 48 | ⚠ **My own regression, caught in a browser within a minute.** Scoping the company failure to its own region meant a dead API rendered *seven* identical red boxes where the old full-screen gate had said it once — and the first fix was wrong too, because it keyed on `401/403/0` while `auth-proxy.ts` returns **503** for "could not reach the API". Every panel proxies through that same BFF, so 503 is as global as a 401. The takeover now covers refusal *and* unreachability; anything else stays scoped, since the other six read different endpoints | `SettingsPanel.tsx` |
+| 49 | **A switch had no visible outcome.** `/dashboard` redirects an Owner to `/dashboard/executive`, so switching *from* a dashboard navigated to the address already on screen — same URL, same layout, and the only changed pixels were which pill was dark (defect 42, which I had recorded as "not a defect but worth a sentence"). It is worse than cosmetic for a screen reader, which a same-URL navigation tells nothing at all. Both switchers now carry `?switched=1` — the only channel that survives a hard navigation — and announce **which** company is now active via `role="status"`, named from the session-backed list rather than from the URL, then strip the flag so a refresh does not re-announce it | `EntitySwitcher.tsx` · `EntitiesCard.tsx` |

@@ -66,6 +66,7 @@ export function ForgotPasswordForm() {
   return (
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
       <Field
+        required
         label="Work email"
         type="email"
         value={email}

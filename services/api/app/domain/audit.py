@@ -59,6 +59,27 @@ class AuditAction(StrEnum):
     REVIEW_DECISION = "review_decision"
     WORKSPACE_CREATED = "workspace_created"
 
+    WORKSPACE_SWITCHED = "workspace_switched"
+    """Somebody moved their session to another entity they hold (ADR 0026).
+
+    Recorded against the workspace being **entered**, so each entity's own log
+    shows who arrived. It is not a permission change and grants nothing — but
+    when a group holds several companies, "who was looking at this one, and
+    when" is the first question an incident asks."""
+
+    DEPARTMENTS_CHANGED = "departments_changed"
+    """Which departments the company runs. **Removing one is a scope change**,
+    so the row names what went as well as what arrived — a department that stops
+    running takes its director off every nav, and the question of why it went is
+    one somebody asks later."""
+
+    REPORTING_CHANGED = "reporting_changed"
+    """`doc/13` §10's restate rule. Recorded only when a setting that actually
+    restates numbers moves — the fiscal year, the reporting week, the report
+    timezone. Choosing thousands over units changes how a figure is written and
+    nothing else, and logging that as a restatement would bury the three that
+    matter in a list of the two that do not."""
+
 
 async def record(
     db: AsyncSession,

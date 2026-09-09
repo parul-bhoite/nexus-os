@@ -24,13 +24,13 @@ from fastapi.testclient import TestClient
 from app.deps import current_scope
 from app.domain.dashboards import (
     BY_DEPARTMENT,
-    DELIVERED,
     DIRECTORS,
     WidgetState,
     landing_department,
     state_for,
     unlock_sentence,
 )
+from app.domain.registry import is_reachable
 from app.domain.scopes import Department, Role
 from app.domain.session import ScopedSession
 from app.main import create_app
@@ -180,34 +180,44 @@ def test_a_viewer_reaches_no_director(client: TestClient) -> None:
 # ── What a tile is allowed to say ─────────────────────────────
 
 
-def test_nothing_is_delivered_yet_so_every_tile_says_so() -> None:
+def test_nothing_is_reachable_yet_so_every_tile_says_so() -> None:
     """The honesty mechanism, asserted rather than trusted.
 
-    While `DELIVERED` is empty every offering must render `PLANNED`. If one ever
+    While nothing is reachable every offering must render `PLANNED`. If one ever
     renders `LOCKED` instead, the page is telling a customer that connecting
     something turns on a widget that does not exist.
+
+    `is_reachable` is asked per offering rather than compared against a set,
+    because the set is no longer here to compare against — `domain/registry`
+    holds it, and this asserts the outcome a person sees rather than the
+    bookkeeping behind it.
     """
-    assert DELIVERED == frozenset()
     for director in DIRECTORS:
         for offering in director.offerings:
-            assert state_for(offering, connected=frozenset()) is WidgetState.PLANNED
+            assert not is_reachable(offering.id)
+            assert (
+                state_for(offering, connected=frozenset(), reachable=is_reachable(offering.id))
+                is WidgetState.PLANNED
+            )
 
 
-def test_a_delivered_offering_with_nothing_connected_locks(client: TestClient) -> None:
-    """And the state it moves to is `LOCKED`, with its unlock intact."""
+def test_a_reachable_offering_with_nothing_connected_locks(client: TestClient) -> None:
+    """And the state it moves to is `LOCKED`, with its unlock intact.
+
+    No module global is reassigned to get there any more. Reachability is an
+    argument, so the test states the hypothesis directly — *if this were built* —
+    instead of mutating the module under test and restoring it in a `finally`
+    that a failing assertion used to skip.
+    """
     growth_plan = BY_DEPARTMENT[Department.MARKETING].offerings[3]
     assert growth_plan.id == "3.4"
-    assert state_for(growth_plan, connected=frozenset()) is WidgetState.PLANNED
+    assert state_for(growth_plan, connected=frozenset(), reachable=False) is WidgetState.PLANNED
 
-    import app.domain.dashboards as dashboards
-
-    original = dashboards.DELIVERED
-    try:
-        dashboards.DELIVERED = frozenset({"3.4"})
-        assert state_for(growth_plan, connected=frozenset()) is WidgetState.LOCKED
-        assert state_for(growth_plan, connected=frozenset(growth_plan.needs)) is WidgetState.LIVE
-    finally:
-        dashboards.DELIVERED = original
+    assert state_for(growth_plan, connected=frozenset(), reachable=True) is WidgetState.LOCKED
+    assert (
+        state_for(growth_plan, connected=frozenset(growth_plan.needs), reachable=True)
+        is WidgetState.LIVE
+    )
 
 
 def test_every_offering_that_needs_something_says_what(client: TestClient) -> None:
@@ -286,3 +296,148 @@ def test_a_director_the_list_omits_cannot_be_opened_directly() -> None:
         )
 
     app.dependency_overrides.clear()
+
+
+# ── The rail (`doc/13` §4, step C) ────────────────────────────
+
+
+def test_a_director_serves_a_rail_and_not_only_a_flat_list(client: TestClient) -> None:
+    """`doc/08` §4C: Overview, Cash & runway, Receivables, Payables, Approvals.
+
+    The flat `offerings` list is still served while the web adopts this — two
+    shapes of one list, and the older one goes when nothing reads it.
+    """
+    as_role(client, caller(Role.OWNER, {Department.FINANCE}))
+    body = client.get("/dashboards/finance").json()
+
+    assert body["offerings"], "the flat catalogue is still there"
+
+    labels = [section["label"] for section in body["sections"]]
+    assert labels[0] == "Overview", "the rail is ordered, not sorted"
+    assert "Cash & runway" in labels
+    assert "Payables" not in labels, (
+        "doc 08 draws Payables and no capability fills it yet — a tab somebody"
+        " clicks into to find nothing is worse than a tab that is not there"
+    )
+
+
+def test_every_block_names_which_of_the_nine_components_draws_it(
+    client: TestClient,
+) -> None:
+    """The section is the unit of navigation, the block is the unit of
+    rendering. A block with no kind has no defined behaviour when its source
+    disconnects."""
+    as_role(client, caller(Role.OWNER, {Department.FINANCE}))
+    body = client.get("/dashboards/finance").json()
+
+    blocks = [block for section in body["sections"] for block in section["blocks"]]
+    assert blocks
+
+    for block in blocks:
+        assert block["block"], block["key"]
+        assert block["key"].startswith("finance."), "namespaced by department (ADR 0020)"
+
+        if block["state"] == "planned":
+            # An unbuilt widget cannot be unlocked by connecting anything, so it
+            # offers nothing — but the API still carries the sentence, and the
+            # card is what withholds it.
+            assert block["unlock"], "doc 04 §6 rule 1 — every tile states its unlock"
+        else:
+            # Step D's Setup tab. It reads answers the founder already gave, so
+            # it needs no source and has no unlock to state — and an unlock here
+            # would be an instruction to supply the thing it exists to show back.
+            assert block["key"] == "finance.setup"
+            assert block["state"] == "live"
+            assert block["unlock"] == ""
+
+
+def test_the_catalogue_is_served_apart_from_the_rail(client: TestClient) -> None:
+    """`doc/08` §11's deliberate gaps: real capabilities with no section in this
+    cut. Shown apart and labelled as planned, because they are neither locked
+    nor coming."""
+    as_role(client, caller(Role.OWNER, {Department.FINANCE}))
+    body = client.get("/dashboards/finance").json()
+
+    catalogue = {block["key"] for block in body["catalogue"]}
+    railed = {block["key"] for section in body["sections"] for block in section["blocks"]}
+
+    assert catalogue, "doc 05 is wider than doc 08's cut"
+    assert not (catalogue & railed), "a capability is on the rail or in the catalogue, never both"
+    assert "finance.business_simulator" in catalogue
+
+
+def test_the_assistant_panel_is_reserved_and_names_what_it_will_answer(
+    client: TestClient,
+) -> None:
+    """Q67. A blank region where a feature is coming reads as a bug and a fake
+    one reads as a lie, so the panel names the director and lists the questions
+    it will answer — `doc/08` §4E, in the customer's own words."""
+    as_role(client, caller(Role.OWNER, {Department.FINANCE}))
+    assistant = client.get("/dashboards/finance").json()["assistant"]
+
+    assert assistant["available"] is False
+    assert assistant["director"] == "AI Finance Advisor"
+    assert "What is our cash position?" in assistant["questions"]
+
+
+def test_a_department_the_caller_cannot_reach_serves_no_rail(client: TestClient) -> None:
+    """Reach decides presence, and it decides it for the rail too. The sections
+    are computed after `enforce_department`, so a 404 carries no tab names —
+    which would disclose how the company is organised."""
+    as_role(client, caller(Role.DEPARTMENT_MANAGER, {Department.OPERATIONS}))
+    response = client.get("/dashboards/finance")
+
+    assert response.status_code == 404
+    assert "sections" not in response.json()
+
+
+# ── Step D: the Setup tab is lazily loaded, and gated the same ─
+
+
+def test_setup_refuses_a_department_the_caller_cannot_open(client: TestClient) -> None:
+    """The bug a lazily-loaded tab invites.
+
+    The rail is served without a database round trip and the Setup tab fetches
+    its own content, which means there are now **two doors** into a
+    department's data. A caller who gets 404 on the director page must get 404
+    here, in the same order, for the same reason.
+    """
+    as_role(client, caller(Role.DEPARTMENT_MANAGER, {Department.OPERATIONS}))
+
+    assert client.get("/dashboards/finance").status_code == 404
+    assert client.get("/dashboards/finance/setup").status_code == 404
+
+
+def test_setup_refuses_the_chief_of_staff_to_a_manager(client: TestClient) -> None:
+    """Doc 06 §2.4, through the second door. The executive check is a different
+    rule with a different answer — the Chief of Staff is not a department
+    somebody might be added to, so naming the requirement is safe."""
+    as_role(client, caller(Role.DEPARTMENT_MANAGER, {Department.SALES}))
+
+    assert client.get("/dashboards/executive/setup").status_code == 403
+
+
+def test_the_rail_no_longer_carries_the_setup_content(client: TestClient) -> None:
+    """Finding #23 is that `GET /dashboards` already spends 25 to 30 round trips.
+    The fix for that is not to add a context assembly to every director page —
+    most visits never open Setup."""
+    as_role(client, caller(Role.OWNER, {Department.FINANCE}))
+    body = client.get("/dashboards/finance").json()
+
+    setup = next(s for s in body["sections"] if s["key"] == "setup")
+    assert "facts" not in setup
+    assert setup["available"] == 1, "the tab reports that it has something on it"
+
+
+def test_the_page_can_tell_which_tab_has_something_on_it(client: TestClient) -> None:
+    """What `available` is for. Opening on Overview would greet a new customer
+    with five tiles that all say "not built yet", when the one tab with content
+    is two along."""
+    as_role(client, caller(Role.OWNER, {Department.FINANCE}))
+    sections = client.get("/dashboards/finance").json()["sections"]
+
+    with_content = [s["key"] for s in sections if s["available"] > 0]
+
+    assert with_content == ["setup"], (
+        "on a day-one dashboard Setup is the only tab with anything on it"
+    )

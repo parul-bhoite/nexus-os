@@ -13,7 +13,7 @@ second company splits one business's data in half silently.
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -30,14 +30,27 @@ from app.auth.csrf import require_csrf
 from app.auth.workspaces import find_verified_workspace_for_domain
 from app.db import _unscoped_session
 from app.deps import CurrentScope, CurrentSession, require_executive_surface
-from app.domain.departments import label_for
+from app.domain.audit import AuditAction, record
+from app.domain.departments import label_for, select_departments, selected_departments
 from app.domain.invitations import may_administer
 from app.domain.membership import UserAlreadyInAWorkspaceError
+from app.domain.question_bank import BY_DEPARTMENT as QUESTIONS_BY_DEPARTMENT
 from app.domain.registration import JoinRequestState
+from app.domain.registry import CapabilityKind, capabilities_for
+from app.domain.reporting import (
+    MAX_DECIMALS,
+    SETTINGS,
+    ReportingSettings,
+    Scale,
+    WeekStart,
+    moves,
+    restates_numbers,
+)
 from app.domain.scopes import Department, Role
 from app.domain.session import ScopedSession
 from app.logging import get_logger
 from app.retrieval.scoped import apply_user_scope, scoped_connection
+from app.routes.dashboards import AnsweredQuestions
 
 router = APIRouter(tags=["companies"])
 log = get_logger(__name__)
@@ -75,9 +88,8 @@ async def list_departments() -> list[DepartmentChoiceOut]:
     function and should be able to say so. This answers "where do you work",
     not "which dashboards exist".
     """
-    return [
-        DepartmentChoiceOut(value=d.value, label=label_for(d)) for d in Department
-    ]
+    return [DepartmentChoiceOut(value=d.value, label=label_for(d)) for d in Department]
+
 
 ExecutiveScope = Annotated[ScopedSession, Depends(require_executive_surface)]
 
@@ -232,6 +244,406 @@ async def current_company(scope: CurrentScope) -> CurrentCompanyOut:
         role=scope.role.value,
         may_administer=may_administer(scope.role),
     )
+
+
+# ── Reporting (`doc/13` §13, ADR 0025) ────────────────────────
+
+
+class SettingOut(BaseModel):
+    """One field on the panel, with the sentence that makes it checkable."""
+
+    key: str
+    label: str
+    changes: str
+    """What it changes, in the question bank's voice."""
+
+    moves_tiles: int
+    """How many of **this company's** tiles are computed differently if it
+    changes. Derived from the capability registry against the departments they
+    run — a company without Operations is not told a setting moves Operations
+    tiles. Zero for the two settings that only change how a figure is written."""
+
+    moves_departments: list[str]
+    restates: bool
+    """Whether changing it triggers the restate rule (`doc/13` §10): affected
+    tiles marked stale and re-derived, and the change logged. False for
+    presentation, because logging a display preference as a restatement buries
+    the changes that matter among the ones that do not."""
+
+
+class ReportingOut(BaseModel):
+    """The assumptions every window on every tile is cut against."""
+
+    currency: str
+    """The currency **every figure in the product is labelled in**.
+
+    Doc 05 §1 lists it beside the fiscal year and the timezone as required
+    before any dashboard renders, and until now nothing asked for it: the
+    registration form dropped it (commit 78ac694, "three facts nothing reads")
+    and no settings surface replaced it. `context.assemble` fell back to `OMR`,
+    so a company in Dubai would have had its dirhams labelled as rials with
+    nothing on screen to correct.
+    """
+
+    country: str
+    """Where the company is. Not a reporting assumption — a company fact, and it
+    belongs on panel 4 with the name and the website when that panel is built.
+    It is here because the alternative was continuing to ask for it nowhere."""
+
+    fiscal_year_start_month: int
+    week_start: str
+    timezone: str
+    scale: str
+    decimals: int
+
+    changed_at: str | None
+    """`None` means never changed since registration — a different fact from
+    changed at the moment of registration, which is why the column is nullable."""
+
+    settings: list[SettingOut]
+    may_administer: bool
+
+
+class ReportingIn(BaseModel):
+    # Three letters, upper-cased on the way in. Not validated against ISO 4217:
+    # a closed list would need a table and a migration to add a currency, and
+    # the failure it prevents — a typo — is visible on every tile immediately.
+    currency: str = Field(min_length=3, max_length=3)
+    country: str = Field(min_length=2, max_length=2)
+    fiscal_year_start_month: int = Field(ge=1, le=12)
+    week_start: WeekStart
+    timezone: str = Field(min_length=1, max_length=64)
+    scale: Scale
+    decimals: int = Field(ge=0, le=MAX_DECIMALS)
+
+
+_REPORTING_COLUMNS = (
+    "reporting_currency, country,"
+    " fiscal_year_start_month, reporting_week_start, report_timezone,"
+    " report_scale, report_decimals, reporting_changed_at"
+)
+
+# Built once, so the `S608` justification sits in one place — the same
+# arrangement `routes/dashboards.py` uses for `BINDING_ONLY_SQL`.
+# `_REPORTING_COLUMNS` is a module constant and never input; it is interpolated
+# because the select and the update's `RETURNING` must name the *same* columns,
+# and a second copy is how one of them ends up missing a field the reader needs.
+_SELECT_REPORTING = f"SELECT {_REPORTING_COLUMNS} FROM workspace WHERE id = :w"  # noqa: S608
+_UPDATE_REPORTING = (
+    "UPDATE workspace SET"
+    "   reporting_currency = :currency,"
+    "   country = :country,"
+    "   fiscal_year_start_month = :month,"
+    "   reporting_week_start = :week,"
+    "   report_timezone = :tz,"
+    "   report_scale = :scale,"
+    "   report_decimals = :decimals,"
+    "   reporting_changed_at = CASE WHEN :restated"
+    "     THEN now() ELSE reporting_changed_at END"
+    " WHERE id = :w" + f" RETURNING {_REPORTING_COLUMNS}"
+)
+
+
+def _reporting_out(row: Any, *, selected: frozenset[Department], role: Role) -> ReportingOut:
+    settings = [
+        SettingOut(
+            key=setting.key,
+            label=setting.label,
+            changes=setting.changes,
+            moves_tiles=len(moved := moves(setting, selected=selected)),
+            moves_departments=sorted({label_for(c.department) for c in moved}),
+            restates=restates_numbers(setting),
+        )
+        for setting in SETTINGS
+    ]
+    return ReportingOut(
+        # Defaulted on read, not on write. A workspace registered before this
+        # panel existed has NULLs, and answering `""` would put an empty
+        # currency on every tile — the fallback is the same one
+        # `context.assemble` uses, so the panel and the figures agree.
+        currency=row.reporting_currency or "OMR",
+        country=row.country or "OM",
+        fiscal_year_start_month=row.fiscal_year_start_month,
+        week_start=row.reporting_week_start,
+        timezone=row.report_timezone,
+        scale=row.report_scale,
+        decimals=row.report_decimals,
+        changed_at=row.reporting_changed_at.isoformat() if row.reporting_changed_at else None,
+        settings=settings,
+        may_administer=may_administer(role),
+    )
+
+
+@router.get("/companies/current/reporting", response_model=ReportingOut)
+async def current_reporting(scope: CurrentScope) -> ReportingOut:
+    """What every tile's window is cut against.
+
+    Readable by anybody in the workspace, and writable only by an
+    administrator. That asymmetry is deliberate: a Contributor cannot change the
+    reporting week, and a Contributor who cannot *see* it has no way to check
+    the arithmetic in a working drawer that cites it. A number is only checkable
+    if the assumptions under it are visible to the person checking.
+    """
+    async with scoped_connection(scope) as session:
+        row = (
+            await session.execute(
+                text(_SELECT_REPORTING),
+                {"w": str(scope.workspace_id)},
+            )
+        ).first()
+        if row is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+        selected = await selected_departments(session, workspace_id=scope.workspace_id)
+
+    return _reporting_out(row, selected=selected, role=scope.role)
+
+
+@router.put(
+    "/companies/current/reporting",
+    response_model=ReportingOut,
+    dependencies=[Depends(require_csrf)],
+)
+async def update_reporting(
+    payload: ReportingIn, scope: CurrentScope, session: CurrentSession
+) -> ReportingOut:
+    """Change the assumptions, and record that they moved.
+
+    **The stamp and the audit row are written in the same transaction as the
+    change**, for `hooks.py`'s reason: an audit trail that survives a rolled-back
+    write is a lie about what happened, and a stamp that does not is worse —
+    every later derivation would compare itself against a change that never
+    landed.
+
+    The stamp only moves when something is actually restated. Choosing thousands
+    over units changes how a figure is written and nothing else, so it is stored
+    without claiming that this company's history was re-derived.
+    """
+    if not may_administer(scope.role):
+        # 403 rather than 404: this caller can see the settings — the previous
+        # endpoint serves them — so the resource's existence is not a secret.
+        # What they may not do is move them, and saying so is the honest answer.
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Reporting settings are set by an owner or an executive.",
+        )
+
+    # Validated here rather than trusted from the request: `ReportingIn` bounds
+    # the numbers, and this bounds the combination the way the domain does.
+    ReportingSettings(
+        fiscal_year_start_month=payload.fiscal_year_start_month,
+        week_start=payload.week_start,
+        timezone=payload.timezone,
+        scale=payload.scale,
+        decimals=payload.decimals,
+    )
+
+    async with scoped_connection(scope) as db:
+        before = (
+            await db.execute(
+                text(_SELECT_REPORTING),
+                {"w": str(scope.workspace_id)},
+            )
+        ).first()
+        if before is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+
+        restated = (
+            # A currency change **relabels every figure in the product**, which
+            # is a restatement by any reading — the number is the same and what
+            # it means is not.
+            (before.reporting_currency or "OMR") != payload.currency.upper()
+            or before.fiscal_year_start_month != payload.fiscal_year_start_month
+            or before.reporting_week_start != payload.week_start.value
+            or before.report_timezone != payload.timezone
+        )
+
+        row = (
+            await db.execute(
+                text(_UPDATE_REPORTING),
+                {
+                    "currency": payload.currency.upper(),
+                    "country": payload.country.upper(),
+                    "month": payload.fiscal_year_start_month,
+                    "week": payload.week_start.value,
+                    "tz": payload.timezone,
+                    "scale": payload.scale.value,
+                    "decimals": payload.decimals,
+                    "restated": restated,
+                    "w": str(scope.workspace_id),
+                },
+            )
+        ).one()
+
+        if restated:
+            await record(
+                db,
+                workspace_id=scope.workspace_id,
+                action=AuditAction.REPORTING_CHANGED,
+                actor_user_id=session.user_id,
+                target_type="workspace",
+                target_id=str(scope.workspace_id),
+                reason=(
+                    f"currency {payload.currency.upper()},"
+                    f" financial year starts month {payload.fiscal_year_start_month},"
+                    f" weeks start {payload.week_start.value},"
+                    f" reports cut in {payload.timezone}"
+                ),
+            )
+
+        selected = await selected_departments(db, workspace_id=scope.workspace_id)
+        await db.commit()
+
+    return _reporting_out(row, selected=selected, role=scope.role)
+
+
+# ── Departments (`doc/13` §14, panel 7) ───────────────────────
+
+
+class DepartmentStateOut(BaseModel):
+    """One department, and what turning it on or off would do."""
+
+    value: str
+    label: str
+    running: bool
+
+    capabilities: int
+    """How many capabilities this department brings. Derived from the registry,
+    so the sentence on the screen cannot disagree with the product."""
+
+    answered: int
+    unanswered: int
+    """Its question block, which is what makes its figures this company's rather
+    than generic. Shown here because adding a department is also adding
+    questions, and a founder should know that before they tick it."""
+
+
+class DepartmentsOut(BaseModel):
+    departments: list[DepartmentStateOut]
+    may_administer: bool
+
+
+class RunningDepartmentsIn(BaseModel):
+    departments: list[str] = Field(min_length=1)
+
+
+@router.get("/companies/current/departments", response_model=DepartmentsOut)
+async def current_departments(scope: CurrentScope, answered: AnsweredQuestions) -> DepartmentsOut:
+    """Which departments this company runs, and what each one carries.
+
+    **Not the onboarding route.** `POST /onboarding/departments` calls
+    `complete_stage`, so reusing it here would re-advance a finished spine every
+    time somebody changed their mind in Settings — and the selection would look
+    like onboarding progress in the audit trail.
+
+    Readable by anybody in the workspace: which departments a company runs is
+    what the nav already shows them. Writable by an administrator only.
+    """
+    async with scoped_connection(scope) as db:
+        chosen = await selected_departments(db, workspace_id=scope.workspace_id)
+
+    return DepartmentsOut(
+        departments=[
+            DepartmentStateOut(
+                value=department.value,
+                label=label_for(department),
+                running=department in chosen,
+                capabilities=len(
+                    [
+                        capability
+                        for capability in capabilities_for(department)
+                        if capability.kind is CapabilityKind.TILE
+                    ]
+                ),
+                answered=sum(
+                    1
+                    for question in QUESTIONS_BY_DEPARTMENT.get(department, ())
+                    if (department.value, question.key) in answered
+                ),
+                unanswered=sum(
+                    1
+                    for question in QUESTIONS_BY_DEPARTMENT.get(department, ())
+                    if (department.value, question.key) not in answered
+                ),
+            )
+            # Sorted, and the Chief of Staff excluded: it is not a department a
+            # company chooses to run. `selected_departments` always adds it,
+            # because it reads the others — offering it as a tick box would
+            # invite somebody to turn off the page that reads everything.
+            for department in sorted(Department, key=lambda d: d.value)
+            if department is not Department.EXECUTIVE
+        ],
+        may_administer=may_administer(scope.role),
+    )
+
+
+@router.put(
+    "/companies/current/departments",
+    response_model=DepartmentsOut,
+    dependencies=[Depends(require_csrf)],
+)
+async def update_departments(
+    payload: RunningDepartmentsIn,
+    scope: CurrentScope,
+    session: CurrentSession,
+    answered: AnsweredQuestions,
+) -> DepartmentsOut:
+    """Change which departments the company runs, and record the change.
+
+    **Removing one is a scope change, not a tidy-up**, so it is audited with
+    what was removed. A department that stops running keeps its answers — Q32:
+    an answer records what was true for the department it was asked about, and a
+    company that stops running Sales has not made its old Sales answers untrue,
+    it has made them historical. Deleting them would lose the evidence a later
+    disagreement needs.
+
+    The floor of one is finding F1's, and it is the same rule the onboarding
+    route enforces: `selected_departments` always adds the Chief of Staff, so a
+    stored selection of none and a company that has not chosen yet both arrive
+    at `runs_department` as a set of one — which reads as *"nothing has been
+    ruled out"* and hands back all seven directors. Refusing zero is what keeps
+    the two states tellable apart.
+    """
+    if not may_administer(scope.role):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Which departments the company runs is set by an owner or an executive.",
+        )
+
+    try:
+        wanted = {Department(value) for value in payload.departments}
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unknown department.") from exc
+
+    if not {d for d in wanted if d is not Department.EXECUTIVE}:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Keep at least one department. Each one gets a director and a "
+            "dashboard, and the Chief of Staff reads the others — with none "
+            "chosen there is nothing for it to read.",
+        )
+
+    async with scoped_connection(scope) as db:
+        before = await selected_departments(db, workspace_id=scope.workspace_id)
+        await select_departments(db, workspace_id=scope.workspace_id, departments=wanted)
+
+        added = sorted(d.value for d in wanted - before if d is not Department.EXECUTIVE)
+        removed = sorted(d.value for d in before - wanted if d is not Department.EXECUTIVE)
+
+        if added or removed:
+            await record(
+                db,
+                workspace_id=scope.workspace_id,
+                action=AuditAction.DEPARTMENTS_CHANGED,
+                actor_user_id=session.user_id,
+                target_type="workspace",
+                target_id=str(scope.workspace_id),
+                reason=(
+                    f"added {', '.join(added) or 'none'}; removed {', '.join(removed) or 'none'}"
+                ),
+            )
+        await db.commit()
+
+    return await current_departments(scope, answered)
 
 
 # ── Join requests (`doc/11` Q8) ───────────────────────────────

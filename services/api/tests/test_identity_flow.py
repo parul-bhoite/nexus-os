@@ -345,201 +345,63 @@ def test_a_reset_revokes_every_live_session(
         cleanup_user(conn, email)
 
 
-# ── 3. One person, one company ────────────────────────────────
+# ── 3. One person, several companies (ADR 0026) ───────────────
+#
+# Three tests stood here and asserted the opposite: that a second `membership`
+# row was refused, that "live" excluded a revoked one, and that a user's own
+# workspace did not count against them. All three exercised
+# `assert_no_live_membership`, which **ADR 0026 deleted** — multi-entity is
+# `doc/11` Q9/Q17 reversed, and that guard was the whole of how the rule was
+# true.
+#
+# They are replaced rather than dropped, and not here:
+# `tests/test_multi_entity.py` holds the four guards that matter now, and
+# `test_reachable_workspaces_are_exactly_the_callers_memberships` is the direct
+# replacement. It asserts what the old guard was really protecting — reach was
+# always the membership, and lifting the constraint does not widen it.
+#
+# What stays in this file is the one claim it is the right home for: identity
+# needed no migration to get here.
 
 
 @requires_db
-async def test_one_live_membership_per_user(app_db: None) -> None:
-    """`doc/11` §3.2, enforced at the write rather than at the routes.
+async def test_the_membership_table_was_many_to_many_all_along(app_db: None) -> None:
+    """`doc/11` §3.2: *"keep the schema, constrain the product."*
 
-    The `membership` table stays many-to-many — the reversal is a *rule*, not a
-    schema change, because the agency case in doc 06 §2.1 may come back and a
-    unique index would have to be migrated away again.
+    That decision is why multi-entity cost a deletion rather than a migration.
+    `membership` is unique on `(workspace_id, user_id)` — one row per person per
+    workspace — and **not** on `user_id` alone, which is what one-company-per-
+    person would have needed to be a schema fact.
 
-    Calls the real guard on the application's own session. An earlier version of
-    this test re-implemented the count in synchronous SQL so it could reuse the
-    rollback fixture, which would have made it a fourth entry on H9's list of
-    test mirrors — a test that passes over a copy of the logic proves the copy.
+    Read from the live catalogue rather than from the migration file: a
+    constraint dropped by a later migration would still be in `0002`, and this
+    is exactly the drift the D23 incident was about.
     """
     from app.db import _unscoped_session
-    from app.domain.membership import UserAlreadyInAWorkspaceError, assert_no_live_membership
-
-    user, tenant, workspace = uuid4(), uuid4(), uuid4()
 
     async with _unscoped_session() as db:
-        try:
-            await db.execute(
-                sa.text("INSERT INTO app_user (id, email) VALUES (:i,:e)"),
-                {"i": str(user), "e": f"solo-{user.hex[:8]}@example.com"},
-            )
-            await db.execute(
-                sa.text("INSERT INTO tenant (id, name) VALUES (:i,'T')"), {"i": str(tenant)}
-            )
-            await db.execute(
-                sa.text("SELECT set_config('nexus.workspace_id', :w, true)"),
-                {"w": str(workspace)},
-            )
+        rows = (
             await db.execute(
                 sa.text(
-                    "INSERT INTO workspace (id, workspace_id, tenant_id, name, domain,"
-                    " domain_verified_at) VALUES (:i,:i,:t,'W',:d, now())"
-                ),
-                {"i": str(workspace), "t": str(tenant), "d": f"solo-{workspace.hex[:8]}.om"},
-            )
-            await db.commit()
-
-            # No membership yet — the guard permits.
-            await assert_no_live_membership(db, user_id=user)
-
-            await db.execute(
-                sa.text("SELECT set_config('nexus.workspace_id', :w, true)"),
-                {"w": str(workspace)},
-            )
-            await db.execute(
-                sa.text(
-                    "INSERT INTO membership (workspace_id, user_id, role) VALUES (:w,:u,'owner')"
-                ),
-                {"w": str(workspace), "u": str(user)},
-            )
-            await db.commit()
-
-            with pytest.raises(UserAlreadyInAWorkspaceError):
-                await assert_no_live_membership(db, user_id=user)
-        finally:
-            await db.rollback()
-            for statement in (
-                "DELETE FROM membership WHERE user_id = :u",
-                "DELETE FROM workspace WHERE id = :w",
-                "DELETE FROM tenant WHERE id = :t",
-                "DELETE FROM app_user WHERE id = :u",
-            ):
-                await db.execute(
-                    sa.text(statement), {"u": str(user), "w": str(workspace), "t": str(tenant)}
+                    "SELECT c.conname, pg_get_constraintdef(c.oid) AS definition"
+                    "  FROM pg_constraint c"
+                    "  JOIN pg_class t ON t.oid = c.conrelid"
+                    " WHERE t.relname = 'membership' AND c.contype IN ('u', 'p')"
                 )
-            await db.commit()
-
-
-@requires_db
-async def test_the_guard_ignores_a_revoked_membership(app_db: None) -> None:
-    """ "Live" is the load-bearing word.
-
-    Someone who left a company must be able to join or start another. Counting
-    every row ever written would lock them out permanently, and the support
-    conversation that follows has no fix short of a manual DELETE.
-    """
-    from app.db import _unscoped_session
-    from app.domain.membership import assert_no_live_membership
-
-    user, tenant, workspace = uuid4(), uuid4(), uuid4()
-
-    async with _unscoped_session() as db:
-        try:
-            await db.execute(
-                sa.text("INSERT INTO app_user (id, email) VALUES (:i,:e)"),
-                {"i": str(user), "e": f"left-{user.hex[:8]}@example.com"},
             )
-            await db.execute(
-                sa.text("INSERT INTO tenant (id, name) VALUES (:i,'T')"), {"i": str(tenant)}
-            )
-            await db.execute(
-                sa.text("SELECT set_config('nexus.workspace_id', :w, true)"),
-                {"w": str(workspace)},
-            )
-            await db.execute(
-                sa.text(
-                    "INSERT INTO workspace (id, workspace_id, tenant_id, name, domain,"
-                    " domain_verified_at) VALUES (:i,:i,:t,'W',:d, now())"
-                ),
-                {"i": str(workspace), "t": str(tenant), "d": f"left-{workspace.hex[:8]}.om"},
-            )
-            await db.execute(
-                sa.text(
-                    "INSERT INTO membership (workspace_id, user_id, role, revoked_at)"
-                    " VALUES (:w,:u,'owner', now())"
-                ),
-                {"w": str(workspace), "u": str(user)},
-            )
-            await db.commit()
+        ).all()
 
-            await assert_no_live_membership(db, user_id=user)
-        finally:
-            await db.rollback()
-            for statement in (
-                "DELETE FROM membership WHERE user_id = :u",
-                "DELETE FROM workspace WHERE id = :w",
-                "DELETE FROM tenant WHERE id = :t",
-                "DELETE FROM app_user WHERE id = :u",
-            ):
-                await db.execute(
-                    sa.text(statement), {"u": str(user), "w": str(workspace), "t": str(tenant)}
-                )
-            await db.commit()
+    definitions = [row.definition for row in rows]
 
+    assert any(
+        "workspace_id" in definition and "user_id" in definition for definition in definitions
+    ), f"one row per person per workspace is the constraint that must exist: {definitions}"
 
-@requires_db
-async def test_the_guard_ignores_the_users_own_workspace(app_db: None) -> None:
-    """`other_than` — the difference between a rule and a trap.
-
-    Accepting an invitation is idempotent by design: the insert is
-    `ON CONFLICT DO NOTHING`, so re-clicking a link keeps the role you already
-    hold rather than resetting it (doc 06 §4.15 — a role change is not an
-    invitation). Counting the user's *own* workspace would turn every second
-    click into "you are already part of a company": true, useless, and refusing
-    the one case that was deliberately built to be safe.
-
-    The first version of the guard omitted the parameter and
-    `test_an_existing_member_keeps_the_role_they_already_hold` failed in CI. It
-    is asserted here too, because that test is about roles and would not
-    obviously be the place a later reader looks for this rule.
-    """
-    from app.db import _unscoped_session
-    from app.domain.membership import assert_no_live_membership
-
-    user, tenant, workspace = uuid4(), uuid4(), uuid4()
-
-    async with _unscoped_session() as db:
-        try:
-            await db.execute(
-                sa.text("INSERT INTO app_user (id, email) VALUES (:i,:e)"),
-                {"i": str(user), "e": f"same-{user.hex[:8]}@example.com"},
-            )
-            await db.execute(
-                sa.text("INSERT INTO tenant (id, name) VALUES (:i,'T')"), {"i": str(tenant)}
-            )
-            await db.execute(
-                sa.text("SELECT set_config('nexus.workspace_id', :w, true)"),
-                {"w": str(workspace)},
-            )
-            await db.execute(
-                sa.text(
-                    "INSERT INTO workspace (id, workspace_id, tenant_id, name, domain,"
-                    " domain_verified_at) VALUES (:i,:i,:t,'W',:d, now())"
-                ),
-                {"i": str(workspace), "t": str(tenant), "d": f"same-{workspace.hex[:8]}.om"},
-            )
-            await db.execute(
-                sa.text(
-                    "INSERT INTO membership (workspace_id, user_id, role) VALUES (:w,:u,'owner')"
-                ),
-                {"w": str(workspace), "u": str(user)},
-            )
-            await db.commit()
-
-            # Their own workspace is excluded, so this permits.
-            await assert_no_live_membership(db, user_id=user, other_than=workspace)
-
-            # Any other workspace is not.
-            with pytest.raises(Exception, match="already part of a company"):
-                await assert_no_live_membership(db, user_id=user, other_than=uuid4())
-        finally:
-            await db.rollback()
-            for statement in (
-                "DELETE FROM membership WHERE user_id = :u",
-                "DELETE FROM workspace WHERE id = :w",
-                "DELETE FROM tenant WHERE id = :t",
-                "DELETE FROM app_user WHERE id = :u",
-            ):
-                await db.execute(
-                    sa.text(statement), {"u": str(user), "w": str(workspace), "t": str(tenant)}
-                )
-            await db.commit()
+    assert not any(
+        definition.replace(" ", "").upper().startswith("UNIQUE(USER_ID)")
+        for definition in definitions
+    ), (
+        "a unique constraint on `user_id` alone would have made"
+        " one-person-one-company a schema fact, and ADR 0026 would have needed a"
+        " migration to reverse it"
+    )

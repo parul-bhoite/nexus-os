@@ -183,6 +183,19 @@ def test_the_limit_actually_bites(client: TestClient, conn: Connection) -> None:
 
     Asserted on the counters rather than on the wall clock: the backoff is a
     delay, and timing assertions in CI are how a suite becomes flaky.
+
+    **And the first version of that assertion was still time-dependent**, which
+    is worth stating because the docstring above claimed it was not. It read
+    `max(hits) >= 6` over the matching buckets, and `_window_start` floors a
+    bucket to the hour — so six attempts that straddle an hour boundary land in
+    two rows and neither one reaches six. It failed once at `13:59:38 → 14:00:23`
+    inside an 86-minute run, having passed every run before it.
+
+    `rate_limit` documents the 2x-across-a-boundary behaviour as accepted, so
+    the split is the product working as designed. Summing instead of maxing is
+    exact here because `a_fresh_address` means the `login_email` rows belong to
+    this test and nothing else — `login_ip` accumulates across the module, which
+    is why it is only checked for existence.
     """
     email = a_fresh_address()
     try:
@@ -201,7 +214,11 @@ def test_the_limit_actually_bites(client: TestClient, conn: Connection) -> None:
             "no per-email counter — rotating source addresses defeats a per-IP limit alone"
         )
         # `count AS hits`: `Row.count` resolves to `tuple.count`, the method.
-        assert max(b.hits for b in buckets) >= 6
+        counted = sum(b.hits for b in buckets if b.bucket.startswith("login_email:"))
+        assert counted == 6, (
+            f"six attempts against a fresh address counted {counted} times. "
+            "Summed, not maxed — see the docstring on the hour boundary."
+        )
     finally:
         cleanup(conn, email)
 

@@ -18,6 +18,7 @@ both look identical to success on a screen.
 from __future__ import annotations
 
 import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Final
@@ -51,6 +52,21 @@ class UnavailableReason(StrEnum):
     SKILL_DISABLED = "skill_disabled"
     """Killed by `disabled_ai_skills` — a switch that has existed and been read
     since M0 without any caller consulting it."""
+
+    MODEL_UNAVAILABLE = "model_unavailable"
+    """There is no usable language model: no key, or a revoked one.
+
+    **A supported state, not an error** (ADR 0011). It is separate from
+    `SCHEMA_INVALID` because the two want opposite responses — one is ours to
+    fix and the other is a deployment fact — and collapsing them would make
+    *"the product is misconfigured"* indistinguishable from *"the model wrote
+    something malformed"* on the one screen where somebody is deciding whether
+    to trust us."""
+
+    PROVIDER_FAILED = "provider_failed"
+    """The provider was reachable and did not answer: an overload, a timeout, a
+    refused request. Distinct from `SCHEMA_INVALID` because nothing was wrong
+    with what came back — nothing came back."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,11 +142,11 @@ class Budgets:
         return self.tenant_spent >= self.tenant_limit or self.user_spent >= self.user_limit
 
 
-def run(
+async def run(
     *,
     skill: str,
     computed: Computed,
-    call_model: object,
+    call_model: Callable[[Computed], Awaitable[str]],
     budgets: Budgets,
     disabled_skills: frozenset[str],
 ) -> Answer:
@@ -145,6 +161,12 @@ def run(
     `call_model` is passed in rather than imported so nothing outside
     `app/ai/` names a vendor (ADR 0011's boundary), and so this whole path is
     testable without a key — which is a supported state, not a degraded one.
+
+    **Async because the model call is.** It was synchronous while nothing called
+    it, and a synchronous pipeline can only be joined to an async provider by
+    duplicating this ordering somewhere that can await — which would put the
+    decision about when to give up in two places. The decisions here are still
+    pure; only the call it makes is not.
     """
     if skill in disabled_skills:
         return Answer(outcome=Outcome.UNAVAILABLE, reason=UnavailableReason.SKILL_DISABLED)
@@ -162,9 +184,8 @@ def run(
     if budgets.exhausted:
         return Answer(outcome=Outcome.UNAVAILABLE, reason=UnavailableReason.BUDGET_EXHAUSTED)
 
-    assert callable(call_model)
     for attempt in (0, 1):
-        prose = str(call_model(computed))
+        prose = await call_model(computed)
 
         invented = invented_numbers(prose, computed)
         if invented:

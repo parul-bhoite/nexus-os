@@ -32,10 +32,16 @@ from app.retrieval.scoped import apply_user_scope
 
 
 class UserAlreadyInAWorkspaceError(Exception):
-    """Raised when a second company would be joined or created.
+    """**Retained and no longer raised** (ADR 0026).
 
-    The message is shown to the person it happened to, so it says what to do.
-    "Conflict" tells someone with one account and one company nothing at all.
+    One person belonged to one company (Q9/Q17) until multi-entity was built at
+    MVP. Three routes still catch this, and the class survives so that a reader
+    tracing why they do finds this note rather than an import error — and so
+    that if a *different* one-workspace rule is ever wanted, it is argued for on
+    its own terms rather than by reviving a guard whose reason was reversed.
+
+    The message is kept for the same reason: it is what the product used to say,
+    and it reads as a decision rather than a conflict.
     """
 
     def __init__(
@@ -55,9 +61,12 @@ async def live_membership_count(
 ) -> int:
     """How many workspaces this user currently belongs to.
 
-    `other_than` excludes one workspace from the count. That is what makes
-    re-accepting an invitation to the workspace you are *already* in idempotent
-    rather than a refusal — see `assert_no_live_membership`.
+    `other_than` excludes one workspace from the count. It existed so that
+    re-accepting an invitation to the workspace you are *already* in was
+    idempotent rather than a refusal. The guard that needed it is gone (ADR
+    0026) and the parameter stays, because *"how many other entities does this
+    person hold?"* is the question the group view asks — and it is now a real
+    question rather than the setup for a refusal.
 
     Reads through the `membership_own_rows` policy from migration 0003, so
     `nexus.user_id` is set first — the same contract `memberships_for_user`
@@ -79,23 +88,16 @@ async def live_membership_count(
     ).scalar_one()
     return int(count)
 
-
-async def assert_no_live_membership(
-    db: AsyncSession, *, user_id: UUID, other_than: UUID | None = None
-) -> None:
-    """Refuse if this user already belongs to a *different* company.
-
-    Called by `create_workspace_for_claim` and by `invitations.accept` — the two
-    paths that write a `membership` row.
-
-    **`other_than` is the difference between a rule and a trap.** Accepting an
-    invitation is idempotent by design: the insert is
-    `ON CONFLICT DO NOTHING`, so re-clicking a link keeps the role you already
-    hold rather than resetting it. Counting the user's own workspace would turn
-    every second click into "you are already part of a company" — technically
-    true, useless, and refusing the one case that was explicitly built to be
-    safe. `test_an_existing_member_keeps_the_role_they_already_hold` caught
-    exactly that when the first version of this guard omitted the parameter.
-    """
-    if await live_membership_count(db, user_id=user_id, other_than=other_than) > 0:
-        raise UserAlreadyInAWorkspaceError
+# `assert_no_live_membership` was here, and ADR 0026 removed it. It refused a
+# second `membership` row for a user, which is what made "one person, one
+# company" true — and multi-entity is that decision reversed.
+#
+# **The schema never needed changing.** `membership` was left many-to-many
+# deliberately (`doc/11` §3.2: *"keep the schema, constrain the product"*), so
+# lifting the constraint is a deletion rather than a migration. That foresight
+# is the whole reason this step was six days and not thirty.
+#
+# What replaces the guard is a test rather than nothing:
+# `test_reachable_workspaces_are_exactly_the_callers_memberships`. A rule that
+# is removed without its replacement asserted is a rule nobody notices the
+# absence of.

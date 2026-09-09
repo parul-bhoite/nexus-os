@@ -1,0 +1,25 @@
+name = "narrate-metric"
+version = "1"
+description = "Phrase a figure that has already been computed. Produces no numbers of its own."
+model = "claude-sonnet-5"
+effort = "low"
+
+# One sentence, plus a short reason. A ceiling this low is a design constraint
+# rather than a saving: a tile has room for a sentence, and a model given room
+# for a paragraph writes one and gets truncated mid-clause.
+max_output_tokens = 512
+cache_system = true
+
+# The figure, its delta, its window and its sources are all computed in
+# `calculators/` and passed in. Declaring them means a caller cannot forget one
+# and get a model that quietly invents it instead — which is the entire failure
+# this skill exists inside a guarded pipeline to prevent.
+requires_grounding = ["label", "value", "unit", "window", "sources", "delta"]
+
+# Writes nothing. It phrases; it does not decide anything that outlives the
+# request. A skill with an empty `writes` cannot persist a value even if the
+# model returns one, and this is the first skill in the product for which that
+# is the point rather than a side effect.
+writes = []
+
+tags = ["dashboard", "narration"]

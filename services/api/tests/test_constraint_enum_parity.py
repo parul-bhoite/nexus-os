@@ -38,6 +38,7 @@ from app.domain.department_answers import AnswerState
 from app.domain.facts import SourceKind as FactSourceKind
 from app.domain.onboarding_sessions import Phase, SessionStatus, TurnRole
 from app.domain.registration import JoinRequestState, ResearchRunState
+from app.domain.reporting import Scale, WeekStart
 from app.domain.research import SourceKind, SourceState
 from app.domain.scopes import Role, Scope, scope_code
 from app.grounding.pipeline import Outcome
@@ -179,6 +180,20 @@ MAPPINGS: tuple[Mapping, ...] = (
     # an enum member — so the compared set is the ids it exposes. The constraint
     # is doing the same job either way: refusing a provider nothing downstream
     # can read.
+    # The reporting settings (`doc/13` §13, ADR 0025). Registered in the same
+    # commit as migration 0027, because a value-list CHECK with no mapping fails
+    # `test_every_value_list_constraint_is_registered` rather than the test it
+    # was added for — three CI round trips, per `CONTINUE-HERE`.
+    Mapping(
+        "ck_workspace_reporting_week_start",
+        "app.domain.reporting.WeekStart",
+        frozenset(day.value for day in WeekStart),
+    ),
+    Mapping(
+        "ck_workspace_reporting_scale",
+        "app.domain.reporting.Scale",
+        frozenset(scale.value for scale in Scale),
+    ),
     Mapping(
         "ck_workspace_connection_provider",
         "app.domain.connections.PROVIDERS via PROVIDER_IDS",

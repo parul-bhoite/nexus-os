@@ -24,7 +24,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.workspaces import find_verified_workspace_for_domain
 from app.connectors.domain_check import normalise_domain
 from app.domain import audit
-from app.domain.membership import assert_no_live_membership
 from app.domain.research import SourceKind
 from app.logging import get_logger
 from app.retrieval.scoped import apply_workspace_scope
@@ -117,7 +116,6 @@ async def create_company(
     permitted. Defaulting it to `True` would turn a deliberate branch into a
     thing nobody sees.
     """
-    await assert_no_live_membership(db, user_id=user_id)
 
     domain = domain_of(details.website_url)
 

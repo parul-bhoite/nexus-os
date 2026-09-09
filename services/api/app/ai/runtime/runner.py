@@ -175,6 +175,7 @@ class SkillRunner:
         messages: Sequence[Message],
         grounding: Mapping[str, Any] | None = None,
         effort: str | None = None,
+        attempts: int = 2,
     ) -> SkillResult:
         """Run a skill once, validate, retry once.
 
@@ -187,6 +188,15 @@ class SkillRunner:
         Validated against the same set the manifest loader uses, because an
         effort the provider does not recognise is a 400 at the far end of a slow
         call rather than an error here.
+
+        `attempts` exists for one real case too, and it is the grounding
+        pipeline. That pipeline retries once when a model puts a number in its
+        prose that no calculation produced; this method retries once when the
+        output does not fit its schema. Composed at their defaults the two would
+        spend **four** provider calls where `doc/12` P14 specifies two, and the
+        second pair would look identical to the first in the log. So the
+        narrator passes 1 and keeps its retry budget where the interesting
+        failure is. Everything else passes nothing and gets two.
         """
         manifest = self._registry.get(skill_name)
         grounding = dict(grounding or {})
@@ -218,16 +228,19 @@ class SkillRunner:
             timeout_seconds=manifest.timeout_seconds,
         )
 
+        if attempts not in (1, 2):
+            raise SkillFailedError(f"{skill_name}: attempts must be 1 or 2, not {attempts}")
+
         started = time.monotonic()
         last_problems: list[str] = []
-        for attempt in (1, 2):
+        for attempt in range(1, attempts + 1):
             completion = await self._provider.complete(request)
 
             if completion.truncated:
                 # A truncated answer read as a complete one is worse than none —
                 # half a brief looks like a whole brief.
                 last_problems = ["the response hit max_output_tokens and is incomplete"]
-                if attempt == 1:
+                if attempt < attempts:
                     continue
                 break
 
@@ -251,12 +264,12 @@ class SkillRunner:
                 return result
 
             last_problems = problems
-            if attempt == 1:
+            if attempt < attempts:
                 log.info("ai.skill.revalidate", skill=manifest.name, problems=problems[:3])
 
         log.info("ai.skill.invalid", skill=manifest.name, problems=last_problems[:5])
         raise SkillOutputInvalidError(
-            f"{skill_name} did not return a valid response in two attempts: "
+            f"{skill_name} did not return a valid response in {attempts} attempt(s): "
             + "; ".join(last_problems[:5])
         )
 

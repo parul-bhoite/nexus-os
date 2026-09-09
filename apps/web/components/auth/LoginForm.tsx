@@ -87,6 +87,7 @@ export function LoginForm() {
       ) : null}
 
       <Field
+        required
         label="Work email"
         type="email"
         value={email}
@@ -97,6 +98,7 @@ export function LoginForm() {
       />
 
       <Field
+        required
         label="Password"
         type="password"
         value={password}

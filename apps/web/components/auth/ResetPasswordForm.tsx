@@ -85,6 +85,7 @@ export function ResetPasswordForm() {
       ) : null}
 
       <Field
+        required
         label="New password"
         type="password"
         value={password}

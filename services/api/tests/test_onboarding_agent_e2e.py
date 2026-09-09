@@ -221,6 +221,22 @@ def _context() -> str:
     )
 
 
+def _narration() -> str:
+    """`narrate-metric` (`doc/13` step B).
+
+    The fixture is a sentence with **no numeral in it**, which is the skill's
+    whole contract: the figure is in the grounding and the tile already shows
+    it, so the sentence earns its place by saying what it means. A fixture that
+    quoted the value would pass the schema and teach the wrong shape.
+    """
+    return json.dumps(
+        {
+            "sentence": "Cash runway is unchanged since last month.",
+            "because": "",
+        }
+    )
+
+
 def _provider(**overrides: Any) -> ScriptedProvider:
     script: dict[str, Any] = {
         "company-research": _research(),
@@ -230,6 +246,12 @@ def _provider(**overrides: Any) -> ScriptedProvider:
         "persona-builder": _persona(),
         "company-brain-builder": _brain(),
         "context-personalization": _context(),
+        # Not used by any onboarding journey — a metric is narrated on a
+        # dashboard, not during setup. It is scripted anyway because
+        # `ScriptedProvider` raises on an unscripted skill, and a provider that
+        # cannot answer for a skill the registry holds is a trap for whoever
+        # writes the first tile test.
+        "narrate-metric": _narration(),
     }
     script.update(overrides)
     return ScriptedProvider(script)
@@ -258,6 +280,7 @@ def test_the_scripted_fixtures_match_the_real_skill_schemas() -> None:
         "persona-builder": _persona(),
         "company-brain-builder": _brain(),
         "context-personalization": _context(),
+        "narrate-metric": _narration(),
     }
     assert set(scripted) == set(registry.names()), "a skill has no scripted fixture"
 

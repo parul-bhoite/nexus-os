@@ -21,6 +21,12 @@ const STATE_STYLES: Record<WidgetState, string> = {
   locked: 'bg-clay-100 text-clay-600',
   warming: 'bg-gold-100 text-clay-600',
   self_reported: 'bg-bone-200 text-ink-600',
+  // Added when the API's two remaining states reached this client. `tsc` found
+  // the gap: `STATE_LABEL` would have produced `undefined` for either of them,
+  // so a stale figure would have rendered with a blank chip beside it — a
+  // number that looks current with nothing saying it is not.
+  stale: 'bg-clay-100 text-clay-600',
+  unavailable: 'bg-bone-200 text-ink-500',
   planned: 'bg-bone-200 text-ink-500',
 }
 

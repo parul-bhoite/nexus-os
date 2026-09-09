@@ -138,6 +138,7 @@ export function RegisterForm() {
       />
 
       <Field
+        required
         label="Work email"
         type="email"
         value={email}
@@ -149,6 +150,7 @@ export function RegisterForm() {
       />
 
       <Field
+        required
         label="Password"
         type="password"
         value={password}

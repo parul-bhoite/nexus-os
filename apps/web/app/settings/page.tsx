@@ -55,9 +55,10 @@ export default function SettingsPage() {
         <div className="py-10">
           <h1 className="font-display text-title font-medium text-ink-900">Settings</h1>
           <p className="mt-3 max-w-prose text-[0.95rem] leading-relaxed text-ink-600">
-            Proving your domain, and the people in your company. These are the two things
-            that reach beyond your own account, which is why they are the two the domain
-            check gates.
+            Proving your domain, the people in your company, and the assumptions every
+            figure on every dashboard is cut against. The first two reach beyond your own
+            account, which is why the domain check gates them; the third decides what your
+            numbers mean.
           </p>
 
           <div className="mt-10">

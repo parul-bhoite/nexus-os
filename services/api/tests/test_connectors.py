@@ -7,12 +7,13 @@ CRM choice, and both cover the failures that are hardest to see later.
 from __future__ import annotations
 
 from app.domain.connectors import (
-    CRM_CAPABILITIES,
+    CRM_FIELD_REQUIREMENTS,
     ConnectionState,
     check_completeness,
     state_for_connection,
 )
 from app.domain.dashboards import WidgetState
+from app.domain.registry import BY_ID
 
 EVERYTHING = frozenset({"last_activity_at", "amount", "stage_canonical", "loss_reason"})
 
@@ -29,26 +30,30 @@ def test_connect_reports_what_cannot_be_calculated() -> None:
 
     assert not result.fully_supported
     unsupported = dict(result.unsupported)
-    assert "Stale deal detection" in unsupported
-    assert "last_activity_at" in unsupported["Stale deal detection"], (
+    # The tile's own name, read from the capability table. It used to be
+    # "Stale deal detection" here and "Stale and at-risk deals" on the dashboard
+    # — two names for one thing, which reads as two features.
+    stale = BY_ID["sales.stale_deal_alert"].name
+    assert stale in unsupported
+    assert "last_activity_at" in unsupported[stale], (
         "the reason must name the field, because a field name is actionable and "
         "'unavailable' is not"
     )
 
     # And everything else still works. A partial connection is not a failed one.
-    assert "Pipeline value" in result.supported
+    assert BY_ID["sales.pipeline_board"].name in result.supported
 
 
 def test_a_complete_connection_reports_no_gaps() -> None:
     result = check_completeness(EVERYTHING)
     assert result.fully_supported
-    assert len(result.supported) == len(CRM_CAPABILITIES)
+    assert len(result.supported) == len(CRM_FIELD_REQUIREMENTS)
 
 
 def test_every_unsupported_capability_says_which_field_is_missing() -> None:
     """Exhaustive: no capability may be refused without naming its cause."""
     result = check_completeness(frozenset())
-    assert len(result.unsupported) == len(CRM_CAPABILITIES)
+    assert len(result.unsupported) == len(CRM_FIELD_REQUIREMENTS)
     for name, reason in result.unsupported:
         assert "needs" in reason, name
 
