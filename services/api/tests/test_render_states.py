@@ -143,3 +143,88 @@ def test_the_optional_branches_stay_unreachable_unless_asked_for() -> None:
             WidgetState.PARTIAL,
             WidgetState.LIVE,
         )
+
+
+# ── The two audits, and the argument a deleted test was making ─
+
+
+def test_a_crawl_alone_makes_the_audits_partial_not_live() -> None:
+    """**This replaces `test_marketing_delivered.py`, which asserted the opposite.**
+
+    `domain/marketing.py::marketing_state` returned `LIVE` for a crawled
+    workspace, and its test was called
+    `test_the_audits_are_not_partial_versions_of_a_ga4_number`. The argument
+    was good: calling a crawl-derived audit `PARTIAL` would imply GA4 improves
+    it, and GA4 has nothing to do with either score.
+
+    The argument survives; the state name does not. GA4 is in **neither**
+    capability's `required_sources`, so it can never be what the tile is
+    waiting for — that is asserted separately below. What each one is genuinely
+    still missing is real: `seo_gaps` promises keyword volumes and difficulty
+    it has no source for, and `brand_intelligence` promises voice consistency
+    that needs documents and a model. `PARTIAL` says that, and the old `LIVE`
+    claimed the whole capability was delivered when a third of it was.
+
+    `partial` is also in `hasFigure`, so the figure still renders. Nothing is
+    hidden by being honest about it.
+    """
+    from app.domain.dashboards import state_from_sources
+    from app.domain.registry import BY_ID
+
+    for capability_id in ("marketing.seo_gaps", "marketing.brand_intelligence"):
+        capability = BY_ID[capability_id]
+        assert Source.CRAWL in capability.required_sources
+
+        crawled_only = state_from_sources(
+            capability.required_sources, reachable=True, connected=frozenset({Source.CRAWL})
+        )
+        assert crawled_only is WidgetState.PARTIAL, capability_id
+
+        # And with nothing at all, `locked` — the missing input is the crawl
+        # itself, which is ours, so this is "we have not looked yet" rather
+        # than "connect something".
+        assert (
+            state_from_sources(
+                capability.required_sources, reachable=True, connected=frozenset()
+            )
+            is WidgetState.LOCKED
+        )
+
+
+def test_an_audit_unlock_never_names_ga4() -> None:
+    """The half of the deleted test that was always the real claim.
+
+    A founder told "connect GA4 to finish your SEO audit" would connect it and
+    watch nothing change. `unlock_for_sources` reads `required_sources`, so the
+    guarantee is structural rather than a matter of wording — but it is worth a
+    test, because the wording is what somebody reads.
+    """
+    from app.domain.dashboards import unlock_for_sources
+    from app.domain.registry import BY_ID
+
+    for capability_id in ("marketing.seo_gaps", "marketing.brand_intelligence"):
+        capability = BY_ID[capability_id]
+        sentence = unlock_for_sources(
+            capability.required_sources, connected=frozenset({Source.CRAWL})
+        )
+        assert sentence, f"{capability_id} is partial and must say what it waits on"
+        assert "analytics" not in sentence.lower(), sentence
+        assert "ga4" not in sentence.lower(), sentence
+
+
+def test_connecting_ga4_changes_neither_audit() -> None:
+    """The same claim from the other direction, and the cheaper one to break."""
+    from app.domain.dashboards import state_from_sources
+    from app.domain.registry import BY_ID
+
+    for capability_id in ("marketing.seo_gaps", "marketing.brand_intelligence"):
+        capability = BY_ID[capability_id]
+        without = state_from_sources(
+            capability.required_sources, reachable=True, connected=frozenset({Source.CRAWL})
+        )
+        with_ga4 = state_from_sources(
+            capability.required_sources,
+            reachable=True,
+            connected=frozenset({Source.CRAWL, Source.GA4}),
+        )
+        assert without is with_ga4, capability_id

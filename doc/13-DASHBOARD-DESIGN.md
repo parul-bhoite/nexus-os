@@ -278,6 +278,60 @@ is built into the block from the first widget rather than retrofitted to sixty. 
 `Settings` line is version 2's addition: a number is only checkable if the assumptions
 under it are on the same screen as the arithmetic.
 
+### Built: the first two figures (slice 1)
+
+`marketing.seo_gaps` and `marketing.brand_intelligence` render this contract today, and
+the drawer is real. It reads the **calculator's checks**, not a `generation` row:
+
+```
+SEO Intelligence                                    [Partial]
+Keyword volumes and difficulty, gaps, briefs, technical issues
+45 / 65   points · 6 of 9 checks passed
+Technical SEO. Nine checks on the one page we fetched … Not keyword
+volumes, difficulty or rankings — those need a keyword data source
+this workspace has not got.
+Measured 2026-09-09 from https://iana.org
+Needs keyword data.
+[− why this number]
+  +10  Served over HTTPS                    https
+  +15  Page is not blocked from indexing    indexable
+  +5   Canonical URL is declared            https://iana.org/
+  0/10 Meta description is a usable length  0 characters
+  0/5  Structured data is present           no JSON-LD
+  0/5  Page language is declared            no lang attribute
+  …
+  calculators.audit.score_technical_seo
+```
+
+Four decisions in that, each of which could have gone the easy way:
+
+**The denominator is the headline, not the percentage.** `69%` reads as *"69% of your
+SEO is fine"*, which is a far stronger claim than *"you passed 45 of 65 weighted
+points"* — and the second is what was computed. The percentage is served and available;
+it is not what the eye lands on.
+
+**`measures` is a field, not prose someone remembered to write.** It names what was
+counted *and what was not*. Without it, a legibility score under a tile called "Brand
+Intelligence — voice consistency, positioning, messaging gaps" is a correct number
+under a misdescribing headline: not an I1 violation in the letter, and the one failure
+here a reader could never detect.
+
+**Both tiles are pinned to `partial` by construction.** Neither can drift to `live`.
+`seo_gaps` owes keyword data that D2 makes unavailable; `brand_intelligence` owes the
+voice analysis that needs documents and a model, and `connected_sources` deliberately
+does not claim `LANGUAGE_MODEL` merely because a key is set — a key existing is not a
+model being read. The old `domain/marketing.marketing_state` returned `LIVE` on a crawl
+alone and was deleted with the wiring; its argument (*"these are not partial versions of
+a GA4 number"*) survives as a test that no audit unlock ever names GA4.
+
+**The drawer needs no endpoint, and `generation` is still unwritten in production.** The
+checks *are* the working. A narrated sentence would need the row; a number's arithmetic
+does not — which is why narration is slice 2 and off the render path (M31).
+
+The date is served and rendered because `stale` is deliberately unreachable: nothing
+re-crawls on a schedule, so deriving staleness would mark every audit out of date eight
+days after signup, permanently (M32).
+
 ## 7. The seven states, as copy and as treatment
 
 | State | Copy rule | Treatment | Who resolves it |
@@ -884,3 +938,6 @@ test that constructs one scope cannot see between anything.
 | 47 | **Settings gated all eight panels on a fetch six of them did not need.** The screen blocked on `fetchCompany` + `fetchState`, and only then did the six prop-less panels mount and start their own requests — one serial round trip to `us-east-2` in front of everything, which is what made the audit log still be loading after 10s. Only the identity line, the domain card, the invite form and the per-department blocks need that data; the rest now mount immediately and fetch in parallel. **Reduces M27 rather than closing it** — it is still eight requests, but they are no longer eight-after-one | `SettingsPanel.tsx` |
 | 48 | ⚠ **My own regression, caught in a browser within a minute.** Scoping the company failure to its own region meant a dead API rendered *seven* identical red boxes where the old full-screen gate had said it once — and the first fix was wrong too, because it keyed on `401/403/0` while `auth-proxy.ts` returns **503** for "could not reach the API". Every panel proxies through that same BFF, so 503 is as global as a 401. The takeover now covers refusal *and* unreachability; anything else stays scoped, since the other six read different endpoints | `SettingsPanel.tsx` |
 | 49 | **A switch had no visible outcome.** `/dashboard` redirects an Owner to `/dashboard/executive`, so switching *from* a dashboard navigated to the address already on screen — same URL, same layout, and the only changed pixels were which pill was dark (defect 42, which I had recorded as "not a defect but worth a sentence"). It is worse than cosmetic for a screen reader, which a same-URL navigation tells nothing at all. Both switchers now carry `?switched=1` — the only channel that survives a hard navigation — and announce **which** company is now active via `role="status"`, named from the session-backed list rather than from the URL, then strip the flag so a refresh does not re-announce it | `EntitySwitcher.tsx` · `EntitiesCard.tsx` |
+| 50 | ⚠ **`connected_sources` as a FastAPI dependency read the database before the permission guards** — and eleven hermetic tests in `test_dashboard_scope.py` failed on a missing `NEXUS_DATABASE_URL`, which was the honest signal. I moved it inline, then moved it back: `running_departments` and `answered_questions` have both been dependencies since step C, the read is scoped to the caller's own workspace so ordering was never the exposure it looked like, and inline is what turns permission unit tests into integration tests. **The third time this file has learned that lesson**, now written down in `observed_sources` | `routes/dashboards.py` |
+| 51 | ⚠ **A codec import put the crawl engine on an anonymous route's import graph.** `test_no_unauthenticated_crawl.py` forbids any module under `app/research/` from being reachable without a session, and it caught `routes.companies → routes.dashboards → grounding.compute → research.extract` within minutes. The fix was a real split rather than an exemption: **`PageSignals` and its storage codec are a data shape, `extract_signals` is the HTML parser**, and only the second is the crawl engine. The shape moved to `domain/page_signals.py`, which both the write path and the read path may import | `domain/page_signals.py` · `research/extract.py` |
+| 52 | ⚠ **The department header contradicted the tiles beneath it.** *"No source behind this department can be measured yet, so there is no score"* was true for a year and became false the moment the first tile computed one — Marketing showed that sentence above two measured figures. The score is still absent, but for a different reason, and the copy now says which: a composite of the two capabilities we can measure would score that much and be read as the whole. Same reasoning as the company score being out of six departments rather than seven. Found in a browser, not by a test — there is no `DirectorPage` unit test | `DirectorPage.tsx` |

@@ -21,6 +21,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import jobs_session
+from app.domain.page_signals import CaptureSource, signals_to_json
 from app.domain.research import (
     CLAIM_SQL,
     STALE_AFTER_MINUTES,
@@ -88,6 +89,47 @@ async def _record(
             "k": kind.value,
         },
     )
+
+    # The signals, in the same transaction and only for a crawl. The other
+    # source kinds have no HTML and nothing to extract.
+    #
+    # This path matters more than the onboarding one, because **it is the crawl
+    # that recurs.** Onboarding runs once; this runs whenever a founder asks for
+    # a fresh read. Leaving it out would mean the recurring crawl held signals
+    # in memory and dropped them — the exact gap migration 0028 exists to close.
+    #
+    # Requires the `GRANT ... TO nexus_jobs` in 0028: this runs on the
+    # maintenance role, and without the grant it raises `permission denied`
+    # inside `_run_source`'s deliberately broad `except`, which reaches the
+    # founder as "This step did not finish" and names nothing.
+    if kind is SourceKind.CRAWL and outcome.signals:
+        await db.execute(
+            text(
+                "UPDATE page_signals SET superseded_at = now()"
+                " WHERE workspace_id = :ws AND superseded_at IS NULL"
+            ),
+            {"ws": workspace_id},
+        )
+        for position, page in enumerate(outcome.pages):
+            captured = outcome.signals.get(str(page.get("url", "")))
+            if captured is None:
+                continue
+            await db.execute(
+                text(
+                    "INSERT INTO page_signals"
+                    " (workspace_id, captured_by, run_id, url, position, signals)"
+                    " VALUES (:ws, :by, :r, :url, :pos, CAST(:sig AS jsonb))"
+                ),
+                {
+                    "ws": workspace_id,
+                    "by": CaptureSource.RESEARCH_RUN.value,
+                    "r": str(run_id),
+                    "url": str(page.get("url", "")),
+                    "pos": position,
+                    "sig": json.dumps(signals_to_json(captured)),
+                },
+            )
+
     await db.commit()
 
 

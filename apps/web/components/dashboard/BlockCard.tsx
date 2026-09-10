@@ -1,4 +1,12 @@
-import { STATE_LABEL, type BlockKind, type DirectorBlock, type WidgetState } from '@/lib/dashboard-client'
+'use client'
+
+import { useState } from 'react'
+import {
+  STATE_LABEL,
+  type BlockKind,
+  type DirectorBlock,
+  type WidgetState,
+} from '@/lib/dashboard-client'
 
 /**
  * One capability on the rail, in whatever state it is actually in.
@@ -9,19 +17,41 @@ import { STATE_LABEL, type BlockKind, type DirectorBlock, type WidgetState } fro
  * is the rule this component exists to hold, and the reason the copy lives here
  * rather than in nine block components that would each drift.
  *
- * ## Why there is no value slot yet
+ * ## The value slot, and why it took until now
  *
- * The API's block carries a name, what it will show, its state and its unlock —
- * and **no number**. Nothing computes one yet: `calculators/deltas.py` is
- * written and uncalled, and no route serves a narrated figure. So a value area
- * here would be an outline, and `dashboards.py` is explicit that a widget
- * outline on a screen is the thing a screenshot cannot distinguish from a
- * working one.
+ * This section used to be called *"why there is no value slot yet"*, and its
+ * argument was right: nothing computed a number, so a value area would have
+ * been an outline, and `dashboards.py` is explicit that a widget outline is the
+ * thing a screenshot cannot distinguish from a working one.
  *
- * What the block *kind* changes today is therefore the sentence about what it
- * will draw, not a fake rendering of it. The kinds get their data shapes when
- * the first tile is computed — the same discipline as `connected_sources()`
- * returning an empty set rather than a guess.
+ * Two capabilities now carry a real figure — `marketing.seo_gaps` and
+ * `marketing.brand_intelligence`, scored by `calculators/audit.py` from a
+ * crawled page. **The slot appears only when `block.figure` is present**, so
+ * the other eighty-eight tiles render exactly as before. The outline rule is
+ * unchanged; there is simply something to put in it.
+ *
+ * Three things the figure renders, and each is load-bearing:
+ *
+ * - **The denominator, next to the score.** `45 / 65 points`, not `69%`. A
+ *   percentage reads as "69% of your SEO is fine", which is a much stronger
+ *   claim than "you passed 45 of 65 weighted points" — and the second is what
+ *   was computed. The percentage is served and available; it is not the
+ *   headline.
+ * - **What it measures.** `figure.measures` names what was counted *and what
+ *   was not*, because a tile called "Brand Intelligence" promising voice
+ *   consistency, showing a legibility score, would be a correct number under a
+ *   misdescribing headline. That is the one dishonest thing this could ship.
+ * - **The date the page was fetched.** Standing in for the `stale` state the
+ *   route deliberately does not reach: nothing re-crawls on a schedule, so
+ *   deriving staleness would mark every audit out of date a week after signup.
+ *
+ * ## The working drawer needs no endpoint
+ *
+ * `figure.checks` **is** the calculator's working — nine observations, each
+ * with the points it contributed and the evidence behind it. So the drawer that
+ * was reserved-and-disabled now opens, with no new route and no `generation`
+ * row to read. A narrated sentence would need that row; a number's arithmetic
+ * does not.
  *
  * ## The three rules that are easiest to lose
  *
@@ -70,9 +100,106 @@ const KIND_PROMISE: Record<BlockKind, string> = {
  * The three that do are the three where the working drawer has something to
  * open. `self_reported` is deliberately not among them: it carries a value and
  * it is not a measurement, which is the whole point of the distinction.
+ *
+ * Kept as a state question even though `block.figure` now answers the same
+ * thing more directly, because the two answer it for different reasons and
+ * both must agree: a state in this set with no figure is a serving bug, and a
+ * figure outside it would be a number the state machine says we should not
+ * have. The render below requires *both*.
  */
 function hasFigure(state: WidgetState): boolean {
   return state === 'live' || state === 'partial' || state === 'stale'
+}
+
+/** The score, its denominator, and how many checks stand behind it. */
+function Figure({ block }: { block: DirectorBlock }) {
+  const figure = block.figure
+  if (!figure) return null
+
+  return (
+    <div className="mt-4">
+      <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span className="font-display text-3xl leading-none text-ink-900">
+          {figure.score}
+          <span className="text-ink-400"> / {figure.max_score}</span>
+        </span>
+        <span className="text-sm text-ink-500">
+          points · {figure.checks_passed} of {figure.checks.length} checks passed
+        </span>
+      </p>
+
+      {/* What was counted, and what was not. The guard against a real number
+          under a headline that promises more than it measured. */}
+      <p className="mt-2 max-w-prose text-sm leading-relaxed text-ink-600">
+        <span className="font-medium text-ink-700">{figure.label}.</span> {figure.measures}
+      </p>
+
+      <p className="mt-2 text-sm text-ink-400">
+        Measured {figure.measured_at} from{' '}
+        <a
+          href={figure.source_url}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="underline decoration-ink-300 underline-offset-2 hover:text-ink-600"
+        >
+          {figure.source_url}
+        </a>
+      </p>
+    </div>
+  )
+}
+
+/**
+ * The working, opened.
+ *
+ * Every check the calculator ran, in its order, with the points it contributed
+ * and the evidence it saw. Failures are not styled as errors: a page without
+ * structured data has not done anything wrong, and colouring nine rows red
+ * would turn an observation into a reprimand.
+ */
+function Working({ block }: { block: DirectorBlock }) {
+  const [open, setOpen] = useState(false)
+  const figure = block.figure
+  if (!figure) return null
+
+  return (
+    <div className="mt-4">
+      <button
+        type="button"
+        onClick={() => setOpen((was) => !was)}
+        aria-expanded={open}
+        className="self-start rounded-lg border border-ink-200 px-3 py-1.5 text-sm font-medium text-ink-700 hover:border-ink-300 hover:text-ink-900"
+      >
+        {open ? '− why this number' : '+ why this number'}
+      </button>
+
+      {open ? (
+        <div className="mt-3 overflow-hidden rounded-xl border border-ink-100">
+          <ul className="divide-y divide-ink-100">
+            {figure.checks.map((check) => (
+              <li key={check.id} className="flex flex-wrap gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
+                <span
+                  className={`shrink-0 font-mono text-2xs uppercase tracking-[0.08em] ${
+                    check.passed ? 'text-steel-600' : 'text-ink-400'
+                  }`}
+                >
+                  {check.passed ? `+${check.weight}` : `0 / ${check.weight}`}
+                </span>
+                <span className="min-w-0 grow">
+                  <span className="text-ink-800">{check.label}</span>
+                  {/* The calculator's own words. An observation, never advice. */}
+                  <span className="mt-0.5 block text-ink-500">{check.evidence}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="border-t border-ink-100 bg-bone-50 px-4 py-2 font-mono text-2xs text-ink-400">
+            {figure.method}
+          </p>
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 function Consequence({ block }: { block: DirectorBlock }) {
@@ -151,21 +278,20 @@ export function BlockCard({ block }: { block: DirectorBlock }) {
 
       <p className="mt-2 text-[0.95rem] leading-relaxed text-ink-600">{block.shows}</p>
 
+      {/* Above the consequence, deliberately. The number is what this tile is
+          for; "needs keyword data" qualifies it and reads as a footnote to it,
+          where the reverse order reads as an error with a number attached. */}
+      <Figure block={block} />
+
       <Consequence block={block} />
 
-      {/* The working drawer's place, and it is reserved rather than drawn. It
-          opens onto the `generation` row behind the figure — method, inputs,
-          arithmetic, window — and there is no row to open until something is
-          computed. A disabled control that says why beats a control that is
-          absent for reasons the reader has to guess. */}
-      {hasFigure(block.state) ? (
-        <button
-          type="button"
-          disabled
-          className="mt-4 self-start rounded-lg border border-ink-200 px-3 py-1.5 text-sm text-ink-500"
-        >
-          + why this number
-        </button>
+      {/* Both conditions, not either. A state in `hasFigure` with no figure is
+          a serving bug and must not render a drawer onto nothing; a figure
+          arriving in a state the machine says should not carry one is a number
+          we were told we should not have. Requiring both means neither is
+          papered over. */}
+      {hasFigure(block.state) && block.figure ? (
+        <Working block={block} />
       ) : (
         <p className="mt-4 text-sm leading-relaxed text-ink-400">
           {KIND_PROMISE[block.block]}

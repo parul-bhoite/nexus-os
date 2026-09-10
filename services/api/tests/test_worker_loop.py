@@ -11,6 +11,7 @@ deliberately crashing, and the other five still arriving.
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import AsyncIterator
 from uuid import uuid4
 
@@ -172,6 +173,136 @@ async def test_a_crashing_source_does_not_take_the_run_with_it(
         finally:
             await apply_workspace_scope(db, ws)
             for statement in (
+                "DELETE FROM research_source WHERE workspace_id = :w",
+                "DELETE FROM research_run WHERE workspace_id = :w",
+                "DELETE FROM workspace WHERE id = :w",
+            ):
+                await db.execute(sa.text(statement), {"w": str(ws)})
+            await db.execute(sa.text("DELETE FROM app_user WHERE id = :u"), {"u": str(user)})
+            await db.commit()
+
+
+# ── The recurring crawl stores its signals ────────────────────
+
+
+@requires_db
+async def test_the_background_crawl_stores_page_signals(
+    app_db: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The write path that actually recurs.
+
+    Onboarding crawls once; this crawls whenever a founder asks for a fresh
+    read. Leaving it out would have meant the recurring crawl held signals in
+    memory and dropped them — the exact gap migration 0028 exists to close, and
+    the one the browser walkthrough could never have caught, because a browser
+    only exercises the onboarding path.
+
+    Also the test that would catch a missing `GRANT ... TO nexus_jobs`: this
+    runs on the app role rather than the worker's, so it proves the SQL and not
+    the permission — `test_ci_contract.py` owns the grant. The two together are
+    the coverage; either alone would leave a silent `permission denied` inside
+    `_run_source`'s deliberately broad `except`.
+    """
+    from app.domain.page_signals import PageSignals, signals_to_json
+
+    fetched = PageSignals(
+        url="https://recrawled.example/",
+        is_https=True,
+        title="A page the worker read",
+        title_length=22,
+        meta_description="Long enough to be a real description of a real business.",
+        meta_description_length=56,
+        h1_texts=("A page the worker read",),
+        word_count=420,
+        internal_link_count=11,
+    )
+
+    async def one_page(*_: object, **__: object) -> CrawlOutcome:
+        return CrawlOutcome(
+            state=SourceState.SUCCEEDED,
+            pages=[{"url": "https://recrawled.example/", "text": "Real prose about a business."}],
+            signals={"https://recrawled.example/": fetched},
+        )
+
+    async with get_sessionmaker()() as db:
+        user, tenant, ws, run = uuid4(), uuid4(), uuid4(), uuid4()
+        await db.execute(
+            sa.text("INSERT INTO app_user (id, email) VALUES (:i,:e)"),
+            {"i": str(user), "e": f"sig-{user.hex[:8]}@example.com"},
+        )
+        await db.execute(
+            sa.text("INSERT INTO tenant (id, name) VALUES (:i,'T')"), {"i": str(tenant)}
+        )
+        await apply_workspace_scope(db, ws)
+        await db.execute(
+            sa.text(
+                "INSERT INTO workspace (id, workspace_id, tenant_id, name, domain)"
+                " VALUES (:i,:i,:t,'W',:d)"
+            ),
+            {"i": str(ws), "t": str(tenant), "d": f"sig-{ws.hex[:8]}.om"},
+        )
+        await db.execute(
+            sa.text(
+                "INSERT INTO research_run (id, workspace_id, state, requested_by_user_id)"
+                " VALUES (:i,:w,'running',:u)"
+            ),
+            {"i": str(run), "w": str(ws), "u": str(user)},
+        )
+        await db.execute(
+            sa.text(
+                "INSERT INTO research_source (workspace_id, run_id, kind, state)"
+                " VALUES (:w,:r,:k,'running')"
+            ),
+            {"w": str(ws), "r": str(run), "k": SourceKind.CRAWL.value},
+        )
+        # A previous crawl's row, so the supersede is exercised rather than
+        # assumed. Two generations both current would leave the reader's
+        # `ORDER BY position LIMIT 1` picking a stale page half the time.
+        await db.execute(
+            sa.text(
+                "INSERT INTO page_signals"
+                " (workspace_id, captured_by, run_id, url, position, signals)"
+                " VALUES (:w,'research_run',:r,'https://stale.example/',0, CAST(:s AS jsonb))"
+            ),
+            {"w": str(ws), "r": str(run), "s": json.dumps(signals_to_json(fetched))},
+        )
+        await db.commit()
+
+        try:
+            monkeypatch.setattr(worker_loop, "crawl_site", one_page)
+            await worker_loop._run_source(
+                db,
+                workspace_id=ws,
+                run_id=run,
+                kind=SourceKind.CRAWL,
+                seeds=["https://recrawled.example/"],
+            )
+
+            await apply_workspace_scope(db, ws)
+            rows = (
+                await db.execute(
+                    sa.text(
+                        "SELECT url, captured_by, position, (superseded_at IS NULL) AS current"
+                        " FROM page_signals WHERE workspace_id = :w ORDER BY current, position"
+                    ),
+                    {"w": str(ws)},
+                )
+            ).all()
+
+            current = [r for r in rows if r.current]
+            assert len(current) == 1, [r.url for r in current]
+            assert current[0].url == "https://recrawled.example/"
+            assert current[0].captured_by == "research_run"
+            assert current[0].position == 0
+
+            # The old row is superseded, not deleted: it is the history that
+            # explains why a figure moved.
+            superseded = [r for r in rows if not r.current]
+            assert [r.url for r in superseded] == ["https://stale.example/"]
+        finally:
+            await apply_workspace_scope(db, ws)
+            for statement in (
+                "DELETE FROM page_signals WHERE workspace_id = :w",
                 "DELETE FROM research_source WHERE workspace_id = :w",
                 "DELETE FROM research_run WHERE workspace_id = :w",
                 "DELETE FROM workspace WHERE id = :w",

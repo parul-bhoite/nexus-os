@@ -136,22 +136,37 @@ def test_every_offering_has_exactly_one_capability() -> None:
     assert len({c.doc05_id for c in from_doc05}) == offerings, "one capability per offering"
 
 
-def test_the_only_openable_capabilities_are_the_two_that_read_answers_back() -> None:
-    """The first thing in this product a person can open, and what it is.
+def test_every_openable_capability_either_reads_answers_or_computes_a_figure() -> None:
+    """What a person can open, and on what basis.
 
-    Everything computed is still `planned`: no route serves a figure. Setup and
-    the Watchlist are different in kind — they read answers the founder has
-    already given, so there is nothing to connect and nothing to calculate.
+    **This assertion narrowed when slice 1 shipped.** It used to say every
+    openable capability ends in `.setup` or `.watchlist`, which was the honest
+    claim while nothing served a figure. Two Marketing audits now do, so the
+    claim worth making is the one underneath it: an openable capability is
+    openable *because* something answers it — either answers the founder
+    already gave, or a calculator.
 
-    There were three mechanisms for this one fact once —
-    `dashboards.DELIVERED`, `registry.Capability.delivered` and
-    `marketing.DELIVERED_MARKETING` — and they disagreed. One flag now, and the
-    honesty of every "planned" label rests on it.
+    The failure this guards has not changed. `state_from_sources` reaches a
+    figure state by the absence of contradicting evidence, so an id added to
+    `_REACHABLE` with nothing behind it renders a tile claiming a number and
+    then shows a blank space. There were three mechanisms for this one fact
+    once — `dashboards.DELIVERED`, `Capability.delivered` and
+    `marketing.DELIVERED_MARKETING` — and they disagreed. One flag now.
     """
+    from app.grounding.compute import CRAWL_AUDITS
+
     openable = {c.id for c in REGISTRY if c.reachable}
 
     assert openable, "step D's sections are openable, and the meter should say so"
-    assert all(c.endswith((".setup", ".watchlist")) for c in openable), sorted(openable)
+    unexplained = {
+        capability
+        for capability in openable
+        if not capability.endswith((".setup", ".watchlist")) and capability not in CRAWL_AUDITS
+    }
+    assert not unexplained, (
+        f"{sorted(unexplained)} are reachable with nothing behind them — they will "
+        f"render a figure state and no figure. Add a calculator or unset reachable."
+    )
     assert "marketing.setup" in openable
     assert "executive.setup" not in openable, (
         "the Chief of Staff has no question block — it consumes the other"
@@ -159,26 +174,31 @@ def test_the_only_openable_capabilities_are_the_two_that_read_answers_back() -> 
     )
 
 
-def test_the_marketing_audits_are_implemented_and_still_not_reachable() -> None:
-    """The gap the unification exposed, kept as a test so closing it is deliberate.
+def test_the_marketing_audits_are_now_reachable_and_carry_a_figure() -> None:
+    """**The wiring landed, and this is the test that said it would change.**
 
-    `calculators/audit.py` scores brand and technical SEO, and
-    `domain/marketing.py` decides their state — but `marketing_state` is called
-    from its own test and from nowhere else, so no user can open either tile.
-    That is why `implemented` and `reachable` are two flags: a completeness
-    meter counting the first would tell a founder they have two capabilities
-    they cannot open.
+    Its previous form asserted the audits were `implemented` and deliberately
+    *not* `reachable`, because `calculators/audit.py` scored brand and
+    technical SEO while `marketing_state` was called from its own test and
+    nowhere else — no user could open either tile. That gap is closed:
+    `grounding/compute.py` dispatches to the scoring functions and
+    `routes/dashboards.py` serves the result.
 
-    When the wiring lands, this test changes on purpose.
+    Both flags are still separate and still earn their keep. `implemented`
+    means a calculation exists; `reachable` means a route serves it. Closing
+    the second without the first is what `_validate` raises on, and a
+    completeness meter counting only the first would tell a founder they have
+    capabilities they cannot open.
     """
+    from app.grounding.compute import CRAWL_AUDITS
+
     audits = {"marketing.seo_gaps", "marketing.brand_intelligence"}
 
     assert audits <= {c.id for c in REGISTRY if c.implemented}
-    # Asserted about the audits specifically rather than about everything
-    # implemented. Step D's sections are both implemented **and** reachable, so
-    # the global form of this assertion stopped being the claim worth making the
-    # moment anything shipped.
-    assert not any(BY_ID[capability].reachable for capability in audits)
+    assert all(BY_ID[capability].reachable for capability in audits)
+    # And something actually computes each one, which is the claim the previous
+    # form of this test was protecting by keeping them unreachable.
+    assert audits <= set(CRAWL_AUDITS)
 
 
 def test_impact_is_a_declared_dependency_not_a_guess() -> None:

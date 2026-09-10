@@ -48,13 +48,20 @@ they were hiding became visible:
 - **`implemented`** — the calculation exists in code.
 - **`reachable`** — a route serves it to a person.
 
-Marketing's two audit capabilities are `implemented` and **not** `reachable`:
-`calculators/audit.py` scores them and `domain/marketing.py` decides their state,
-but `marketing_state` is called from its own test and from nowhere else, so no
-user can open either tile. That is why the flags are separate rather than one
-optimistic boolean — the completeness meter a customer reads must count what
-they can open, and `reachable` implies `implemented` is a test rather than a
-convention.
+Marketing's two audit capabilities were `implemented` and **not** `reachable`
+for a year, and that pair is why the flags are separate rather than one
+optimistic boolean: `calculators/audit.py` scored them and nothing could call
+it, because the crawl kept only a page's text and threw the HTML away. A
+completeness meter counting `implemented` would have told a founder they had
+two capabilities they could not open.
+
+Both are now reachable, through `grounding/compute.py` and migration 0028's
+`page_signals`. `domain/marketing.py` — which held a third, disagreeing state
+machine for exactly these two — was deleted with the wiring: `state_from_sources`
+is the single answer, and it renders them `partial` rather than `live`, because
+`seo_gaps` still owes keyword data and `brand_intelligence` still owes the voice
+analysis its name promises. The flags stay separate, and `reachable` implies
+`implemented` is still a test rather than a convention.
 
 ## The two numbers
 
@@ -457,29 +464,45 @@ _IMPLEMENTED: Final[frozenset[str]] = frozenset(
         # Step D's sections. `reachable` implies `implemented`, and a test says
         # so — a route cannot serve a calculation that does not exist.
         *_setup_and_watchlist_ids(),
-        # `calculators/audit.py` scores these and `domain/marketing.py` decides
-        # their state. Both are real; neither is wired to a route (P16's
-        # remaining half), which is why they are not `_REACHABLE`.
+        # `calculators/audit.py` scores these, and since slice 1 they are also
+        # reachable: `grounding/compute.py` dispatches to the two scoring
+        # functions and `routes/dashboards.py` serves the result. For a year
+        # they sat here `implemented` and unreachable, which was true and
+        # useless — the calculators were written and tested and nothing kept a
+        # page's HTML long enough to feed them.
         "marketing.seo_gaps",
         "marketing.brand_intelligence",
     }
 )
 
-_REACHABLE: Final[frozenset[str]] = _setup_and_watchlist_ids()
-"""**The first capabilities a person can actually open.**
+_REACHABLE: Final[frozenset[str]] = _setup_and_watchlist_ids() | frozenset(
+    {
+        # **The first two capabilities that put a computed number on a tile.**
+        # Both are pinned to `partial` by construction and neither can drift to
+        # `live`: `seo_gaps` needs a keyword data source that D2 makes
+        # unavailable, and `brand_intelligence` needs a language model that
+        # nothing on the dashboard path reads until narration lands. That
+        # matters — a `live` `brand_intelligence` would claim the voice
+        # analysis its `shows` promises, which `score_brand` does not do.
+        "marketing.seo_gaps",
+        "marketing.brand_intelligence",
+    }
+)
+"""**The capabilities a person can actually open.**
 
-Everything else is `planned`: no route serves a computed figure yet. These two
-per department are different in kind — they read answers that already exist, so
-there is nothing to connect and nothing to compute. A founder who finished
-onboarding can open them today, which is why the completeness meter stops
-reading zero here rather than at the first connector.
-"""
-"""Nothing yet, and the completeness meter says so.
+Everything else is `planned`. Two kinds are in here.
 
-This is the set that fills in one capability at a time as the section work wires
-tiles to routes. Until an id appears here, its tile says it is not built —
-anything else puts a widget outline on a screen that a screenshot cannot be
-distinguished from a working one.
+The `setup` and `watchlist` pair per department read answers that already
+exist, so there is nothing to connect and nothing to compute — a founder who
+finished onboarding can open them immediately, which is why the completeness
+meter stops reading zero here rather than at the first connector. They never
+reach `BlockCard`: `DirectorPage` routes those two tab keys to `SetupSection`.
+
+The two Marketing audits are the first that carry a figure. Adding an id here
+is not a label change — `state_from_sources` reaches a figure state by the
+*absence* of contradicting evidence, so an id added with no calculator behind
+it renders a tile that says it has a number and then shows a blank space.
+`tests/test_grounding_compute.py` fails the build for exactly that.
 """
 
 

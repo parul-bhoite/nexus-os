@@ -24,6 +24,7 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.runtime.fields import resolve
+from app.domain.page_signals import CaptureSource
 from app.logging import get_logger
 
 log = get_logger(__name__)
@@ -292,6 +293,76 @@ def _storable(value: str) -> str:
     readable page must cost a character and not a signup.
     """
     return value.replace("\x00", "")
+
+
+async def save_page_signals(
+    db: AsyncSession,
+    *,
+    session_id: UUID,
+    workspace_id: UUID,
+    pages: Sequence[Mapping[str, str]],
+    signals: Mapping[str, dict[str, Any]],
+) -> None:
+    """Store what each kept page demonstrably contained, superseding any prior crawl.
+
+    Takes **already-serialised** payloads rather than `PageSignals`, and that
+    is not a convenience. `tests/test_no_unauthenticated_crawl.py` forbids any
+    module under `app/research/` from being reachable from an unauthenticated
+    route, and this module is reachable from `routes/companies.py` — so
+    importing the codec here failed that test the moment it was written. The
+    conversion belongs to the caller, which is the authenticated route that
+    already imports the crawler to run it.
+
+    Separate from `save_crawl` and not folded into it, because the two write
+    different shapes for different readers. `save_crawl` merges into the
+    `research` JSONB with `||`, and it flattens every page value with
+    `_storable(str(v))` — a nested signals dict would be stored as its Python
+    `repr` and come back unparseable. These go to their own table, typed, with
+    RLS of their own.
+
+    **`position` is the index into `pages`, not into the crawl.** The caller has
+    already dropped undecodable pages with `is_prose`, so position 0 is the
+    first page that survived that filter. `site.plan` orders by priority, which
+    makes it the page the crawl led with — the rule `retrieval/crawl.py` reads
+    by. Indexing the unfiltered crawl instead would let position 0 name a page
+    that was dropped, and the tile would read `locked` while rows existed.
+
+    Supersede-then-insert in the caller's transaction, matching `company_brain`:
+    a re-crawl must not leave two generations of a page competing to be
+    position 0, and the old rows are the history that explains why a figure
+    moved.
+    """
+    await db.execute(
+        sa.text(
+            "UPDATE page_signals SET superseded_at = now()"
+            " WHERE workspace_id = :ws AND superseded_at IS NULL"
+        ),
+        {"ws": workspace_id},
+    )
+    for position, page in enumerate(pages):
+        url = str(page.get("url", ""))
+        captured = signals.get(url)
+        if captured is None:
+            # A page kept by the caller that the crawl captured nothing for.
+            # Skipped rather than stored empty: an all-default `PageSignals`
+            # scores zero on every check, which would say the page failed them
+            # rather than that we never read it (I10).
+            continue
+        await db.execute(
+            sa.text(
+                "INSERT INTO page_signals"
+                " (workspace_id, captured_by, session_id, url, position, signals)"
+                " VALUES (:ws, :by, :sid, :url, :pos, CAST(:sig AS jsonb))"
+            ),
+            {
+                "ws": workspace_id,
+                "by": CaptureSource.ONBOARDING.value,
+                "sid": session_id,
+                "url": url,
+                "pos": position,
+                "sig": json.dumps(captured),
+            },
+        )
 
 
 async def save_crawl(

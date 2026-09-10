@@ -661,3 +661,63 @@ async def test_a_manager_is_grounded_only_in_their_own_department(
             " however much better the prose would read for it"
         )
         assert context.scope_key == "L3:finance"
+
+
+# ── The day boundary, pinned to a timestamp rather than the clock ──
+
+
+async def test_the_day_boundary_is_the_workspaces_midnight_not_utc(app_db: None) -> None:
+    """The bug this file found by accident, asserted on purpose.
+
+    `date_trunc('day', now() AT TIME ZONE :tz)` returns a **naive** timestamp.
+    Compared against a `timestamptz` column, Postgres reinterprets it in the
+    *session* timezone — GMT here — so local midnight in Muscat became midnight
+    UTC, four hours late. Inside that window the query summed nothing, both
+    budgets read zero, and `exhausted` could not become true: the daily token
+    budget was unenforced for four hours of every day.
+
+    The three tests above would have caught it, and did — but only between
+    20:00 and 24:00 UTC, which is why it survived. **They encode "now"; this
+    encodes the boundary.** Two rows are written with explicit `created_at`
+    values either side of the workspace's local midnight, so the assertion is
+    the same at every hour of the day.
+    """
+    async with get_sessionmaker()() as db:
+        seed = await _seed(db)
+        try:
+            # 01:00 and 23:00 local, on either side of the same local midnight.
+            # Written directly rather than through `record` because `record`
+            # takes its timestamp from the database, and the whole point is to
+            # choose it.
+            for offset, tokens in (("+1 hour", 700), ("-1 hour", 400)):
+                await db.execute(
+                    sa.text(
+                        "INSERT INTO generation"
+                        " (workspace_id, module, prompt_version, input_snapshot,"
+                        "  calculation_trace, scope_key, outcome, input_tokens,"
+                        "  output_tokens, cost_micros, requested_by_user_id, created_at)"
+                        " VALUES (:w,'boundary','v1', CAST('{}' AS json), CAST('{}' AS json),"
+                        "  'k','answered', :t, 0, 0, :u,"
+                        "  date_trunc('day', now() AT TIME ZONE 'Asia/Muscat')"
+                        f"    AT TIME ZONE 'Asia/Muscat' + interval '{offset}')"
+                    ),
+                    {"w": str(seed.workspace_id), "t": tokens, "u": str(seed.user_id)},
+                )
+
+            budgets = await ledger.budgets_for(
+                db,
+                workspace_id=seed.workspace_id,
+                user_id=seed.user_id,
+                settings=get_settings(),
+                timezone="Asia/Muscat",
+            )
+
+            # The row an hour into the local day counts; the row an hour before
+            # it does not. Anything else means the window is in the wrong place.
+            assert budgets.tenant_spent == 700, (
+                "the day boundary is not the workspace's local midnight — a row "
+                "one hour into today counted as 0, or yesterday's leaked in"
+            )
+            assert budgets.user_spent == 700
+        finally:
+            await db.rollback()

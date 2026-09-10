@@ -22,7 +22,7 @@ from app.calculators.audit import (
     score_performance,
     score_technical_seo,
 )
-from app.research.extract import PageSignals
+from app.domain.page_signals import PageSignals
 
 
 def signals(**overrides: object) -> PageSignals:

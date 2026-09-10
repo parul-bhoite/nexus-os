@@ -127,37 +127,58 @@ def test_no_connector_advertises_an_unlockable_capability_yet() -> None:
     worse than no tile. The catalogue lives in `will_unlock`, which the tool's
     page may show as *coming*, never as *waiting for you*.
 
-    **The premise narrowed when step D shipped.** This asserted that *nothing*
-    was reachable, and Setup and the Watchlist now are — they read answers that
-    already exist. They need no source at all, so they can never be something a
-    connector unlocks, which is why the claim worth asserting is about the
-    capabilities a connector actually feeds.
-    """
-    connector_fed = [c for c in TILES if c.required_sources]
+    **The premise has narrowed twice, and the second time it inverted.** It
+    first asserted that *nothing* was reachable. Step D made Setup and the
+    Watchlist reachable, needing no source at all. Slice 1 then made two
+    Marketing audits reachable *with* sources — and because `DAY_ONE` already
+    includes the crawl, connecting a keyword data source now genuinely does
+    complete `marketing.seo_gaps`. **That is the first true call to action this
+    product has ever had**, and asserting zero of them would now be asserting a
+    regression.
 
-    assert not any(c.reachable for c in connector_fed), (
-        "nothing that needs a source is reachable yet — the tiles that are"
-        " reachable need none, which is a different thing"
-    )
+    So the claim becomes the one that was always underneath: every capability a
+    connector advertises must be one something can actually put a number on.
+    `unlocks_now` already filters to `reachable`; this adds the half
+    `reachable` cannot see, because `state_from_sources` reaches a figure state
+    by the absence of contradicting evidence rather than the presence of a
+    figure. A tile promised on the connect screen and then blank on the
+    dashboard is what `doc/04` §6 rule 1 calls worse than no tile.
+    """
+    from app.grounding.compute import CRAWL_AUDITS
 
     for tool in CONNECTABLE:
-        assert unlocks_now(tool.source, connected=DAY_ONE) == ()
+        for capability in unlocks_now(tool.source, connected=DAY_ONE):
+            assert capability.id in CRAWL_AUDITS or capability.id.endswith(
+                (".setup", ".watchlist")
+            ), (
+                f"connecting {tool.source.value} is advertised as turning on "
+                f"{capability.id}, and nothing computes it — the founder would "
+                f"connect a tool and find the tile still empty"
+            )
 
 
-def test_the_reachable_capabilities_need_no_source_at_all() -> None:
-    """The other half, and the reason the test above could narrow safely.
+def test_no_reachable_capability_waits_only_on_a_third_party() -> None:
+    """The other half, restated for the same reason.
 
-    A reachable capability that *did* need a source would mean a connector was
-    advertising something openable, and the count on the connect screen would
-    have to include it. Step D's two need nothing: they read what the workspace
-    already holds, so an empty Setup tab is a fact about the answers rather than
-    about our access.
+    Step D's ten need no source: they read what the workspace already holds, so
+    an empty Setup tab is a fact about the answers rather than about our
+    access. Slice 1's two audits need the **crawl**, which is also ours — we
+    fetch the page ourselves during onboarding.
+
+    The claim underneath both, and the one worth keeping: a reachable
+    capability must be openable on the strength of something *we* produce. One
+    whose every source came from a third party would be reachable in name only
+    — a tile a founder can click and never see a number in, which is the
+    failure `doc/04` §6 rule 1 calls worse than no tile.
     """
+    ours = {entry.source for entry in LEDGER if entry.origin is Origin.OURS}
     reachable = [c for c in TILES if c.reachable]
 
-    assert reachable, "step D shipped ten of them"
-    assert all(not c.required_sources for c in reachable), sorted(
-        c.id for c in reachable if c.required_sources
+    assert reachable, "step D shipped ten and slice 1 added two"
+    stranded = [c for c in reachable if c.required_sources and not (set(c.required_sources) & ours)]
+    assert not stranded, (
+        f"{sorted(c.id for c in stranded)} are reachable but every source they need "
+        f"comes from a third party — nothing we control can put a number on them"
     )
 
 

@@ -37,6 +37,7 @@ from app.domain.connectors import ConnectionState
 from app.domain.department_answers import AnswerState
 from app.domain.facts import SourceKind as FactSourceKind
 from app.domain.onboarding_sessions import Phase, SessionStatus, TurnRole
+from app.domain.page_signals import CaptureSource
 from app.domain.registration import JoinRequestState, ResearchRunState
 from app.domain.reporting import Scale, WeekStart
 from app.domain.research import SourceKind, SourceState
@@ -198,6 +199,13 @@ MAPPINGS: tuple[Mapping, ...] = (
         "ck_workspace_connection_provider",
         "app.domain.connections.PROVIDERS via PROVIDER_IDS",
         PROVIDER_IDS,
+    ),
+    # Crawled page signals (`doc/13` slice 1). Registered in the same commit as
+    # migration 0028, for the reason two comments above already give.
+    Mapping(
+        "ck_page_signals_captured_by",
+        "app.domain.page_signals.CaptureSource",
+        frozenset(source.value for source in CaptureSource),
     ),
 )
 

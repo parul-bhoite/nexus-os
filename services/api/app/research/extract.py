@@ -7,16 +7,26 @@ happens in a model call that does not exist in M2 at all.
 
 That split is I1 in structural form: an extractor that returned a "brand score"
 would make the number's origin a matter of trust rather than of construction.
+
+**`PageSignals` itself lives in `domain/page_signals.py`, not here.** This
+module is the HTML parser, and `tests/test_no_unauthenticated_crawl.py` forbids
+any module under `app/research/` from being reachable from an unauthenticated
+route. The dashboard read path needs the *shape* and its storage codec —
+`retrieval/crawl.py` deserialises a stored row — and dragging the parser along
+with it put `app.research.extract` on a graph reachable from
+`routes/companies.py`. Parsing a page and describing what a page contains are
+two different things; only the first is the crawl engine.
 """
 
 from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass, field
 from urllib.parse import urljoin, urlsplit
 
 from bs4 import BeautifulSoup, Tag
+
+from app.domain.page_signals import PageSignals
 
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 # Loose on purpose: GCC numbers vary in shape and this only records presence.
@@ -32,50 +42,6 @@ SOCIAL_HOSTS = {
     "tiktok.com": "tiktok",
     "wa.me": "whatsapp",
 }
-
-
-@dataclass(frozen=True, slots=True)
-class PageSignals:
-    """What the page demonstrably contains. No interpretation."""
-
-    url: str
-    is_https: bool
-
-    title: str | None
-    title_length: int
-    meta_description: str | None
-    meta_description_length: int
-
-    h1_texts: tuple[str, ...] = field(default=())
-    h2_texts: tuple[str, ...] = field(default=())
-
-    has_viewport_meta: bool = False
-    has_canonical: bool = False
-    canonical_url: str | None = None
-    has_robots_meta: bool = False
-    robots_blocks_indexing: bool = False
-    has_structured_data: bool = False
-    has_open_graph: bool = False
-    declared_language: str | None = None
-
-    image_count: int = 0
-    images_with_alt: int = 0
-
-    internal_link_count: int = 0
-    external_link_count: int = 0
-
-    emails: tuple[str, ...] = field(default=())
-    has_phone: bool = False
-    social_profiles: tuple[str, ...] = field(default=())
-
-    word_count: int = 0
-    html_bytes: int = 0
-    script_count: int = 0
-    stylesheet_count: int = 0
-    inline_style_count: int = 0
-
-    text_sample: str = ""
-    """Leading body text. Untrusted content — see the M12 boundary."""
 
 
 def _text_of(tags: list[Tag], limit: int) -> tuple[str, ...]:
@@ -207,3 +173,5 @@ def extract_text(html: str) -> str:
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
     return str(soup.get_text(" ", strip=True))
+
+

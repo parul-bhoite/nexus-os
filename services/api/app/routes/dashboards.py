@@ -21,6 +21,7 @@ doc 06 §4.5, the same rule `filter_records` follows.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -67,26 +68,96 @@ from app.domain.sections import (
     Section,
     sections_for,
 )
+from app.grounding.compute import compute_from_crawl
 from app.grounding.context import CompanyContext, assemble
+from app.retrieval.crawl import CrawlSnapshot, current_page_signals
 from app.retrieval.scoped import apply_workspace_scope, scoped_connection
 
 router = APIRouter(prefix="/dashboards", tags=["dashboards"])
 
 
-def connected_sources() -> frozenset[Source]:
-    """What this workspace actually has wired up.
+@dataclass(frozen=True, slots=True)
+class Observed:
+    """What this workspace demonstrably has.
 
-    Empty, and honestly so. Document upload exists (M5) but nothing yet reads an
-    indexed document into a dashboard, and no integration exists at all before
-    M10. Returning `{DOCUMENTS}` here because the upload route exists would make
-    every tile that needs documents claim to be one step from working.
-
-    This is the single place that changes as connectors land, and it takes no
-    arguments today for the same reason: a per-workspace answer needs the
-    integration registry that M10 introduces, and inventing a shape for it now
-    would be guessing at the wrong problem.
+    Every field is a thing something **looked at**, never a thing whose route
+    exists. That distinction is the whole point: the previous version of
+    `connected_sources` returned an empty set and explained that returning
+    `{DOCUMENTS}` "because the upload route exists" would make every tile
+    needing documents claim to be one step from working. Same rule, now with
+    somewhere to put the answers.
     """
-    return frozenset()
+
+    crawl: CrawlSnapshot | None
+    """The page this workspace's most recent crawl led with, or `None`.
+
+    The snapshot rather than a boolean, because the two callers want different
+    halves of the same row and one read must serve both: the state machine
+    needs only "is there a crawl", and the figure needs the signals themselves.
+    Answered by `retrieval/crawl.py`, not inferred from the domain being set or
+    from onboarding having finished — a crawl that found nothing readable is a
+    completed onboarding with no signals, which is exactly the case a tile must
+    render as `locked`.
+    """
+
+    @property
+    def crawled(self) -> bool:
+        return self.crawl is not None
+
+
+def connected_sources(observed: Observed) -> frozenset[Source]:
+    """The sources this workspace actually has wired up.
+
+    **Only `CRAWL`, and only because something asked.** The four other
+    OURS-origin sources — `ONBOARDING`, `ROSTER`, `OPS_LAYER` and the TIME
+    origin `HISTORY` — are deliberately absent: no reachable capability needs
+    any of them, so claiming them would change the state of tiles nobody has
+    verified. That is the same failure the empty set existed to avoid, arrived
+    at from the other direction.
+
+    `DOCUMENTS` and `LANGUAGE_MODEL` are absent too, and both are decisions.
+    The honest test for documents is `retrieval.chunks.count(db, scope) > 0`,
+    which is **per-caller** — an Owner and a Contributor in one workspace would
+    get different tile states, correct under I2/I3 but a thing that deserves
+    its own slice. A model *key* being set is not a model being read, and
+    nothing on the dashboard path reads one until narration lands; claiming it
+    now would let `brand_intelligence` reach `live` and so claim the voice
+    analysis its name promises, which `score_brand` does not do.
+
+    Every CONNECTOR-origin source stays absent until M10's integration
+    registry. `DATAFORSEO` stays absent under D2, and that is what keeps
+    `seo_gaps` honestly `partial` rather than accidentally `live`.
+
+    Widening this is safer than it looks, and `test_capability_registry.py`
+    asserts why: `state_from_sources` short-circuits on `not reachable` before
+    it reads `connected` at all, so a new source can only affect capabilities
+    somebody deliberately put in `_REACHABLE`.
+    """
+    return frozenset({Source.CRAWL}) if observed.crawled else frozenset()
+
+
+async def observed_sources(scope: CurrentScope) -> Observed:
+    """Look at what this workspace has, once per request.
+
+    A dependency, for the third time in this file and the same reason the other
+    two give: `tests/test_dashboard_scope.py` asserts the permission lattice
+    with no database, and reading this inside the handler turns those unit
+    tests into integration tests. I tried it inline first and eleven of them
+    failed on a missing `NEXUS_DATABASE_URL`, which is the lesson arriving for
+    the third time.
+
+    A dependency does resolve *before* the handler's four guards, so a caller
+    who is about to get a 404 still costs one read. That is not the exposure it
+    looks like: `scoped_connection` scopes the query to the caller's own
+    workspace, so the read can only ever see what they were already entitled
+    to — and `running_departments` and `answered_questions` have both worked
+    this way since step C.
+    """
+    async with scoped_connection(scope) as db:
+        return Observed(crawl=await current_page_signals(db, scope))
+
+
+ObservedSources = Annotated[Observed, Depends(observed_sources)]
 
 
 class OfferingOut(BaseModel):
@@ -110,6 +181,69 @@ class OfferingOut(BaseModel):
     note: str
 
 
+class CheckOut(BaseModel):
+    """One observation and the points it contributed. Never a recommendation.
+
+    `Check.evidence` is specified as what was *observed* rather than as advice,
+    and this carries it through unrestated. A tile that turned "0 internal
+    links" into "add internal links" would be giving guidance nobody computed.
+    """
+
+    id: str
+    label: str
+    passed: bool
+    weight: int
+    evidence: str
+
+
+class FigureOut(BaseModel):
+    """A computed figure, its denominator, and its working.
+
+    **The denominator travels with the number** — `ShellOut`'s rule for
+    `ShellOut`'s reason. A score on its own is a claim the reader cannot check;
+    `45 out of 65` lets them count. `percentage` is served rather than divided
+    in the browser so two clients cannot round differently from the drawer.
+
+    **Not a view's shape.** No colour, no ordering, no formatting, no chip
+    text. Every field is either the calculator's output or the provenance that
+    makes it checkable — `label` and `measures` included, because what a number
+    measures is a property of the calculation and not of the tile drawing it.
+    """
+
+    label: str
+    """What was measured, from the calculator — **not** the capability's name.
+    `3.7` is presented as "SEO Intelligence" and this measures its technical
+    half."""
+
+    measures: str
+    """One sentence naming exactly what was counted, and what was not.
+
+    The field that stops a correct number being read as an answer to a wider
+    question than it is. `brand_intelligence` promises voice consistency;
+    `score_brand` measures whether a first-time visitor can tell what you do.
+    Both true, and only one of them is what the figure says.
+    """
+
+    score: int
+    max_score: int
+    percentage: int
+
+    checks: list[CheckOut]
+    checks_passed: int
+
+    source_url: str
+    """The page. A score whose page cannot be opened is a number nobody can
+    check, which for a reader is the same as one we invented."""
+
+    measured_at: str
+    """When the page was fetched. Rendered beside the figure rather than in the
+    drawer, because it stands in for the `stale` state this route deliberately
+    does not reach — nothing re-crawls on a schedule, so passing `age_days`
+    would make every audit read "out of date" a week after signup, for good."""
+
+    method: str
+
+
 class BlockOut(BaseModel):
     """One capability, as the rail renders it.
 
@@ -127,6 +261,16 @@ class BlockOut(BaseModel):
     state: str
     unlock: str
     needs: list[str]
+
+    figure: FigureOut | None = None
+    """The computed number, when there is one.
+
+    `None` for every capability nothing computes, which is still most of them.
+    Optional rather than absent from the model so the TypeScript mirror can
+    narrow on it — and **never a zero-valued object**, because a zero score
+    says the website failed every check where the truth is that nobody has
+    looked (I10). That case is `None` alongside a `locked` state.
+    """
 
 
 class FactOut(BaseModel):
@@ -487,7 +631,10 @@ class CompanyDashboardOut(BaseModel):
 
 @router.get("/company", response_model=CompanyDashboardOut)
 async def company_dashboard(
-    scope: CurrentScope, chosen: RunningDepartments, answered: AnsweredQuestions
+    scope: CurrentScope,
+    chosen: RunningDepartments,
+    answered: AnsweredQuestions,
+    observed: ObservedSources,
 ) -> CompanyDashboardOut:
     """One dashboard for the company, segregated by department.
 
@@ -499,7 +646,7 @@ async def company_dashboard(
     visible = [
         d for d in DIRECTORS if _reachable(scope, d) and runs_department(chosen, d.department)
     ]
-    connected = connected_sources()
+    connected = connected_sources(observed)
 
     def outstanding(department: Department) -> int:
         return sum(
@@ -631,7 +778,10 @@ def _watch_for(department: Department, context: CompanyContext) -> list[WatchOut
 
 @router.get("/{department}", response_model=DirectorOut)
 async def director_dashboard(
-    department: Department, scope: CurrentScope, chosen: RunningDepartments
+    department: Department,
+    scope: CurrentScope,
+    chosen: RunningDepartments,
+    observed: ObservedSources,
 ) -> DirectorOut:
     """One director's page.
 
@@ -663,12 +813,45 @@ async def director_dashboard(
     if not runs_department(chosen, director.department):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
 
-    connected = connected_sources()
+    # **One read per request, not one per tile.** Both audited capabilities
+    # score the same page, so a per-tile read would be the same round trip to
+    # `us-east-2` twice for one answer — the shape `director_setup` already
+    # uses: read once, then shape purely.
+    snapshot = observed.crawl
+    connected = connected_sources(observed)
     tiles = [
         capability
         for capability in capabilities_for(director.department)
         if capability.kind is CapabilityKind.TILE
     ]
+
+    def figure_out(capability: Capability) -> FigureOut | None:
+        if snapshot is None:
+            return None
+        computation = compute_from_crawl(capability.id, snapshot)
+        if computation is None:
+            return None
+        return FigureOut(
+            label=computation.label,
+            measures=computation.measures,
+            score=computation.score.score,
+            max_score=computation.score.max_score,
+            percentage=computation.score.percentage,
+            checks=[
+                CheckOut(
+                    id=check.id,
+                    label=check.label,
+                    passed=check.passed,
+                    weight=check.weight,
+                    evidence=check.evidence,
+                )
+                for check in computation.score.checks
+            ],
+            checks_passed=computation.checks_passed,
+            source_url=computation.source_url,
+            measured_at=computation.measured_at.date().isoformat(),
+            method=str(computation.trace["method"]),
+        )
 
     def block_out(capability: Capability) -> BlockOut:
         state = state_from_sources(
@@ -687,6 +870,7 @@ async def director_dashboard(
             state=state.value,
             unlock=unlock_for_sources(capability.required_sources, connected=connected),
             needs=[source.value for source in capability.required_sources],
+            figure=figure_out(capability),
         )
 
     def section_out(section: Section) -> SectionOut:

@@ -4,10 +4,17 @@ import { AuthError } from '@/lib/auth-client'
 /**
  * The seven director pages.
  *
- * Every field here is read from the API and rendered. Nothing is computed in the
- * browser, and there is deliberately no place to put a value: an `Offering` has
- * a name, what it will show, its state and its unlock — and no number. The
- * figures arrive in a later milestone from `calculators/`, which is pure.
+ * Every field here is read from the API and rendered. **Nothing is computed in
+ * the browser** — that rule has not changed and is the point of the whole
+ * layering, but the sentence that used to follow it has: there is now a place
+ * to put a value.
+ *
+ * `DirectorBlock.figure` carries a score, its denominator and the checks that
+ * produced it, all from `calculators/audit.py` via `grounding/compute.py`. Even
+ * the percentage is served rather than divided here, so two clients cannot
+ * round differently from the drawer that shows the working. An `Offering` still
+ * has no number: that is `doc/05`'s row, and only a block is a thing on a
+ * screen.
  */
 
 /**
@@ -47,6 +54,49 @@ export type BlockKind =
   | 'panel'
   | 'studio'
 
+/**
+ * One observation and the points it contributed.
+ *
+ * `evidence` is the calculator's own words and is an *observation*, never
+ * advice — "0 internal links", not "add internal links". Turning one into the
+ * other in the browser would be giving guidance nobody computed.
+ */
+export type FigureCheck = {
+  id: string
+  label: string
+  passed: boolean
+  weight: number
+  evidence: string
+}
+
+/**
+ * A computed figure, its denominator, and its working.
+ *
+ * `label` and `measures` are not decoration and not the capability's name.
+ * `marketing.brand_intelligence` is presented as "Brand Intelligence" and
+ * promises voice consistency; `score_brand` measures whether a first-time
+ * visitor can tell what the company does. Both are true and only one is what
+ * the number says, so `measures` is rendered next to it — the guard against a
+ * correctly-computed figure sitting under a headline that misdescribes it.
+ */
+export type Figure = {
+  label: string
+  /** What was counted, and what was not. Rendered, not stored for later. */
+  measures: string
+  score: number
+  max_score: number
+  percentage: number
+  checks: FigureCheck[]
+  checks_passed: number
+  /** The page. A score whose page cannot be opened is unverifiable. */
+  source_url: string
+  /** When the page was fetched. Stands in for the `stale` state, which the
+   *  route deliberately does not reach because nothing re-crawls on a
+   *  schedule. */
+  measured_at: string
+  method: string
+}
+
 /** One capability, as the rail renders it. */
 export type DirectorBlock = {
   /** The canonical capability id — `finance.runway_alert`. */
@@ -60,6 +110,15 @@ export type DirectorBlock = {
   /** What this needs, in words. Empty only when nothing is missing. */
   unlock: string
   needs: string[]
+  /**
+   * The computed number, when there is one.
+   *
+   * Absent for every capability nothing computes, which is still most of them,
+   * and **never a zero-valued object**: a zero score would say the website
+   * failed every check where the truth is that nobody has looked (I10). That
+   * case arrives as no figure plus a `locked` state.
+   */
+  figure?: Figure | null
 }
 
 /** One tab on the rail. */

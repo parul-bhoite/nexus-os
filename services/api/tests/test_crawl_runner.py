@@ -205,3 +205,48 @@ async def test_a_same_host_link_follows_the_scheme_that_works(
         "http://example.om",
         "http://example.om/about",
     }
+
+
+# ── Signals are captured while the HTML is in hand ────────────
+
+
+async def test_signals_are_captured_for_every_page_that_was_kept(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The crawl is the only moment the HTML exists.
+
+    `extract_signals` sat with no caller in the entire repository because
+    nothing retained the HTML long enough to call it, which left
+    `calculators/audit.py` — written and 16 tests green — unable to be fed.
+    This asserts the capture, keyed so a later filter cannot mispair it.
+    """
+    monkeypatch.setattr(runner, "fetch_page", _serving({SITE: RICH, f"{SITE}/about": RICH}))
+
+    outcome = await runner.crawl_site([SITE, f"{SITE}/about"])
+
+    assert {page["url"] for page in outcome.pages} == set(outcome.signals)
+    assert outcome.signals[SITE].url == SITE
+    assert outcome.signals[SITE].word_count > 0
+
+
+async def test_a_javascript_shell_leaves_no_signals_behind(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A shell is skipped before `pages.append`, so it must be skipped before
+    the capture too. Signals for a page that is not in `pages` would be scored
+    against a page the crawl decided it could not read."""
+    monkeypatch.setattr(runner, "fetch_page", _serving({SITE: SHELL}))
+
+    outcome = await runner.crawl_site([SITE])
+
+    assert outcome.pages == []
+    assert outcome.signals == {}
+
+
+async def test_an_unreachable_site_captures_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(runner, "fetch_page", _serving({}))
+
+    outcome = await runner.crawl_site([SITE])
+
+    assert outcome.state is SourceState.FAILED
+    assert outcome.signals == {}

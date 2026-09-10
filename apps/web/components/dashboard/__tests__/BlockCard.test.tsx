@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { BlockCard } from '@/components/dashboard/BlockCard'
 import {
@@ -44,6 +44,38 @@ const ALL_KINDS: BlockKind[] = [
   'studio',
 ]
 
+function figure(overrides: Partial<NonNullable<DirectorBlock['figure']>> = {}) {
+  return {
+    label: 'Technical SEO',
+    measures:
+      'Nine checks on the one page we fetched. Not keyword volumes, difficulty or rankings.',
+    score: 45,
+    max_score: 65,
+    percentage: 69,
+    checks: [
+      {
+        id: 'seo.https',
+        label: 'Served over HTTPS',
+        passed: true,
+        weight: 10,
+        evidence: 'https',
+      },
+      {
+        id: 'seo.internal_links',
+        label: 'Links to its own pages',
+        passed: false,
+        weight: 5,
+        evidence: '0 internal links',
+      },
+    ],
+    checks_passed: 7,
+    source_url: 'https://muscat-marine.om/',
+    measured_at: '2026-09-09',
+    method: 'calculators.audit.score_technical_seo',
+    ...overrides,
+  }
+}
+
 function block(overrides: Partial<DirectorBlock> = {}): DirectorBlock {
   return {
     key: 'finance.runway_alert',
@@ -76,14 +108,46 @@ describe('BlockCard, across every state', () => {
     }
   })
 
-  it('never renders a zero in any state', () => {
-    // I10. A `0` on a tile is a statement about the customer's business, and
-    // the states that have no figure must not reach for a placeholder one.
+  it('never renders a zero on a tile with no figure', () => {
+    // I10, and **this assertion was narrowed rather than deleted.** It used to
+    // cover every state unconditionally, which was right while no tile carried
+    // a number. It is now scoped to tiles with no figure, because the rule was
+    // never "the character 0 must not appear" — it is that **a zero must not
+    // stand in for an absence.** `0 / 65` is a measurement of a page that
+    // failed every check, and `0 internal links` is a true observation; a
+    // *missing* crawl renders `locked`, which is what says we have not looked.
+    //
+    // The two cases the old form was really protecting are asserted below and
+    // in the test that follows, so the coverage went up, not down.
     for (const state of ALL_STATES) {
       const { container, unmount } = render(<BlockCard block={block({ state })} />)
       expect(container.textContent).not.toMatch(/(^|\s)0(\s|$)/)
       unmount()
     }
+  })
+
+  it('renders no number at all where there is no figure', () => {
+    // The half of the old zero rule that mattered: not "no 0" but "no digits
+    // pretending to be a measurement".
+    for (const state of ALL_STATES) {
+      const { container, unmount } = render(<BlockCard block={block({ state })} />)
+      expect(container.textContent).not.toMatch(/\d+\s*\/\s*\d+/)
+      unmount()
+    }
+  })
+
+  it('renders a locked audit as its unlock, never as a zero score', () => {
+    // The case I10 exists for. A workspace whose site could not be read has no
+    // signals, so the API sends `locked` and no figure — it must not arrive as
+    // 0 out of 65, which would tell a founder their website failed everything.
+    const { container } = render(
+      <BlockCard
+        block={block({ state: 'locked', unlock: 'Needs a read of your website.', figure: null })}
+      />,
+    )
+
+    expect(screen.getByText('Needs a read of your website.')).toBeTruthy()
+    expect(container.textContent).not.toMatch(/0\s*\/\s*65/)
   })
 
   it('states its unlock when locked, and offers none when planned', () => {
@@ -125,19 +189,140 @@ describe('BlockCard, across every state', () => {
   })
 
   it('offers the working drawer only where there is a figure to explain', () => {
-    // The drawer opens onto the `generation` row behind the number. Offering it
+    // The drawer opens onto the checks that produced the number, so offering it
     // on a tile with no number would open onto nothing.
     for (const state of ['live', 'partial', 'stale'] as WidgetState[]) {
-      const { unmount } = render(<BlockCard block={block({ state })} />)
+      const { unmount } = render(<BlockCard block={block({ state, figure: figure() })} />)
       expect(screen.getByRole('button', { name: /why this number/i })).toBeTruthy()
       unmount()
     }
 
     for (const state of ['locked', 'warming', 'planned', 'unavailable'] as WidgetState[]) {
-      const { unmount } = render(<BlockCard block={block({ state })} />)
+      const { unmount } = render(<BlockCard block={block({ state, figure: figure() })} />)
       expect(screen.queryByRole('button', { name: /why this number/i })).toBeNull()
       unmount()
     }
+  })
+
+  it('offers no drawer for a figure state that arrived without a figure', () => {
+    // **A serving bug, and it must not render as an empty drawer.** The state
+    // machine reaches `live` and `partial` by the *absence* of contradicting
+    // evidence rather than the presence of a number, so a capability wired
+    // reachable with no calculator behind it produces exactly this. The tile
+    // falls back to saying what it will draw, which is what every other
+    // unbuilt tile says.
+    for (const state of ['live', 'partial', 'stale'] as WidgetState[]) {
+      const { unmount } = render(<BlockCard block={block({ state, figure: null })} />)
+      expect(screen.queryByRole('button', { name: /why this number/i })).toBeNull()
+      unmount()
+    }
+  })
+})
+
+describe('BlockCard, with a computed figure', () => {
+  it('shows the figure with its denominator, never the bare number', () => {
+    // `ShellOut`'s rule for `ShellOut`'s reason: a score on its own is a claim
+    // the reader cannot check, and 45 out of 65 lets them count.
+    render(<BlockCard block={block({ state: 'partial', figure: figure() })} />)
+
+    expect(screen.getByText('45')).toBeTruthy()
+    expect(screen.getByText(/\/ 65/)).toBeTruthy()
+  })
+
+  it('does not lead with the percentage', () => {
+    // "69%" reads as "69% of your SEO is fine", which is a much stronger claim
+    // than "you passed 45 of 65 weighted points". The percentage is served and
+    // deliberately not the headline.
+    const { container } = render(
+      <BlockCard block={block({ state: 'partial', figure: figure() })} />,
+    )
+
+    expect(container.textContent).not.toMatch(/69\s*%/)
+  })
+
+  it('names what the figure measures, not just what the capability shows', () => {
+    // **The guard against the one dishonest thing this slice could ship.**
+    // `marketing.brand_intelligence` is presented as "Brand Intelligence" and
+    // promises voice consistency; `score_brand` measures whether a first-time
+    // visitor can tell what the company does. A correct number under that
+    // headline, with no sentence narrowing it, is a lie the reader cannot
+    // detect.
+    render(
+      <BlockCard
+        block={block({
+          name: 'Brand Intelligence',
+          shows: 'Voice consistency, positioning, messaging gaps',
+          state: 'partial',
+          figure: figure({
+            label: 'Site legibility',
+            measures:
+              'Nine checks on whether a first-time visitor can tell what you do. '
+              + 'Not voice consistency, positioning or messaging gaps.',
+          }),
+        })}
+      />,
+    )
+
+    expect(screen.getByText(/Not voice consistency/i)).toBeTruthy()
+    expect(screen.getByText(/Site legibility/)).toBeTruthy()
+  })
+
+  it('renders the date the page was fetched beside the figure', () => {
+    // The only thing standing in for the `stale` state the route deliberately
+    // does not reach: nothing re-crawls on a schedule, so deriving staleness
+    // would mark every audit out of date a week after signup.
+    render(<BlockCard block={block({ state: 'partial', figure: figure() })} />)
+
+    expect(screen.getByText(/Measured 2026-09-09/)).toBeTruthy()
+  })
+
+  it('links the page the score was measured from', () => {
+    // A score whose page cannot be opened is a number nobody can check.
+    render(<BlockCard block={block({ state: 'partial', figure: figure() })} />)
+
+    const link = screen.getByRole('link', { name: 'https://muscat-marine.om/' })
+    expect(link.getAttribute('href')).toBe('https://muscat-marine.om/')
+  })
+
+  it('keeps the unlock alongside the figure rather than instead of it', () => {
+    // `partial` means both things are true: there is a real number, and
+    // something is still missing. Showing only one of the two is what the
+    // deleted `marketing_state` got wrong in each direction.
+    render(
+      <BlockCard
+        block={block({ state: 'partial', unlock: 'Needs keyword data.', figure: figure() })}
+      />,
+    )
+
+    expect(screen.getByText('45')).toBeTruthy()
+    expect(screen.getByText('Needs keyword data.')).toBeTruthy()
+  })
+
+  it('opens the working drawer onto the checks that produced the number', () => {
+    // `figure.checks` *is* the calculator's working, so the drawer needs no
+    // endpoint and no `generation` row. Closed by default: nine rows unfurled
+    // on every tile would bury the number they explain.
+    render(<BlockCard block={block({ state: 'partial', figure: figure() })} />)
+
+    expect(screen.queryByText('Served over HTTPS')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: /why this number/i }))
+
+    expect(screen.getByText('Served over HTTPS')).toBeTruthy()
+    expect(screen.getByText('0 internal links')).toBeTruthy()
+    expect(screen.getByText('calculators.audit.score_technical_seo')).toBeTruthy()
+  })
+
+  it('shows a failed check as an observation, not as an error', () => {
+    // A page without structured data has not done anything wrong. Nine rows
+    // styled red would turn the calculator's observations into a reprimand.
+    render(<BlockCard block={block({ state: 'partial', figure: figure() })} />)
+    fireEvent.click(screen.getByRole('button', { name: /why this number/i }))
+
+    // The evidence is carried through in the calculator's words, unrestated
+    // into advice — "0 internal links", never "add internal links".
+    expect(screen.getByText('0 internal links')).toBeTruthy()
+    expect(screen.queryByText(/^add /i)).toBeNull()
   })
 })
 

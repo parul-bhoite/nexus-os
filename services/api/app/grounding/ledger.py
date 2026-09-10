@@ -52,7 +52,7 @@ _SPENT_SQL: Final = """
                         THEN input_tokens + output_tokens ELSE 0 END), 0) AS "user"
       FROM generation
      WHERE workspace_id = :w
-       AND created_at >= date_trunc('day', now() AT TIME ZONE :tz)
+       AND created_at >= date_trunc('day', now() AT TIME ZONE :tz) AT TIME ZONE :tz
 """
 """One query for both numbers.
 
@@ -60,6 +60,28 @@ Two queries would be two round trips to `us-east-2` on the hot path of every
 generation, and — worse — two moments in time. A tenant total read a second
 before a user total can disagree with it, and the disagreement always favours
 spending.
+
+## The second `AT TIME ZONE :tz` is load-bearing, and it was missing
+
+`now() AT TIME ZONE :tz` converts to a **naive** local timestamp, and
+`date_trunc` keeps it naive. Comparing a naive timestamp against a
+`timestamptz` column makes Postgres reinterpret it in the **session**
+timezone — GMT on this deployment — so local midnight in Muscat became
+midnight *UTC*. Converting back with a second `AT TIME ZONE :tz` is what turns
+naive local midnight into the instant it actually was.
+
+**The window this opened was four hours wide, every day.** Between 20:00 and
+24:00 UTC the cutoff sat in the future, so the query summed nothing, both
+budgets read zero, and `exhausted` could not become true — the daily token
+budget was simply unenforced for a sixth of each day, and the four hours moved
+with the workspace's own reporting timezone.
+
+Found at 22:13 UTC by a full-suite run, which is the only reason it was found
+at all: three tests in `test_grounding_ledger_db.py` fail inside that window
+and pass every other hour of the day. Same shape as the fixed-window rate-limit
+boundary — a test that encodes "now" is a test that is green most of the time.
+`test_the_day_boundary_is_the_workspaces_midnight_not_utc` pins it against an
+explicit timestamp rather than against the clock.
 """
 
 

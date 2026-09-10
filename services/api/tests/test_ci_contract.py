@@ -178,3 +178,53 @@ def test_a_skipped_database_test_fails_the_run(pytester: pytest.Pytester) -> Non
         "not doing its job, and 92 unproved tests could vanish from CI silently"
     )
     result.stderr.fnmatch_lines(["*requires_db test(s) were skipped*"])
+
+
+@pytest.mark.requires_db
+def test_the_jobs_role_can_write_page_signals() -> None:
+    """Migration 0028's grant, proved rather than assumed.
+
+    The grant sits inside an `IF EXISTS (SELECT 1 FROM pg_roles ...)` guard, so
+    on a database where `db/bootstrap.sql` never created `nexus_jobs` it emits a
+    `NOTICE` and silently does nothing. The failure then appears only when a
+    background crawl runs, as `permission denied for table page_signals` inside
+    `_run_source`'s deliberately broad Q56 `except` — which reaches the founder
+    as *"This step did not finish"* and names nothing at all.
+
+    So this asserts the privilege in the catalogue. It belongs in this file
+    rather than beside the worker's tests for the same reason everything else
+    here does: a missing grant is a property of the *deployment*, and CI is
+    where a deployment fact has to fail.
+    """
+    from tests.dburl import jobs_database_url
+
+    jobs_url = jobs_database_url()
+    assert jobs_url is not None, (
+        "NEXUS_JOBS_DATABASE_URL is not exported. ADR 0018 makes the role "
+        "non-optional, so this asserts rather than skips."
+    )
+
+    engine = sa.create_engine(jobs_url, poolclass=sa.pool.NullPool)
+    try:
+        with engine.connect() as conn:
+            granted = {
+                row[0]
+                for row in conn.execute(
+                    sa.text(
+                        "SELECT privilege_type FROM information_schema.table_privileges"
+                        " WHERE table_name = 'page_signals' AND grantee = current_user"
+                    )
+                )
+            }
+    finally:
+        engine.dispose()
+
+    # SELECT to read back, INSERT to store a fresh crawl, UPDATE to supersede
+    # the previous one. No DELETE, deliberately: superseded rows are the history
+    # that explains why a figure moved.
+    assert {"SELECT", "INSERT", "UPDATE"} <= granted, (
+        f"nexus_jobs holds {sorted(granted)} on page_signals. The background "
+        f"crawl will fail with `permission denied` inside a broad except that "
+        f"names nothing — re-run migration 0028 against a database where the "
+        f"role exists."
+    )

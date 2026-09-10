@@ -17,11 +17,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Final
 
+from app.domain.page_signals import PageSignals
 from app.domain.research import SourceState
 from app.logging import get_logger
 from app.research import site
 from app.research.crawler import FetchError, fetch_page
-from app.research.extract import extract_text
+from app.research.extract import extract_signals, extract_text
 
 log = get_logger(__name__)
 
@@ -37,6 +38,21 @@ class CrawlOutcome:
     state: SourceState
     error_reason: str = ""
     pages: list[dict[str, str]] = field(default_factory=list)
+    signals: dict[str, PageSignals] = field(default_factory=dict)
+    """What each fetched page demonstrably contained, keyed by url.
+
+    **The reason this exists at all:** the HTML is in hand exactly once, here,
+    and every consumer downstream is days later. `extract_signals` was written
+    in M2 and had no caller for a year because nothing kept the HTML long
+    enough to call it — so `calculators/audit.py`, fully written and 16 tests
+    green, could never be fed. One line in `_crawl` closes that.
+
+    A dict keyed by url rather than a list parallel to `pages`, because
+    `routes/onboarding_agent.py` filters `pages` by `is_prose` *after* this
+    returns. An index-aligned list would then pair a kept page with a dropped
+    page's signals — silently, and only for sites that already have trouble.
+    `visited` guarantees one fetch per url, so the key is unique.
+    """
     js_rendered_urls: list[str] = field(default_factory=list)
 
 
@@ -242,6 +258,8 @@ async def _crawl(
             continue
 
         outcome.pages.append({"url": url, "text": text})
+        # Here and nowhere else: this is the only moment the HTML exists.
+        outcome.signals[url] = extract_signals(html, url=url)
 
         # Links are a fallback, not a second pass: they extend the plan only
         # while there is budget left to use them.

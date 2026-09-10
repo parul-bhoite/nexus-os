@@ -49,6 +49,7 @@ from app.domain.onboarding_agent import (
     next_brain_group,
 )
 from app.domain.onboarding_promotion import promote
+from app.domain.page_signals import signals_to_json
 from app.domain.scopes import Department
 from app.domain.session import ScopedSession
 from app.logging import get_logger
@@ -774,6 +775,20 @@ async def start(scope: CurrentScope) -> StateOut:
         # traceable to, and grounding that made a round trip through a browser
         # is grounding a browser could have edited.
         await store.save_crawl(db, session_id=session_id, pages=[dict(p) for p in pages])
+        # Same transaction as the pages themselves. Signals that survived a
+        # rolled-back crawl would be scored against pages nobody has.
+        await store.save_page_signals(
+            db,
+            session_id=session_id,
+            workspace_id=scope.workspace_id,
+            pages=[dict(p) for p in pages],
+            # Serialised here rather than in the store: see the note on
+            # `save_page_signals` about `app/research/` and anonymous routes.
+            signals={
+                url: signals_to_json(captured)
+                for url, captured in (outcome.signals if outcome is not None else {}).items()
+            },
+        )
         return await _state(db, scope, await _load(db, scope))
 
 

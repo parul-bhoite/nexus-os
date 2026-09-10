@@ -138,6 +138,10 @@ export function DirectorPage({ department }: { department: string }) {
 
 function Ready({ director, all }: { director: Director; all: Dashboards }) {
   const sections = director.sections ?? []
+  // How many capabilities here carry a real computed figure. Used only for the
+  // score copy below, which said "no source can be measured yet" for a year and
+  // became false the moment the first tile computed one.
+  const measured = sections.flatMap((section) => section.blocks).filter((b) => b.figure).length
   const catalogue = director.catalogue ?? []
   const unanswered = all.directors.find((d) => d.department === director.department)
     ?.unanswered_questions
@@ -217,12 +221,32 @@ function Ready({ director, all }: { director: Director; all: Dashboards }) {
           out of six departments and not seven. */}
       <div className="mt-6 rounded-2xl border border-gold-300 bg-gold-100 px-5 py-5">
         <p className="font-mono text-2xs uppercase tracking-[0.12em] text-clay-600">
-          {director.scoreable ? 'Not scored yet' : 'Never scored'}
+          {!director.scoreable ? 'Never scored' : measured === 0 ? 'Not scored yet' : 'No composite yet'}
         </p>
         <p className="mt-2 max-w-prose text-[0.95rem] leading-relaxed text-ink-800">
-          {director.scoreable
-            ? 'No source behind this department can be measured yet, so there is no score. It is absent rather than zero — a zero would be a verdict on your business rather than a statement about our data.'
-            : 'This director is a synthesis layer: it reads the others and is never scored. That is why the company health score is out of six departments, not seven.'}
+          {!director.scoreable ? (
+            'This director is a synthesis layer: it reads the others and is never scored. That is why the company health score is out of six departments, not seven.'
+          ) : measured === 0 ? (
+            'No source behind this department can be measured yet, so there is no score. It is absent rather than zero — a zero would be a verdict on your business rather than a statement about our data.'
+          ) : (
+            /* **This branch exists because the sentence above became false.**
+               It claimed nothing here could be measured, which was true until
+               the first tile computed a figure — and a header contradicting
+               the tiles beneath it is worse than either statement alone.
+
+               What is still absent is the *composite*, and the reason is not
+               that we cannot measure: it is that averaging the two capabilities
+               we can measure would score the part of the department we can see
+               and label it the whole. That is the same reasoning as the company
+               score being out of six departments rather than seven. */
+            <>
+              <strong>{measured}</strong> of this department&rsquo;s capabilities
+              {measured === 1 ? ' is' : ' are'} measured, each with its own figure below. There
+              is still no department score: a composite of the {measured} we can see would
+              score that much and be read as the whole, which is the same reason the company
+              score is out of six departments rather than seven.
+            </>
+          )}
         </p>
       </div>
 

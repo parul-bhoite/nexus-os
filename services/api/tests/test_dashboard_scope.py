@@ -57,7 +57,12 @@ def _override_departments(app: object) -> None:
     written for; `tests/test_onboarding_spine.py` covers the other.
     """
     from app.domain.scopes import Department
-    from app.routes.dashboards import answered_questions, running_departments
+    from app.routes.dashboards import (
+        Observed,
+        answered_questions,
+        observed_sources,
+        running_departments,
+    )
 
     app.dependency_overrides[running_departments] = lambda: frozenset(Department)  # type: ignore[attr-defined]
     # Q27's counter reads the database too. Overridden for the same reason: these
@@ -66,6 +71,11 @@ def _override_departments(app: object) -> None:
     # A lambda, not `frozenset` itself — FastAPI introspects the signature of
     # an override, and a builtin type has none.
     app.dependency_overrides[answered_questions] = lambda: frozenset()  # type: ignore[attr-defined]
+    # Slice 1's crawl read, overridden for the third time and the same reason.
+    # `crawl=None` is the honest default for a workspace nobody has crawled, so
+    # every tile here renders `locked` or `planned` and no figure appears — the
+    # figure has its own tests, and these are about who may see the page at all.
+    app.dependency_overrides[observed_sources] = lambda: Observed(crawl=None)  # type: ignore[attr-defined]
 
 
 @pytest.fixture
@@ -180,25 +190,39 @@ def test_a_viewer_reaches_no_director(client: TestClient) -> None:
 # ── What a tile is allowed to say ─────────────────────────────
 
 
-def test_nothing_is_reachable_yet_so_every_tile_says_so() -> None:
+def test_an_unreachable_tile_says_planned_and_never_locked() -> None:
     """The honesty mechanism, asserted rather than trusted.
 
-    While nothing is reachable every offering must render `PLANNED`. If one ever
-    renders `LOCKED` instead, the page is telling a customer that connecting
-    something turns on a widget that does not exist.
+    **This test used to be called `test_nothing_is_reachable_yet`** and asserted
+    exactly that of every offering. Slice 1 made `3.7` and `3.8` reachable, so
+    the universal claim is gone — but the claim it was protecting is not, and it
+    is the one that matters: an *unreachable* offering must render `PLANNED` and
+    never `LOCKED`, because `LOCKED` tells a customer that connecting something
+    turns on a widget that does not exist (`doc/04` §6 rule 1).
 
     `is_reachable` is asked per offering rather than compared against a set,
-    because the set is no longer here to compare against — `domain/registry`
-    holds it, and this asserts the outcome a person sees rather than the
-    bookkeeping behind it.
+    because the set is not here to compare against — `domain/registry` holds
+    it, and this asserts the outcome a person sees rather than the bookkeeping
+    behind it.
     """
+    checked = 0
     for director in DIRECTORS:
         for offering in director.offerings:
-            assert not is_reachable(offering.id)
+            if is_reachable(offering.id):
+                continue
+            checked += 1
             assert (
-                state_for(offering, connected=frozenset(), reachable=is_reachable(offering.id))
+                state_for(offering, connected=frozenset(), reachable=False)
                 is WidgetState.PLANNED
             )
+            # And connecting everything it names still does not move it. This is
+            # the assertion that would have caught a `LOCKED` leaking through.
+            assert (
+                state_for(offering, connected=frozenset(offering.needs), reachable=False)
+                is WidgetState.PLANNED
+            )
+
+    assert checked > 50, "most of the catalogue is still unbuilt; this should be checking it"
 
 
 def test_a_reachable_offering_with_nothing_connected_locks(client: TestClient) -> None:

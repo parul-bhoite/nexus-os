@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from app.research.extract import PageSignals
+from app.domain.page_signals import PageSignals
 
 
 @dataclass(frozen=True, slots=True)
