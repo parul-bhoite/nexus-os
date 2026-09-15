@@ -5,6 +5,72 @@
 **Method:** every claim below was run, not read. Where a figure is quoted, the
 command that produced it is named.
 
+> ⚠ **Everything below §0 is stale, and knowingly so.** It was written at the end
+> of Phase 3 and the build has since run through P18. Its §2 phase table and §9
+> still speak as though the current work is Phase 4. **The reliable current-state
+> sources are `GOAL-STATUS.md`, `CONTINUE-HERE.md`, `doc/13` §25–26 and the git
+> log.** A full regeneration is outstanding work in its own right — it means
+> re-running the evidence for twenty-two phases — and is deliberately not faked
+> here by editing the numbers in place.
+
+---
+
+## 0. Latest work — the onboarding redesign (15 September 2026)
+
+**Three sections over eight phases. ADR 0027.** The guided onboarding drew a
+seven-step rail that mirrored the server's `Phase` enum; four of those steps are
+one continuous conversation, `assembling` had no step at all, and the tools step
+rendered under the entire transcript. The screen now groups the phases into
+**Conversation · Your tools · Summary**.
+
+**The phases did not change, and that is the load-bearing part.**
+`ck_onboarding_session_phase`, `Phase` and `test_constraint_enum_parity` are
+untouched, so there is no migration and no in-flight session is disturbed. The
+grouping is a lookup in the client; every request still takes its stage from the
+session row.
+
+What shipped with it:
+
+- The interview count moved from the rail into the current section — "Question 3
+  of 5" over the real ceiling, and **named** stages where nothing is countable.
+  Reading a website has no denominator (I1).
+- `assembling` draws the three stages the server actually commits, instead of a
+  greyed-out confirmation card and one line of grey text.
+- A composing indicator in the shape of a bubble, where the next bubble will be,
+  carrying `role="status"` so the escalating label is announced. The words stay
+  under `prefers-reduced-motion`; motion is never the only signal.
+- The tools step became a screen: selectable cards, and a panel that names what
+  the current selection unlocks as it is chosen. The checkbox is still a real
+  `input`, so role, keyboard behaviour and announcement survived the restyling.
+  **It still does not connect** — `connectable` is false for all nine and the
+  honest sentence is rendered from it (ADR 0023, `doc/11` §73).
+
+**Evidence.** `vitest run --root apps/web` — **17 files, 146 tests, all green**
+(140 before, six added for the section model). `tsc --noEmit` clean;
+`next lint` clean. The six new tests were proved able to fail: splitting the
+conversation back into two rail steps turned **four** of them red, and they went
+green again on restore.
+
+**Verified live**, against Neon and a configured `claude-sonnet-5`, at
+`localhost:3100` with the API on `:8001`:
+
+- `/health/ready` — database `ok`, pgvector `ok`, language model `ok`,
+  embeddings `unconfigured` (a supported state, ADR 0003).
+- A completed onboarding lands on `/dashboard`, and the dashboard renders: seven
+  directors, section rails, honest per-capability states carrying their registry
+  ids, and the assistant panel reserved rather than faked.
+- Marketing draws **real computed figures** — `marketing.seo_gaps` at 30/65
+  (4 of 9 checks) and `marketing.brand_intelligence` at 55/70 (6 of 9), each
+  measured from the crawled site and each opening its own working. The department
+  shows **no composite**, stating why, rather than averaging two of nine.
+- No console errors on either screen.
+
+**Not verified, and why.** A logged-in walkthrough of the *new* onboarding
+sections was not possible: the only workspace on this account has completed
+onboarding, so `/onboarding/agent` correctly redirects. Seeing the new sections
+live needs a fresh workspace, which needs a signup. The boot screen was confirmed
+rendering in the browser; everything past it rests on the test suite.
+
 ---
 
 ## 1. Where this stands

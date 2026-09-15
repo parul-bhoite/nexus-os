@@ -755,6 +755,129 @@ describe('AgentOnboarding when a step fails', () => {
  * again. The server refuses `finish` from either step; these prove the client
  * does not try.
  */
+/**
+ * The three sections, over the eight phases the server still keeps.
+ *
+ * The grouping is presentation and must stay presentation: `Phase` has
+ * `ck_onboarding_session_phase` behind it and `test_constraint_enum_parity`
+ * comparing the two, and the ordering it encodes — documents and tools before
+ * the assembly — is a precondition the server checks. These tests assert that
+ * the screen collapses the eight into three *without* the client gaining any
+ * say over which phase it is in.
+ */
+describe('AgentOnboarding sections', () => {
+  it('draws three sections rather than the eight phases the server keeps', async () => {
+    // It was a seven-step rail, which handed somebody meeting the product for
+    // the first time a list to hold in their head. The phases did not change.
+    mocked.readState.mockResolvedValue(briefing())
+
+    render(<AgentOnboarding />)
+
+    expect(await screen.findByText(/Step 1 of 3/)).toBeInTheDocument()
+    expect(screen.getByText('Conversation')).toBeInTheDocument()
+    expect(screen.getByText('Your tools')).toBeInTheDocument()
+    expect(screen.getByText('Summary')).toBeInTheDocument()
+  })
+
+  it('holds one section across the four phases that are one conversation', async () => {
+    // `brief` and `discovery` are different phases and the same room. A rail
+    // that advanced between them would announce a new step every time the agent
+    // finished a sentence.
+    mocked.readState.mockResolvedValue(interviewing([DISCOVERY_TURN]))
+    mocked.nextQuestion.mockResolvedValue({
+      done: false,
+      question: 'What does a good week look like?',
+      target: 'fact.sales.rhythm',
+      scope: 3,
+      choices: [],
+      reason: null,
+    })
+
+    render(<AgentOnboarding />)
+
+    await screen.findByText('What does a good week look like?')
+    expect(screen.getByText(/Step 1 of 3/)).toBeInTheDocument()
+  })
+
+  it('keeps the interview count inside the section, over the real ceiling', async () => {
+    // The granularity the seven-step rail carried in its steps, kept where it
+    // belongs. `answered` is agent turns carrying a target — the same number
+    // the server stops at — so this and the moment the interview ends cannot
+    // disagree.
+    mocked.readState.mockResolvedValue(interviewing([DISCOVERY_TURN]))
+    mocked.nextQuestion.mockResolvedValue({
+      done: false,
+      question: 'What does a good week look like?',
+      target: 'fact.sales.rhythm',
+      scope: 3,
+      choices: [],
+      reason: null,
+    })
+
+    render(<AgentOnboarding />)
+
+    expect(await screen.findByText('Question 2 of 5')).toBeInTheDocument()
+  })
+
+  it('gives the tools their own screen, with the interview left behind', async () => {
+    // The transcript belongs to the conversation and stops at its edge. It used
+    // to render above this step, so the one screen asking for a decision opened
+    // with several hundred words of the reader's own history.
+    mocked.readState.mockResolvedValue({
+      ...interviewing([
+        DISCOVERY_TURN,
+        { role: 'agent', text: 'What does a good week look like?', target: null, scope: null },
+      ]),
+      phase: 'tools',
+    })
+
+    render(<AgentOnboarding />)
+
+    expect(await screen.findByText('HubSpot')).toBeInTheDocument()
+    expect(screen.getByText(/Step 2 of 3/)).toBeInTheDocument()
+    expect(screen.queryByText('I run the site.')).not.toBeInTheDocument()
+    expect(screen.queryByText('What does a good week look like?')).not.toBeInTheDocument()
+  })
+
+  it('names the assembly stages while the workspace is being built', async () => {
+    // It used to leave the confirmation card on screen with its button greyed
+    // out and one line of grey text underneath, so the longest wait after the
+    // opening read looked like a card that had stopped responding. These three
+    // are the commits the server actually makes.
+    mocked.readState.mockResolvedValue({ ...interviewing([DISCOVERY_TURN]), phase: 'persona' })
+    // Held open, so the screen stays on the stage that is running.
+    mocked.finish.mockReturnValue(new Promise(() => {}))
+
+    render(<AgentOnboarding />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /that is me/i }))
+
+    expect(await screen.findByText('Building your Company Brain')).toBeInTheDocument()
+    expect(screen.getByText('Building your Persona')).toBeInTheDocument()
+    expect(screen.getByText('Personalising your workspace')).toBeInTheDocument()
+    expect(screen.getByText(/Step 3 of 3/)).toBeInTheDocument()
+  })
+
+  it('shows the agent composing where the next bubble will be', async () => {
+    // A grey 12px line under the transcript is the one place in a chat nobody
+    // is looking — the eye is at the bottom of the last bubble. `role="status"`
+    // because the label escalates on a long wait and that change should be
+    // heard without the focus moving.
+    mocked.readState.mockResolvedValue(interviewing([DISCOVERY_TURN]))
+    mocked.nextQuestion.mockReturnValue(new Promise(() => {}))
+
+    render(<AgentOnboarding />)
+
+    // The label first — `guard` opens with the boot's own wording and `boot`
+    // replaces it once it knows it is resuming, so asserting on the role alone
+    // races that second `setBusy`.
+    expect(await screen.findByText('Picking up where you left off…')).toBeInTheDocument()
+    // And it is the composing bubble rather than the line of grey text this
+    // replaced, which carried no role at all.
+    expect(screen.getByRole('status')).toHaveTextContent('Picking up where you left off…')
+  })
+})
+
 describe('AgentOnboarding documents and tools', () => {
   const DONE = {
     done: true,

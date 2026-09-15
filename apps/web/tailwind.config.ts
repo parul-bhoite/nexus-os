@@ -136,6 +136,19 @@ const config: Config = {
         shimmer: {
           '100%': { transform: 'translateX(100%)' },
         },
+        // The agent is composing. Three dots, staggered by animation-delay at
+        // the call site, so the bubble reads as someone typing rather than as a
+        // progress bar with no denominator.
+        'typing-dot': {
+          '0%, 65%, 100%': { transform: 'translateY(0)', opacity: '0.3' },
+          '30%': { transform: 'translateY(-3px)', opacity: '1' },
+        },
+        // A section arriving. Shorter and flatter than `rise`, because a whole
+        // screen sliding as far as a single card does reads as a page reload.
+        'section-in': {
+          from: { opacity: '0', transform: 'translate3d(0,10px,0)' },
+          to: { opacity: '1', transform: 'translate3d(0,0,0)' },
+        },
       },
       animation: {
         float: 'float 7s ease-in-out infinite',
@@ -145,6 +158,8 @@ const config: Config = {
         marquee: 'marquee 46s linear infinite',
         'dash-flow': 'dash-flow 22s linear infinite',
         'pulse-ring': 'pulse-ring 3.4s cubic-bezier(0.4,0,0.6,1) infinite',
+        'typing-dot': 'typing-dot 1.3s ease-in-out infinite',
+        'section-in': 'section-in 0.5s cubic-bezier(0.16,1,0.3,1) both',
       },
     },
   },

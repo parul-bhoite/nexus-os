@@ -36,7 +36,20 @@ import {
 } from '@/components/onboarding/OnboardingAura'
 
 /**
- * Guided onboarding: one conversation, on one column, and nothing else.
+ * Guided onboarding: a conversation, a stack, and an arrival.
+ *
+ * **Three sections over eight phases.** The server still keeps all eight —
+ * `Phase` has a CHECK constraint behind it and an ordering the assembly depends
+ * on — but a person meeting the product for the first time was being handed a
+ * seven-step rail and asked to hold it in their head. The four phases that are
+ * all the same conversation are one step now; the two that are the assembly and
+ * its result are one arrival. See `SECTIONS` for why this is a grouping and
+ * must stay one.
+ *
+ * **The transcript belongs to the conversation and stops at its edge.** Tools
+ * and Summary are screens of their own. The tools step used to render under the
+ * entire interview, so the one place in onboarding asking somebody to make a
+ * decision opened with several hundred words of their own history.
  *
  * **It is a chat and only a chat.** There used to be a second column beside it
  * — a Company Brain ledger and a Your Persona sheet — filling in fact by fact
@@ -85,37 +98,69 @@ import {
 
 type Phase = AgentState['phase']
 
-const PHASES: { key: Phase; label: string; hint: string }[] = [
-  { key: 'analysing', label: 'Read', hint: 'Reading your website' },
-  { key: 'brief', label: 'Brief', hint: 'Your company profile' },
-  { key: 'discovery', label: 'You', hint: 'Your role & goals' },
-  { key: 'documents', label: 'Documents', hint: 'Your own files' },
-  { key: 'tools', label: 'Tools', hint: 'Where your data lives' },
-  { key: 'persona', label: 'Confirm', hint: 'Review what we keep' },
-  { key: 'ready', label: 'Ready', hint: 'Workspace set up' },
+type SectionKey = 'conversation' | 'tools' | 'summary'
+
+/**
+ * Three sections, over the eight phases the server still keeps.
+ *
+ * **The phases did not change and deliberately must not.** `Phase` is a
+ * `StrEnum` with `ck_onboarding_session_phase` behind it and
+ * `test_constraint_enum_parity` comparing the two on every run; the ordering it
+ * encodes — documents and tools *before* the assembly — is a precondition the
+ * server checks, not a sequence the client is trusted to follow. What was wrong
+ * was showing all eight, because a person meeting a product for the first time
+ * was handed a seven-step rail and asked to hold it in their head.
+ *
+ * So this is a grouping, and only a grouping. The four phases that are all the
+ * same conversation are drawn as one step; the two that are the assembly and
+ * its result are drawn as one arrival. Nothing is skipped and nothing is
+ * reordered — a session written by an older build resumes into exactly the
+ * phase it left, and lands in whichever of these three contains it.
+ *
+ * `assembling` now has a home, which it never had before: it belongs to Summary
+ * rather than to nothing, so the rail no longer goes blank for the twenty
+ * seconds the Brain is being built. That was the old `phaseIndex === -1`.
+ */
+const SECTIONS: {
+  key: SectionKey
+  label: string
+  hint: string
+  phases: Phase[]
+}[] = [
+  {
+    key: 'conversation',
+    label: 'Conversation',
+    hint: 'Your company, your role, your files',
+    phases: ['analysing', 'brief', 'discovery', 'documents'],
+  },
+  {
+    key: 'tools',
+    label: 'Your tools',
+    hint: 'Where your numbers live',
+    phases: ['tools'],
+  },
+  {
+    key: 'summary',
+    label: 'Summary',
+    hint: 'Confirm, and open your workspace',
+    phases: ['persona', 'assembling', 'ready'],
+  },
 ]
-/* Seven steps, and the two new ones are the point rather than an addition.
-   Everything a person supplies has to be supplied *before* Confirm, because
-   Confirm is where the Persona and the Brain stop being drafts — so the rail
-   showing Documents and Tools ahead of it is showing the real order, and the
-   server refuses `finish` from either of them for the same reason.
 
-   `assembling` is still absent, as it always was: it is a stage of Confirm and
-   not a step somebody takes. `phaseIndex` therefore returns -1 while it runs,
-   which leaves every step un-highlighted for a few seconds — the same
-   behaviour as before, and better than a rail that jumps to a step nobody
-   pressed. */
+function sectionIndexFor(phase: Phase): number {
+  const found = SECTIONS.findIndex((section) => section.phases.includes(phase))
+  // Never -1 in practice — every member of the union is listed above, and the
+  // type makes adding one without placing it a compile error. Falling back to
+  // the conversation rather than to -1 means a phase added in a later build
+  // still draws a rail instead of an empty one.
+  return found === -1 ? 0 : found
+}
 
-/** What the canvas is headed while each phase is open. */
-const PHASE_EYEBROW: Record<Phase, string> = {
-  analysing: 'Reading your company',
-  brief: 'What we found',
-  discovery: 'Getting to know you',
-  documents: 'Your own documents',
-  tools: 'Where your data lives',
-  persona: 'How we understood you',
-  assembling: 'Building your workspace',
-  ready: 'Your workspace is ready',
+/** What the canvas is headed, per section. */
+const SECTION_TITLE: Record<SectionKey, string> = {
+  conversation: 'Let us get to know your company',
+  tools: 'Where your numbers live',
+  summary: 'Your workspace is ready to build',
 }
 
 /**
@@ -315,7 +360,8 @@ export function AgentOnboarding() {
   const unreadable = state.phase === 'analysing' && state.site_unreadable === true
   const reading = state.phase === 'analysing' && !unreadable
 
-  const phaseIndex = PHASES.findIndex((p) => p.key === state.phase)
+  const sectionIndex = sectionIndexFor(state.phase)
+  const section = SECTIONS[sectionIndex].key
 
   // The server holds `discovery` for the whole interview, not just its opening
   // question, so the phase alone cannot say whether that question has been put.
@@ -405,7 +451,7 @@ export function AgentOnboarding() {
     <div className="relative min-h-screen lg:grid lg:grid-cols-[21.5rem_minmax(0,1fr)]">
       <Rail
         state={state}
-        phaseIndex={phaseIndex}
+        sectionIndex={sectionIndex}
         aura={aura}
         asked={state.answered}
         ceiling={state.ceiling}
@@ -427,23 +473,42 @@ export function AgentOnboarding() {
             inventing a step nobody pressed. */}
         <header className="mx-auto w-full max-w-3xl px-6 pt-10">
           <p className="animate-fade-in font-mono text-[11px] uppercase tracking-[0.22em] text-ink-400">
-            {phaseIndex >= 0 ? `Step ${phaseIndex + 1} of ${PHASES.length}` : 'One moment'}
+            {`Step ${sectionIndex + 1} of ${SECTIONS.length}`}
+            <span className="text-ink-300"> · {SECTIONS[sectionIndex].label}</span>
           </p>
-          {/* Keyed so the title rises again on each phase change — it is the
-              one line that announces the room has changed. `analysing` covers
-              two screens that say opposite things: when the site could not be
-              read, the page below is the manual brief, and a title reading
-              "reading your company" over "I could not read nosuch.com" is the
-              screen contradicting itself in the first two lines a person
-              reads. */}
-          <h1 key={state.phase} className="mt-1.5 animate-rise font-display text-title text-ink">
+          {/* Keyed on the *section*, not the phase, so the title holds still
+              through the four phases that are one conversation. It used to be
+              keyed on the phase, which re-ran the entrance animation — and
+              rewrote the heading — every time the agent moved from the brief to
+              the interview, mid-sentence, while the person was reading it.
+
+              `analysing` covers two screens that say opposite things: when the
+              site could not be read, the page below is the manual brief, and a
+              title reading "let us get to know your company" over "I could not
+              read nosuch.com" is the screen contradicting itself in the first
+              two lines a person reads. */}
+          <h1 key={section} className="mt-1.5 animate-rise font-display text-title text-ink">
             {state.phase === 'analysing' && state.site_unreadable
               ? 'Tell me about your company'
-              : (PHASE_EYEBROW[state.phase] ?? '')}
+              : SECTION_TITLE[section]}
           </h1>
         </header>
 
-        <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 px-6 pb-10 pt-6">
+        {/* Keyed on the section so each one enters once, on arrival. Keying it
+            on the phase would replay the entrance four times during a single
+            conversation — the screen restarting itself under somebody who is
+            mid-answer. */}
+        <div
+          key={section}
+          className="mx-auto flex w-full max-w-3xl flex-1 animate-section-in flex-col gap-4 px-6 pb-10 pt-6"
+        >
+          {/* The conversation. The transcript belongs to this section and stops
+              at its edge: the tools screen used to render the entire interview
+              above itself, so the one screen asking a person to make a decision
+              opened with several hundred words of their own history. Each
+              section is now the thing it is for. */}
+          {section === 'conversation' && (
+            <>
           <Greeting viewer={state.viewer} />
 
           {reading && (
@@ -581,7 +646,15 @@ export function AgentOnboarding() {
             />
           )}
 
-          {state.phase === 'tools' && (
+          {/* Suppressed while reading: `ReadingBubble` is already showing this
+              exact sentence, and the same line twice reads as two things
+              happening. */}
+          {busy && !reading && <TypingBubble label={busy} />}
+            </>
+          )}
+
+          {/* Tools, on a screen of its own. */}
+          {section === 'tools' && (
             <ToolsStep
               disabled={busy !== null}
               // The declaration and the first assembly stage under one guard:
@@ -599,20 +672,28 @@ export function AgentOnboarding() {
             />
           )}
 
-          {(state.phase === 'persona' || state.phase === 'assembling') && (
-            <PersonaConfirm
-              state={state}
-              disabled={busy !== null}
-              onConfirm={() => assemble(assemblyDone)}
-            />
+          {section === 'summary' && (
+            <>
+              {/* The assembly, while it runs, in place of the card that started
+                  it. It used to leave the confirmation on screen with its
+                  button greyed out and one grey line underneath — so the
+                  longest wait after the opening read looked like a card that
+                  had stopped responding. The stages are the ones the server
+                  actually commits, named by `ASSEMBLY_LABEL`, and the phase says
+                  which is running. */}
+              {busy !== null ? (
+                <Assembling phase={state.phase} label={busy} />
+              ) : state.phase === 'ready' ? (
+                <ReadyCard state={state} router={router} />
+              ) : (
+                <PersonaConfirm
+                  state={state}
+                  disabled={false}
+                  onConfirm={() => assemble(assemblyDone)}
+                />
+              )}
+            </>
           )}
-
-          {state.phase === 'ready' && <ReadyCard state={state} router={router} />}
-
-          {/* Suppressed while reading: `ReadingBubble` is already showing this
-              exact sentence, and the same line twice reads as two things
-              happening. */}
-          {busy && !reading && <p className="text-xs text-ink-400">{busy}</p>}
           {error && (
             <div className="rounded-lg bg-clay-100 px-3 py-2">
               <p role="alert" className="text-sm text-clay-600">
@@ -656,13 +737,13 @@ export function AgentOnboarding() {
  */
 function Rail({
   state,
-  phaseIndex,
+  sectionIndex,
   aura,
   asked,
   ceiling,
 }: {
   state: AgentState
-  phaseIndex: number
+  sectionIndex: number
   aura: AuraState
   asked: number
   ceiling: number
@@ -689,12 +770,12 @@ function Rail({
       </div>
 
       <ol className="mt-7 flex flex-1 flex-col gap-1.5">
-        {PHASES.map((phase, index) => {
-          const done = index < phaseIndex
-          const here = index === phaseIndex
+        {SECTIONS.map((section, index) => {
+          const done = index < sectionIndex
+          const here = index === sectionIndex
           return (
             <li
-              key={phase.key}
+              key={section.key}
               // Staggered so the rail assembles downward on first paint rather
               // than appearing all at once. Inline because the delay is
               // per-index and Tailwind has no arbitrary-delay-by-loop utility.
@@ -724,7 +805,7 @@ function Rail({
                         : 'border-bone-200 bg-white text-ink-300'
                   }`}
                 >
-                  {done ? <CheckMark /> : <PhaseGlyph phase={phase.key} />}
+                  {done ? <CheckMark /> : <SectionGlyph section={section.key} />}
                 </span>
                 <div className="min-w-0">
                   <p
@@ -733,14 +814,20 @@ function Rail({
                       here ? 'text-ink' : done ? 'text-ink-500' : 'text-ink-300'
                     }`}
                   >
-                    {phase.label}
+                    {section.label}
                   </p>
                   <p className={`mt-0.5 text-xs ${here || done ? 'text-ink-400' : 'text-ink-300'}`}>
-                    {phase.hint}
+                    {section.hint}
                   </p>
-                  {here && state.phase === 'discovery' && (
+                  {/* Where inside the section you are — the granularity the
+                      seven-step rail used to carry in its steps, kept where it
+                      belongs. It says "Question 3 of 5" over a real ceiling,
+                      and names the other stages rather than counting them,
+                      because reading a website is not a countable quantity and
+                      a fraction over it would be invented. */}
+                  {here && (
                     <p className="mt-1.5 animate-fade-in text-xs font-medium text-steel-600">
-                      Question {Math.min(asked + 1, ceiling)} of {ceiling}
+                      {sectionDetail(state, asked, ceiling)}
                     </p>
                   )}
                 </div>
@@ -791,42 +878,54 @@ function CheckMark() {
 }
 
 /**
- * One glyph per step, in the product's own line weight.
+ * Where inside the current section the person is.
+ *
+ * The seven-step rail carried this in its steps: each phase was its own line,
+ * so "which of these am I on" was answered by the rail's own shape. Collapsing
+ * to three sections would have thrown that away and left somebody four phases
+ * deep in one conversation with no sign of movement — so the detail moves here,
+ * under the step, where it can be a sentence rather than a label.
+ *
+ * **No fraction over anything uncountable.** "Question 3 of 5" is real: `asked`
+ * is agent turns carrying a target and `ceiling` is `MAX_QUESTIONS`, the same
+ * number the server stops at. Reading a website has no denominator, so that
+ * stage is named instead of counted — the alternative is a progress bar over a
+ * guess, which is the invented number this product exists to refuse.
+ */
+function sectionDetail(state: AgentState, asked: number, ceiling: number): string {
+  switch (state.phase) {
+    case 'analysing':
+      return state.site_unreadable ? 'Tell us in your own words' : 'Reading your website'
+    case 'brief':
+      return 'Check what we read'
+    case 'discovery':
+      return `Question ${Math.min(asked + 1, ceiling)} of ${ceiling}`
+    case 'documents':
+      return 'Add your own files'
+    case 'tools':
+      return 'Pick what you run on'
+    case 'persona':
+      return 'Confirm how we understood you'
+    case 'assembling':
+      return 'Building your Company Brain'
+    case 'ready':
+      return 'Done — open your workspace'
+  }
+}
+
+/**
+ * One glyph per section, in the product's own line weight.
  *
  * The rail used to number its steps. A number says how many there are and
  * nothing a person can recognise; each of these says what *kind* of thing the
- * step is — a site being read, a page, a conversation — before the label is
- * read. `aria-hidden` on the tile that draws it: the label beside it is the
+ * step is — a conversation, a stack of systems, an arrival — before the label
+ * is read. `aria-hidden` on the tile that draws it: the label beside it is the
  * accessible name, as it always was.
- *
- * `assembling` gets the same mark as `ready` only to keep the record total —
- * it has no rail entry and the glyph is never drawn for it.
  */
-function PhaseGlyph({ phase }: { phase: Phase }) {
-  const glyphs: Record<Phase, React.ReactNode> = {
-    analysing: (
-      <>
-        <circle cx="12" cy="12" r="8.5" />
-        <path d="M3.5 12h17" />
-        <ellipse cx="12" cy="12" rx="3.8" ry="8.5" />
-      </>
-    ),
-    brief: (
-      <>
-        <rect x="5" y="3.5" width="14" height="17" rx="2.5" />
-        <path d="M9 9h6" />
-        <path d="M9 13h6" />
-        <path d="M9 17h3.5" />
-      </>
-    ),
-    discovery: (
+function SectionGlyph({ section }: { section: SectionKey }) {
+  const glyphs: Record<SectionKey, React.ReactNode> = {
+    conversation: (
       <path d="M12 20.5l-3.2-3H6.5A3.5 3.5 0 0 1 3 14V7.5A3.5 3.5 0 0 1 6.5 4h11A3.5 3.5 0 0 1 21 7.5V14a3.5 3.5 0 0 1-3.5 3.5h-2.3l-3.2 3z" />
-    ),
-    documents: (
-      <>
-        <rect x="8" y="3.5" width="12.5" height="14.5" rx="2.5" />
-        <path d="M3.5 8.5V18a2.5 2.5 0 0 0 2.5 2.5h10" />
-      </>
     ),
     tools: (
       <>
@@ -836,17 +935,7 @@ function PhaseGlyph({ phase }: { phase: Phase }) {
         <path d="M12 16v4.5" />
       </>
     ),
-    persona: (
-      <>
-        <circle cx="9" cy="8" r="3.4" />
-        <path d="M3.5 20.5a5.5 5.5 0 0 1 11 0" />
-        <path d="M15 11.5l2.2 2.2 3.8-4.2" />
-      </>
-    ),
-    assembling: (
-      <path d="M12 3.5l2.1 5.4 5.4 2.1-5.4 2.1L12 18.5l-2.1-5.4L4.5 11l5.4-2.1z" />
-    ),
-    ready: (
+    summary: (
       <>
         <path d="M11 4l1.9 4.8L17.5 10.5l-4.6 1.7L11 17l-1.9-4.8L4.5 10.5l4.6-1.7z" />
         <path d="M18 15.5l.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8z" />
@@ -865,7 +954,7 @@ function PhaseGlyph({ phase }: { phase: Phase }) {
       strokeLinejoin="round"
       className="h-[18px] w-[18px]"
     >
-      {glyphs[phase]}
+      {glyphs[section]}
     </svg>
   )
 }
@@ -948,6 +1037,130 @@ function AgentBubble({ children }: { children: React.ReactNode }) {
         {children}
       </div>
     </div>
+  )
+}
+
+/**
+ * The agent is composing. Three dots, and the sentence saying what for.
+ *
+ * It was one line of grey 12px text below the transcript, which in a chat is
+ * the one place a person is not looking — the eye is at the bottom of the last
+ * bubble, waiting for the next one. So the signal goes where the next bubble
+ * will be, in the shape of a bubble, which is the convention every messaging
+ * product has already taught everybody to read.
+ *
+ * **The words stay.** `globals.css` collapses every animation to one iteration
+ * under `prefers-reduced-motion`, so for anyone with that set the dots hold
+ * still — and the label is then the only thing carrying the state. Motion is
+ * decoration here and never the message, the same rule `Booting` follows.
+ *
+ * `role="status"` with `aria-live="polite"`: the label changes mid-wait
+ * ("Thinking…" becoming a slower sentence at six seconds), and that change
+ * should be heard without the focus moving.
+ */
+function TypingBubble({ label }: { label: string }) {
+  return (
+    <div className="flex animate-rise justify-start" role="status" aria-live="polite">
+      <div className="flex max-w-[38rem] items-center gap-3 rounded-2xl rounded-bl-md border border-bone-200/70 bg-white/80 px-4 py-3 shadow-paper backdrop-blur-sm">
+        <span aria-hidden className="flex items-end gap-1">
+          {[0, 1, 2].map((dot) => (
+            <span
+              key={dot}
+              className="h-1.5 w-1.5 animate-typing-dot rounded-full bg-steel-500"
+              // Per-dot, so they travel as a wave rather than pulsing in
+              // unison. Inline because the delay is per-index and Tailwind has
+              // no arbitrary-delay-by-loop utility.
+              style={{ animationDelay: `${dot * 160}ms` }}
+            />
+          ))}
+        </span>
+        <span className="text-sm leading-relaxed text-ink-500">{label}</span>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The workspace being built, while it is being built.
+ *
+ * Three named stages rather than a spinner, because they are three real
+ * commits: the server runs persona, then the Brain group by group, then the
+ * context, and each one lands on its own row. A failure part-way keeps what
+ * finished and resumes at what did not — which is worth showing, since it is
+ * the difference between "start again" and "carry on".
+ *
+ * **Which stage is running comes from the phase, not from a timer.**
+ * `ASSEMBLY_LABEL` is keyed by the phase a `finish()` call starts *from*, so
+ * the phase on the row names the work in flight. A stage the phase has already
+ * passed is drawn as done; the rest are drawn as pending. Nothing counts
+ * seconds or estimates a remainder — how long a Brain takes depends on how much
+ * site there was to read.
+ */
+function Assembling({ phase, label }: { phase: Phase; label: string }) {
+  // The order the server commits them in. `persona` is the phase the Brain is
+  // built *from*, which is why the middle row is reached at `persona` and not
+  // at a phase of its own.
+  const stages: { from: Phase; text: string }[] = [
+    { from: 'tools', text: 'Building your Persona' },
+    { from: 'persona', text: 'Building your Company Brain' },
+    { from: 'assembling', text: 'Personalising your workspace' },
+  ]
+  const at = stages.findIndex((stage) => stage.from === phase)
+
+  return (
+    <Card>
+      <div className="flex items-center gap-3">
+        <PresenceMark state="thinking" size={26} />
+        <h2 className="font-display text-lg text-ink">Building your workspace</h2>
+      </div>
+      <p className="mt-2 text-sm text-ink-600">
+        This is the part that takes a moment. Each step is saved as it finishes, so nothing here
+        has to be done twice.
+      </p>
+
+      <ol className="mt-4 flex flex-col gap-2.5">
+        {stages.map((stage, index) => {
+          const done = at > index
+          const here = at === index
+          return (
+            <li key={stage.from} className="flex items-center gap-3">
+              <span
+                aria-hidden
+                className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border transition-colors duration-500 ${
+                  done
+                    ? 'border-ink bg-ink text-bone-50'
+                    : here
+                      ? 'border-steel-400 bg-white text-steel-600'
+                      : 'border-bone-300 bg-white text-ink-300'
+                }`}
+              >
+                {done ? (
+                  <CheckMark />
+                ) : here ? (
+                  <span className="h-1.5 w-1.5 animate-typing-dot rounded-full bg-steel-500" />
+                ) : (
+                  <span className="h-1.5 w-1.5 rounded-full bg-bone-400" />
+                )}
+              </span>
+              <span
+                className={`text-sm transition-colors ${
+                  here ? 'font-medium text-ink' : done ? 'text-ink-500' : 'text-ink-300'
+                }`}
+              >
+                {stage.text}
+              </span>
+            </li>
+          )
+        })}
+      </ol>
+
+      {/* The live label, which escalates on a long wait. Kept beside the list
+          rather than instead of it: the list says what the work is, this says
+          it is still happening. */}
+      <p role="status" aria-live="polite" className="mt-4 text-xs text-ink-400">
+        {label}
+      </p>
+    </Card>
   )
 }
 
@@ -1560,21 +1773,42 @@ function ReadyCard({ state, router }: { state: AgentState; router: ReturnType<ty
   const gaps = state.context.known_gaps ?? []
 
   return (
-    <Card>
-      <h2 className="font-display text-lg text-ink">Your Company Brain is live</h2>
-      <p className="mt-2 max-w-prose text-sm leading-relaxed text-ink-600">
-        Every director reads this. You can correct any of it in Settings, and what you
-        say there outranks what we read.
-      </p>
+    <div className="flex flex-col gap-5">
+      {/* The arrival. It is the one moment in the journey that is an ending, and
+          it used to look like every card before it — same border, same heading
+          size, same button. The mark in gold is used exactly once in this
+          product and this is the place. */}
+      <div className="animate-rise-scale rounded-2xl border border-bone-300 bg-white/90 p-6 text-center backdrop-blur-sm">
+        <div className="flex justify-center">
+          <PresenceMark state="ready" size={44} />
+        </div>
+        <h2 className="mt-4 font-display text-title text-ink">Your Company Brain is live</h2>
+        <p className="mx-auto mt-2 max-w-prose text-sm leading-relaxed text-ink-600">
+          Every director reads this. You can correct any of it in Settings, and what you say
+          there outranks what we read.
+        </p>
+
+        <button
+          type="button"
+          onClick={() => router.replace('/dashboard')}
+          className="mt-5 inline-block rounded-full bg-ink px-7 py-3 text-sm font-medium text-bone-50 shadow-paper transition-transform hover:scale-[1.03]"
+        >
+          Open my workspace
+        </button>
+      </div>
 
       {facts.length > 0 && (
-        <div className="mt-4">
+        <Card>
           <p className="font-mono text-2xs uppercase tracking-[0.12em] text-ink-400">
             What it knows
           </p>
           <ul className="mt-2 flex flex-col gap-2">
-            {facts.map((fact) => (
-              <li key={fact.key} className="text-sm leading-relaxed text-ink-700">
+            {facts.map((fact, index) => (
+              <li
+                key={fact.key}
+                className="animate-rise text-sm leading-relaxed text-ink-700"
+                style={{ animationDelay: `${index * 50}ms` }}
+              >
                 {fact.value}
                 {/* The same scope tag the transcript showed as each answer was
                     given, so the vocabulary does not change between the screen
@@ -1585,11 +1819,11 @@ function ReadyCard({ state, router }: { state: AgentState; router: ReturnType<ty
               </li>
             ))}
           </ul>
-        </div>
+        </Card>
       )}
 
       {gaps.length > 0 && (
-        <div className="mt-5">
+        <Card>
           <p className="font-mono text-2xs uppercase tracking-[0.12em] text-ink-400">
             Not yet, and what would change that
           </p>
@@ -1602,17 +1836,9 @@ function ReadyCard({ state, router }: { state: AgentState; router: ReturnType<ty
               </li>
             ))}
           </ul>
-        </div>
+        </Card>
       )}
-
-      <button
-        type="button"
-        onClick={() => router.replace('/dashboard')}
-        className="mt-6 inline-block rounded-full bg-ink px-5 py-2 text-sm font-medium text-bone-50"
-      >
-        Open my workspace
-      </button>
-    </Card>
+    </div>
   )
 }
 
