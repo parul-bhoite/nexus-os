@@ -18,7 +18,7 @@ match statement.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 from uuid import UUID
 
@@ -188,6 +188,7 @@ async def generate_questions(
     session_id: UUID,
     already_known: Mapping[str, Any],
     conversation: list[Mapping[str, str]],
+    rejections: Sequence[str] = (),
 ) -> Mapping[str, Any]:
     """The generated question, and the check that makes it safe to store.
 
@@ -221,13 +222,34 @@ async def generate_questions(
     if not available:
         return {"done": True, "reason": "every askable field already has an answer"}
 
+    # **`rejections` is what makes a retry a retry.**
+    #
+    # This function's docstring has always promised that a model whose question
+    # was refused "is asked again with the failure in front of it". For as long
+    # as it existed, it was not: `OnboardingAgent.next_question` counted the
+    # rejection and called this again with byte-identical arguments, so the
+    # model saw an identical prompt and returned an identical question — and
+    # was refused for an identical reason, up to `MAX_REJECTIONS` times.
+    #
+    # Observed against the real provider: eight calls, 37 seconds, the same
+    # compound question every time. The promise is now kept by passing what was
+    # refused, so attempt two is a different question rather than the same one
+    # made twice.
     result = await ctx.runner.invoke(
         "question-generation",
-        messages=_user("What should we ask next?"),
+        messages=_user(
+            "What should we ask next?"
+            if not rejections
+            else "That did not pass. Ask something different that fixes it."
+        ),
         grounding=_shared(ctx, {
             "available_fields": fields_for_prompt(available),
             "already_known": dict(already_known),
             "conversation_so_far": conversation,
+            # Every refusal so far, not just the last. Carrying only the most
+            # recent lets a model alternate between two faults for ever, each
+            # looking novel to a prompt with a one-item memory.
+            "rejected_so_far": list(rejections),
         }),
     )
 

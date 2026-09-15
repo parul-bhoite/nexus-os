@@ -36,7 +36,7 @@ disagree with the tile beside it.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Final
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,6 +46,7 @@ from app.ai.contracts import (
     LlmRequestError,
     LlmTransientError,
     LlmUnavailableError,
+    Message,
 )
 from app.ai.runtime.runner import SkillFailedError, SkillOutputInvalidError, SkillRunner
 from app.config import Settings
@@ -53,7 +54,14 @@ from app.domain.registry import BY_ID, Capability
 from app.domain.session import ScopedSession
 from app.grounding import ledger
 from app.grounding.context import CompanyContext
-from app.grounding.pipeline import Answer, Computed, Outcome, UnavailableReason, run
+from app.grounding.pipeline import (
+    Answer,
+    Computed,
+    Outcome,
+    UnavailableReason,
+    numerals_supplied,
+    run,
+)
 from app.logging import get_logger
 
 log = get_logger(__name__)
@@ -104,6 +112,19 @@ def _snapshot(
     }
 
 
+_INSTRUCTION: Final = (
+    "Write the sentence for the figure in your grounding."
+)
+"""What the narrator is asked, in one line.
+
+Every skill in this product sends a user turn naming the task —
+`onboarding_commands` does it through `_user(...)` at seven call sites. This is
+the eighth, and it has to exist because the API requires it, not because the
+model needs telling twice: the figure is in `grounding` and the rules are in
+`SKILL.md`.
+"""
+
+
 async def narrate(
     db: AsyncSession,
     scope: ScopedSession,
@@ -150,7 +171,24 @@ async def narrate(
         """
         result = await runner.invoke(
             NARRATOR,
-            messages=[],
+            # **One user turn, and it is not optional.** This was `[]`, and the
+            # Anthropic API refuses an empty message list outright —
+            # `messages: at least one message is required`, HTTP 400 — which
+            # arrives here as `LlmRequestError` and leaves every tile reading
+            # `PROVIDER_FAILED`. So narration could never have produced a
+            # sentence in any deployment.
+            #
+            # It survived because this function had no production caller and
+            # `ScriptedProvider` did not check the list. Both are now closed:
+            # the provider refuses an empty list the way the real one does, and
+            # `test_the_narrator_is_sent_a_message_and_not_an_empty_list`
+            # asserts what was sent.
+            #
+            # The instruction is deliberately thin. Everything the model may
+            # use is in `grounding` and everything it must obey is in
+            # `SKILL.md`; a turn that restated the figure here would be a
+            # second place the number lives.
+            messages=[Message(role="user", content=_INSTRUCTION)],
             grounding={
                 "label": capability.name,
                 "value": values.values,
@@ -168,12 +206,23 @@ async def narrate(
         return f"{sentence} {because}".strip()
 
     try:
+        # The numerals we put in front of the model, which it is therefore
+        # entitled to repeat. `SKILL.md` names `window` and `delta` as figures
+        # it may mention, so the guard has to agree — see `invented_numbers`.
+        #
+        # Derived from the strings **we sent**, above, and never from the
+        # answer that comes back. That direction is the whole invariant.
+        supplied = numerals_supplied(
+            str(trace.get("window", "")), str(trace.get("delta", ""))
+        )
+
         answer = await run(
             skill=NARRATOR,
             computed=computed,
             call_model=call_model,
             budgets=budgets,
             disabled_skills=settings.disabled_ai_skills_set,
+            also_permitted=supplied,
         )
     except Exception as failure:
         # **The row is written for this too**, which is why the exception is

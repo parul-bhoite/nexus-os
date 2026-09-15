@@ -119,9 +119,41 @@ def _permitted(computed: Computed) -> set[str]:
     return allowed
 
 
-def invented_numbers(prose: str, computed: Computed) -> set[str]:
-    """Figures in the prose that no calculation produced. **I1's teeth.**"""
-    return _numbers_in(prose) - _permitted(computed)
+def numerals_supplied(*texts: str) -> frozenset[str]:
+    """Every numeral in the grounding strings a caller put in front of the model.
+
+    The intended argument for `invented_numbers(..., also_permitted=...)`, and
+    named so the call site reads as what it is: *these are the figures we
+    supplied*. A caller passing its own model's output through here would be
+    handing the guard the very thing it exists to check, which the name is
+    meant to make obvious.
+    """
+    return frozenset(_numbers_in(" ".join(texts)))
+
+
+def invented_numbers(
+    prose: str, computed: Computed, *, also_permitted: frozenset[str] = frozenset()
+) -> set[str]:
+    """Figures in the prose that no calculation produced. **I1's teeth.**
+
+    `also_permitted` exists because **`SKILL.md` and this guard disagreed.**
+    The prompt tells the narrator *"Every figure you may mention is in your
+    grounding: `value`, `delta`, `window`"*, and the permitted set was built
+    from `computed.values` alone — so a model that cited the window exactly as
+    instructed had its whole answer rejected as an invention.
+
+    That stayed hidden while every window was wordy. The first calculator to
+    format one with a date — *"the page as fetched on 2026-09-10"* — refused
+    every narration in the product, and blamed the model for the one thing it
+    had not done.
+
+    **What may widen this set is the grounding we sent, and nothing else.** Not
+    a value parsed back out of the answer, not a number the model claims came
+    from somewhere. The caller supplies the numerals it put in front of the
+    model; anything beyond that is still an invention and still costs the whole
+    answer.
+    """
+    return _numbers_in(prose) - _permitted(computed) - also_permitted
 
 
 def describes_no_change(prose: str) -> bool:
@@ -149,6 +181,7 @@ async def run(
     call_model: Callable[[Computed], Awaitable[str]],
     budgets: Budgets,
     disabled_skills: frozenset[str],
+    also_permitted: frozenset[str] = frozenset(),
 ) -> Answer:
     """The pipeline. Checks are ordered by what they cost to discover.
 
@@ -187,7 +220,7 @@ async def run(
     for attempt in (0, 1):
         prose = await call_model(computed)
 
-        invented = invented_numbers(prose, computed)
+        invented = invented_numbers(prose, computed, also_permitted=also_permitted)
         if invented:
             # **Rejected, not corrected.** Rewriting a model's number would put
             # our figure inside their sentence and leave the reasoning around it

@@ -1,4 +1,4 @@
-import { proxyToApi } from '@/lib/auth-proxy'
+import { MODEL_TIMEOUT_MS, proxyToApi } from '@/lib/auth-proxy'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,5 +11,8 @@ export async function POST(request: Request) {
     method: 'POST',
     body: await request.json(),
     unavailable: 'Cannot reach the onboarding service right now.',
+    // This route invokes a skill. The default is sized for a database
+    // read and aborts mid-call on a slow one.
+    timeoutMs: MODEL_TIMEOUT_MS,
   })
 }

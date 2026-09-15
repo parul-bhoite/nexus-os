@@ -19,6 +19,8 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from uuid import UUID, uuid4
 
+from datetime import timedelta
+
 import pytest
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -689,19 +691,33 @@ async def test_the_day_boundary_is_the_workspaces_midnight_not_utc(app_db: None)
             # Written directly rather than through `record` because `record`
             # takes its timestamp from the database, and the whole point is to
             # choose it.
-            for offset, tokens in (("+1 hour", 700), ("-1 hour", 400)):
+            # A `timedelta`, not a string: asyncpg binds it to `interval`
+            # natively, and a str reaches the driver as a str and raises.
+            for offset, tokens in ((timedelta(hours=1), 700), (timedelta(hours=-1), 400)):
                 await db.execute(
                     sa.text(
                         "INSERT INTO generation"
                         " (workspace_id, module, prompt_version, input_snapshot,"
-                        "  calculation_trace, scope_key, outcome, input_tokens,"
+                        "  calculation_trace, scope_key, outcome, prose, input_tokens,"
                         "  output_tokens, cost_micros, requested_by_user_id, created_at)"
                         " VALUES (:w,'boundary','v1', CAST('{}' AS json), CAST('{}' AS json),"
-                        "  'k','answered', :t, 0, 0, :u,"
+                        # `prose` non-empty because the row says `answered`, and
+                        # `ck_generation_prose_matches_outcome` requires the pair
+                        # to agree. The sentence is irrelevant to this test; the
+                        # constraint is not.
+                        "  'k','answered','a sentence', :t, 0, 0, :u,"
                         "  date_trunc('day', now() AT TIME ZONE 'Asia/Muscat')"
-                        f"    AT TIME ZONE 'Asia/Muscat' + interval '{offset}')"
+                        # Bound, not interpolated. The value is a literal from
+                        # the loop above, but a test that builds SQL by
+                        # formatting is a pattern nobody should copy.
+                        "    AT TIME ZONE 'Asia/Muscat' + :offset)"
                     ),
-                    {"w": str(seed.workspace_id), "t": tokens, "u": str(seed.user_id)},
+                    {
+                        "w": str(seed.workspace_id),
+                        "t": tokens,
+                        "u": str(seed.user_id),
+                        "offset": offset,
+                    },
                 )
 
             budgets = await ledger.budgets_for(
@@ -719,5 +735,135 @@ async def test_the_day_boundary_is_the_workspaces_midnight_not_utc(app_db: None)
                 "one hour into today counted as 0, or yesterday's leaked in"
             )
             assert budgets.user_spent == 700
+        finally:
+            await db.rollback()
+
+
+# ── The sentence is stored, and only where it belongs ─────────
+
+
+async def test_an_answered_generation_stores_the_sentence_it_produced(app_db: None) -> None:
+    """**The table used to hold everything about an answer except the answer.**
+
+    0023 gave `generation` the inputs, the arithmetic, the outcome, the refusal
+    reason and the token counts, and `Answer.prose` was persisted nowhere — so
+    a narrated sentence lived exactly as long as the HTTP response carrying it,
+    and a founder who reloaded a tile lost it. Migration 0029 added the column;
+    this is what proves it round-trips rather than merely existing.
+    """
+    async with get_sessionmaker()() as db:
+        seed = await _seed(db)
+        try:
+            written = await ledger.record(
+                db,
+                workspace_id=seed.workspace_id,
+                module="marketing.seo_gaps",
+                prompt_version="1",
+                answer=Answer(
+                    outcome=Outcome.ANSWERED,
+                    prose="Most of the technical checks pass on the page we fetched.",
+                    values={"score": 45.0},
+                ),
+                input_snapshot={},
+                calculation_trace={"numerator": 45},
+                scope_key="L2",
+                requested_by_user_id=seed.user_id,
+            )
+
+            stored = (
+                await db.execute(
+                    sa.text("SELECT prose, outcome FROM generation WHERE id = :i"),
+                    {"i": str(written)},
+                )
+            ).one()
+
+            assert stored.prose == "Most of the technical checks pass on the page we fetched."
+            assert stored.outcome == "answered"
+        finally:
+            await db.rollback()
+
+
+async def test_a_refusal_stores_no_sentence(app_db: None) -> None:
+    """A refusal has nothing to say, and the column says so with an empty
+    string rather than a NULL — the same choice `unavailable_reason` makes, for
+    the same reason: "no sentence" and "nobody set the column" must not be the
+    same value."""
+    async with get_sessionmaker()() as db:
+        seed = await _seed(db)
+        try:
+            written = await ledger.record(
+                db,
+                workspace_id=seed.workspace_id,
+                module="marketing.seo_gaps",
+                prompt_version="1",
+                answer=Answer(
+                    outcome=Outcome.UNAVAILABLE,
+                    reason=UnavailableReason.MODEL_UNAVAILABLE,
+                ),
+                input_snapshot={},
+                calculation_trace={},
+                scope_key="L2",
+            )
+
+            stored = (
+                await db.execute(
+                    sa.text("SELECT prose, unavailable_reason FROM generation WHERE id = :i"),
+                    {"i": str(written)},
+                )
+            ).one()
+
+            assert stored.prose == ""
+            assert stored.unavailable_reason == "model_unavailable"
+        finally:
+            await db.rollback()
+
+
+async def test_an_answer_with_no_sentence_is_refused_before_the_database_sees_it(
+    app_db: None,
+) -> None:
+    """`ck_generation_prose_matches_outcome` would catch this, and a constraint
+    name off Neon does not tell a caller which of its branches forgot. The
+    `ValueError` names the module and the outcome, exactly as the reason guard
+    beside it already does."""
+    async with get_sessionmaker()() as db:
+        seed = await _seed(db)
+        try:
+            with pytest.raises(ValueError, match="must carry the sentence"):
+                await ledger.record(
+                    db,
+                    workspace_id=seed.workspace_id,
+                    module="marketing.seo_gaps",
+                    prompt_version="1",
+                    answer=Answer(outcome=Outcome.ANSWERED, prose="   "),
+                    input_snapshot={},
+                    calculation_trace={},
+                    scope_key="L2",
+                )
+        finally:
+            await db.rollback()
+
+
+async def test_a_refusal_carrying_prose_is_refused_too(app_db: None) -> None:
+    """The other direction. Prose on an `unavailable` row is prose that nothing
+    validated — the pipeline rejected the answer, so whatever the model wrote
+    was never checked against the permitted figures."""
+    async with get_sessionmaker()() as db:
+        seed = await _seed(db)
+        try:
+            with pytest.raises(ValueError, match="must not carry one"):
+                await ledger.record(
+                    db,
+                    workspace_id=seed.workspace_id,
+                    module="marketing.seo_gaps",
+                    prompt_version="1",
+                    answer=Answer(
+                        outcome=Outcome.UNAVAILABLE,
+                        reason=UnavailableReason.INVENTED_NUMBER,
+                        prose="Runway improved by twelve percent.",
+                    ),
+                    input_snapshot={},
+                    calculation_trace={},
+                    scope_key="L2",
+                )
         finally:
             await db.rollback()

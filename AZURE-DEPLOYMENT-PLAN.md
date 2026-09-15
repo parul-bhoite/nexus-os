@@ -4,6 +4,13 @@ A plan derived from what the repository actually contains — `docker-compose.ym
 the two Dockerfiles, `.env.example`, `app/storage.py`, `app/mail.py`, and
 `ARCHITECTURE-HLD.md` §9 — not from a generic template.
 
+> **Re-verified 15 September 2026** against the current source: `app/storage.py`
+> still has only `FilesystemObjectStore` (no Azure Blob driver yet), `app/mail.py`
+> still has `SmtpMailer` unwired to a real provider, `app/ai/registry.py` still
+> only ships `anthropic_provider.py`, and `docker-compose.yml` is unchanged —
+> `db` / `migrate` / `api` / `worker` / `web` / `proxy`. Nothing below required
+> revision.
+
 > **Costs below are approximate USD/month list prices**, sized against
 > **UAE North** (nearest region to the Oman/GCC market the README targets).
 > Azure prices change and vary by region; treat every figure as a planning

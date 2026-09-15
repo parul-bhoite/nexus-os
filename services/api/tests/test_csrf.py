@@ -99,6 +99,9 @@ async def test_every_route_guarded_by_csrf_also_requires_a_session() -> None:
         "/domains",
         "/domains/{claim_id}/check",
         "/domains/{claim_id}/workspace",
+        # Slice 2. A POST that spends the workspace's daily token allowance is
+        # a POST worth forging.
+        "/dashboards/{department}/narrate",
     }
     # From the OpenAPI schema, not `app.routes` — the latter does not expose
     # `.path` for these route objects, which silently yields an empty set and a

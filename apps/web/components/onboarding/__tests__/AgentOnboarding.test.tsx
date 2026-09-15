@@ -903,3 +903,103 @@ describe('transcript', () => {
     expect(transcript(turns, live('Who do you lose to?'))).toHaveLength(2)
   })
 })
+
+describe('the Ready screen', () => {
+  /** Setup finished, with a Brain that knows two things and is missing two. */
+  function ready(): client.AgentState {
+    return {
+      ...interviewing([]),
+      phase: 'ready',
+      // **Not `completed`.** `boot` redirects a completed session straight to
+      // the dashboard, so the Ready card is only ever seen on arrival — the
+      // moment `finish` returns — and never on a reload. This is that moment.
+      completed: false,
+      context: {
+        // Written to be prepended to a system prompt, per the skill's own
+        // SKILL.md. It reaches the client because other things on this payload
+        // are needed; it must not reach the screen.
+        preamble:
+          'No pronoun is known for Parul; use the name or "they". This preamble does not '
+          + 'state what Parul is authorized to view — access is resolved separately by the '
+          + 'scope system per query.',
+        facts: [
+          { key: 'goals', value: 'Winning a second government maintenance contract.', scope: 2 },
+          { key: 'role', value: 'Runs the yard and prices every job.', scope: 5 },
+        ],
+        known_gaps: [
+          { topic: 'Brand voice', unlocked_by: 'Uploading two pieces of your writing' },
+          {
+            topic: 'Reporting your real traffic and conversions',
+            unlocked_by: 'Connecting Google Analytics',
+          },
+        ],
+      },
+    }
+  }
+
+  beforeEach(() => {
+    mocked.readState.mockResolvedValue(ready())
+  })
+
+  it('never shows the founder the prompt written for the model', async () => {
+    // **The defect.** `context.preamble` is specified in SKILL.md as "prose,
+    // under 400 words, written to be prepended to a system prompt" — and it
+    // was rendered verbatim on the last screen of setup, instructions to the
+    // model and all.
+    render(<AgentOnboarding />)
+
+    await waitFor(() => expect(screen.getByText(/Your Company Brain is live/i)).toBeTruthy())
+
+    expect(screen.queryByText(/No pronoun is known/i)).toBeNull()
+    expect(screen.queryByText(/scope system per query/i)).toBeNull()
+    expect(screen.queryByText(/this preamble/i)).toBeNull()
+  })
+
+  it('shows what the Brain knows, from the structured facts', async () => {
+    // The same content, from the field the skill produces precisely so a
+    // caller does not have to paste the prose.
+    render(<AgentOnboarding />)
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Winning a second government maintenance contract/i),
+      ).toBeTruthy(),
+    )
+    expect(screen.getByText(/Runs the yard and prices every job/i)).toBeTruthy()
+  })
+
+  it('names the action beside every gap, rather than sending you to look for it', async () => {
+    // `unlocked_by` travelled the whole pipeline and was never rendered, under
+    // a sentence telling the founder that each gap "names its own unlock in
+    // your workspace" — the product asking somebody to go and find what it was
+    // already holding.
+    render(<AgentOnboarding />)
+
+    await waitFor(() => expect(screen.getByText(/Brand voice/i)).toBeTruthy())
+
+    expect(screen.getByText(/Uploading two pieces of your writing/i)).toBeTruthy()
+    expect(screen.getByText(/Connecting Google Analytics/i)).toBeTruthy()
+    expect(screen.queryByText(/names its own unlock/i)).toBeNull()
+  })
+
+  it('does not punctuate a list of gaps into a sentence', async () => {
+    // The joined form produced "…exporting anything.." on screen. Items in a
+    // list are not a sentence and must not be run together with middle dots.
+    //
+    // Scoped to the gap list, not the page: the middle dot is legitimate in
+    // the viewer footer ("Managing Director · Muscat Marine Services"), and a
+    // whole-page assertion would have banned a separator that is doing real
+    // work somewhere else.
+    render(<AgentOnboarding />)
+
+    const gap = await screen.findByText(/Brand voice/i)
+    const list = gap.closest('ul')
+    expect(list).toBeTruthy()
+
+    expect(list!.textContent).not.toMatch(/\.\./)
+    expect(list!.textContent).not.toMatch(/ · /)
+    // And each gap is its own item, rather than one run-together paragraph.
+    expect(list!.querySelectorAll('li')).toHaveLength(2)
+  })
+})
+

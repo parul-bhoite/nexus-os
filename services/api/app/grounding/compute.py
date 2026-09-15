@@ -139,11 +139,27 @@ def compute_from_crawl(capability_id: str, snapshot: CrawlSnapshot) -> Computati
     # **Every number, and only these numbers.** `answer._permitted` treats
     # everything in `values` as a figure the model may write, so an extra key
     # here would be a licence to state something no calculator produced.
+    passed = sum(1 for check in score.checks if check.passed)
     computed = Computed(
         values={
             "score": float(score.score),
             "max_score": float(score.max_score),
             "percentage": float(score.percentage),
+            # **Both of these are here so the narrator may say "6 of 9".**
+            # `BlockCard` prints "6 of 9 checks passed" three lines above where
+            # the sentence goes, and `pipeline._permitted` only allows numerals
+            # that appear in this dict — so without them a narrator writing the
+            # figure the tile is already showing was refused as
+            # `INVENTED_NUMBER`, whose meaning is "the model stated a figure no
+            # calculation produced". A false accusation, rendered to the
+            # customer, about the most sensitive claim this product makes.
+            #
+            # Both are calculator outputs: a count over its own check list and
+            # that list's length. The cost is that 9 and 65 become numerals the
+            # prose may state in an unrelated sense, which is why this is two
+            # named outputs and not everything that would be convenient.
+            "checks_passed": float(passed),
+            "checks_total": float(len(score.checks)),
         }
     )
 
@@ -158,6 +174,25 @@ def compute_from_crawl(capability_id: str, snapshot: CrawlSnapshot) -> Computati
         "page": snapshot.url,
         "pages_captured": snapshot.pages_captured,
         "window": f"the page as fetched on {snapshot.captured_at.date().isoformat()}",
+        # **Named, not left empty.** `narrate` reads `trace.get("delta", "")`
+        # and the runner's grounding check passes on a present-but-empty key,
+        # so the model used to receive `delta: ''` and had to guess what that
+        # meant. `SKILL.md` already handles the real case: "`no_baseline` —
+        # there is nothing to compare against. Say so. Never call it flat,
+        # which claims a comparison you did not make."
+        #
+        # Set here rather than defaulted in `narrate`, because it is the
+        # calculator that knows it scored one snapshot. A default there would
+        # let a future calculator that genuinely computed a zero delta and
+        # forgot to record it silently assert we did not compare when we did —
+        # the exact inverse of the rule above.
+        #
+        # When re-crawling lands (M32) this becomes a real phrase, and the trap
+        # to remember: a delta the prose may *state* has to go into
+        # `computed.values` too, or the invented-number guard rejects every
+        # sentence that mentions it. `"no_baseline"` is safe precisely because
+        # it contains no numeral.
+        "delta": "no_baseline",
         # The working, in the calculator's own words. `Check.evidence` is
         # specified as an observation rather than advice, and this carries it
         # through unrestated — a summary here would be a second account of

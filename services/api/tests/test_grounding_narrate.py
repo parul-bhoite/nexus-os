@@ -279,3 +279,139 @@ async def test_an_unknown_capability_raises_rather_than_narrating_nothing(
             runner=_runner("Anything."),
             settings=get_settings(),
         )
+
+
+# ── The message list, which a scripted provider used not to check ──
+
+
+async def test_the_narrator_is_sent_a_message_and_not_an_empty_list(
+    recorder: _Recorder,
+) -> None:
+    """**This is the test that was missing, and its absence shipped a defect.**
+
+    `narrate` called `runner.invoke(NARRATOR, messages=[], …)`. Anthropic
+    refuses that outright — `messages: at least one message is required`, HTTP
+    400 — which the runner surfaces as `LlmRequestError` and `unavailable_for`
+    maps to `PROVIDER_FAILED`. So narration could never have produced a
+    sentence against a real provider, in any deployment, ever.
+
+    Every other `invoke` call site in the application passes a real user turn
+    through `_user(...)`; `answer.py` was the only `messages=[]` in the whole
+    app. It went unnoticed because `narrate` had no production caller and
+    `ScriptedProvider` did not validate the list — the exact shape CLAUDE.md
+    names three times: *an environment that differs from the one you deploy to
+    can be green in the place nobody deploys to.*
+
+    Found by driving the real path against the real provider before wiring the
+    endpoint, which is the only way it could have been found short of shipping.
+    """
+    provider = ScriptedProvider({NARRATOR: '{"sentence": "Most of the checks pass."}'})
+
+    await narrate(
+        db=None,  # type: ignore[arg-type]
+        scope=_scope(),
+        capability_id=CAPABILITY,
+        context=_context(),
+        computed=Computed(values={"runway_months": 7.4}),
+        trace=TRACE,
+        runner=SkillRunner(provider),
+        settings=get_settings(),
+    )
+
+    assert provider.calls, "the provider was never called"
+    sent = provider.calls[0]
+    assert sent.messages, (
+        "narrate sent no messages. The real API rejects that with HTTP 400, so "
+        "this ships as PROVIDER_FAILED on every tile in every deployment."
+    )
+    assert sent.messages[0].role == "user"
+    assert sent.messages[0].content.strip()
+
+
+# ── The window is grounding, so its digits are not invented ──
+
+
+async def test_a_sentence_citing_the_window_we_supplied_is_not_an_invented_number(
+    recorder: _Recorder,
+) -> None:
+    """**A contradiction inside the codebase, found by driving the real model.**
+
+    `SKILL.md` tells the narrator: *"Every figure you may mention is in your
+    grounding: `value`, `delta`, `window`."* But `pipeline._permitted` was
+    built from `computed.values` alone — so the prompt permitted the window and
+    the guard forbade its digits.
+
+    It stayed hidden while every window was wordy. `compute_from_crawl`
+    formats one as *"the page as fetched on 2026-09-10"*, and the real model
+    did exactly what it was told: it cited the window. `2026`, `09` and `10`
+    were then read as figures no calculation produced, and **both attempts were
+    rejected** — so every narration in the product refused, with
+    `INVENTED_NUMBER`, which accuses the model of the one thing it had not
+    done.
+
+    The doc-13 worked example is `19 Jul - 17 Aug`, so this was waiting for the
+    second calculator regardless.
+
+    The guard keeps its teeth: what widens the permitted set is **the grounding
+    we sent**, never anything read back out of the model's answer. That
+    distinction is the whole invariant, and the test below is the other half of
+    it.
+    """
+    provider = ScriptedProvider(
+        {
+            NARRATOR: json.dumps(
+                {
+                    "sentence": (
+                        "Most of the checks pass on the page as fetched on 2026-09-10, "
+                        "with no baseline yet to compare against."
+                    )
+                }
+            )
+        }
+    )
+
+    result = await narrate(
+        db=None,  # type: ignore[arg-type]
+        scope=_scope(),
+        capability_id=CAPABILITY,
+        context=_context(),
+        computed=Computed(values={"runway_months": 7.4}),
+        trace={**TRACE, "window": "the page as fetched on 2026-09-10"},
+        runner=SkillRunner(provider),
+        settings=get_settings(),
+    )
+
+    assert result.answered, (
+        f"the window we supplied was treated as invented: {result.answer.reason}"
+    )
+    assert "2026-09-10" in result.answer.prose
+
+
+async def test_a_figure_absent_from_the_grounding_is_still_refused(
+    recorder: _Recorder,
+) -> None:
+    """The other half, and the one that must not loosen.
+
+    Widening the permitted set to cover the window is only safe while the
+    widening comes from what **we** sent. A numeral that appears in neither the
+    computed values nor the grounding is still an invention, and still costs
+    the whole answer.
+    """
+    provider = ScriptedProvider(
+        {NARRATOR: json.dumps({"sentence": "Runway improved by 12 percent this month."})}
+    )
+
+    result = await narrate(
+        db=None,  # type: ignore[arg-type]
+        scope=_scope(),
+        capability_id=CAPABILITY,
+        context=_context(),
+        computed=Computed(values={"runway_months": 7.4}),
+        trace={**TRACE, "window": "the page as fetched on 2026-09-10"},
+        runner=SkillRunner(provider),
+        settings=get_settings(),
+    )
+
+    assert not result.answered
+    assert result.answer.reason is UnavailableReason.INVENTED_NUMBER
+    assert result.answer.retried, "it must have been given a second chance first"

@@ -1,5 +1,5 @@
 name = "context-personalization"
-version = "3"
+version = "4"
 description = "Join Brain and Persona into the grounded preamble every later agent receives."
 model = "claude-sonnet-5"
 effort = "medium"

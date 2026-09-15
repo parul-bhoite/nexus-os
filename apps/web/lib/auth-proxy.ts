@@ -29,8 +29,29 @@ import { NextResponse } from 'next/server'
 
 const API_BASE = process.env.NEXUS_API_BASE_URL ?? 'http://127.0.0.1:8000'
 
-/** Comfortably above a round trip to a managed database, well below a hang. */
+/** Comfortably above a round trip to a managed database, well below a hang.
+ *
+ * **Correct only for routes that do not call a model.** A single Haiku call is
+ * four to five seconds and a Sonnet one can be twenty, so a route that invokes
+ * a skill and inherits this default is a timeout waiting for a slow day — see
+ * `MODEL_TIMEOUT_MS`. */
 const TIMEOUT_MS = Number(process.env.NEXUS_PROXY_TIMEOUT_MS ?? 30_000)
+
+/**
+ * For a route that invokes one skill.
+ *
+ * **Three model-backed onboarding routes were on the database default**, and a
+ * browser walkthrough hit it: the brief step aborted at thirty seconds while
+ * the API was still working, and the founder was told the service could not be
+ * reached. `/onboarding/agent/answer` was the worst of them — it can make up to
+ * `MAX_REJECTIONS` question-generation calls in one request.
+ *
+ * Named rather than sprinkled as a literal, because the failure it prevents is
+ * somebody adding a seventh model-backed route and inheriting the number meant
+ * for a database read. `lib/__tests__/auth-proxy.test.ts` asserts every such
+ * route uses it.
+ */
+export const MODEL_TIMEOUT_MS = Number(process.env.NEXUS_PROXY_MODEL_TIMEOUT_MS ?? 90_000)
 
 /**
  * Why 30 seconds and not 15 (finding #23).
@@ -138,8 +159,31 @@ export async function proxyToApi(
 
     const payload = await upstream.json().catch(() => ({ detail: 'Unexpected response.' }))
     return NextResponse.json(payload, { status: upstream.status, headers })
-  } catch {
-    return NextResponse.json({ detail: unavailable }, { status: 503 })
+  } catch (caught: unknown) {
+    // **A timeout is not an unreachable service, and saying so was a lie.**
+    //
+    // Every failure here used to produce the caller's `unavailable` sentence —
+    // for onboarding, "Cannot reach the onboarding service right now." A
+    // browser walkthrough hit it while the API was working perfectly: one
+    // request had spent 37 seconds retrying a rejected question, the abort
+    // below fired at 30, and the founder was told the service was unreachable.
+    // It was not. It was slow, it finished, and its answer arrived for a client
+    // that had already been told a different story.
+    //
+    // The two need different words because they need different actions: an
+    // unreachable service is worth reporting, a slow one is worth waiting for.
+    // `AbortError` is the only thing `controller.abort()` produces, so the
+    // distinction costs one `instanceof`.
+    const timedOut = caught instanceof DOMException && caught.name === 'AbortError'
+    return NextResponse.json(
+      {
+        detail: timedOut
+          ? 'That took longer than we allow for one request. Nothing is broken and nothing '
+            + 'was lost — this often finishes on a second try.'
+          : unavailable,
+      },
+      { status: timedOut ? 504 : 503 },
+    )
   } finally {
     clearTimeout(timeout)
   }

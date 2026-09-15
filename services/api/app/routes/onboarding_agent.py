@@ -41,6 +41,7 @@ from app.domain import connections
 from app.domain import onboarding_sessions as store
 from app.domain.connections import UnknownProviderError
 from app.domain.departments import label_for, selected_departments
+from app.domain.known_gaps import readable_gaps
 from app.domain.onboarding_agent import (
     MAX_QUESTIONS,
     AgentState,
@@ -1643,7 +1644,13 @@ def _with_tool_gaps(context: dict[str, Any], providers: Sequence[str]) -> dict[s
         seen.add(gap["topic"])
         gaps.append(dict(gap))
 
-    return {**context, "known_gaps": gaps}
+    # **Normalised on the way out, because this list reaches a screen.** The two
+    # producers above write `topic` differently — the model sometimes a
+    # `company_brain` column name, the ledger always a full sentence — and the
+    # Ready card rendered them joined by a middle dot with a full stop appended.
+    # `readable_gaps` is where that becomes readable, and it drops any gap with
+    # no action attached.
+    return {**context, "known_gaps": readable_gaps(gaps)}
 
 
 def _with_promoted_facts(

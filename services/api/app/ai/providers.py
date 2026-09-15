@@ -118,6 +118,27 @@ class ScriptedProvider:
     async def complete(self, request: CompletionRequest) -> Completion:
         self.calls.append(request)
 
+        # **Refuse what the real provider refuses.**
+        #
+        # This is not behaviour of its own — it is fidelity, and its absence
+        # cost a defect that could only ever have been found in production.
+        # `grounding/answer.py::narrate` sent `messages=[]` for as long as it
+        # existed. Anthropic rejects that with `messages: at least one message
+        # is required` and HTTP 400, so narration was structurally incapable of
+        # producing a sentence — and every test passed, because this double
+        # accepted a request the API does not.
+        #
+        # A test double that accepts what production rejects is the pattern
+        # CLAUDE.md names three times: an environment that differs from the one
+        # you deploy to can be green in the place nobody deploys to.
+        if not request.messages:
+            raise AssertionError(
+                f"skill {request.skill!r} was called with an empty message list. "
+                "The real provider answers that with HTTP 400 "
+                "('messages: at least one message is required'), so this would "
+                "ship as PROVIDER_FAILED. Send a user turn naming the task."
+            )
+
         if request.skill not in self._responses:
             raise AssertionError(
                 f"ScriptedProvider has no response for skill {request.skill!r}. "

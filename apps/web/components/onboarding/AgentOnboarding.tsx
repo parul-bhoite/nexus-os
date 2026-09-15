@@ -402,7 +402,7 @@ export function AgentOnboarding() {
        would paint over the aura, which sits at `-z-10` — above the page canvas
        and below in-flow content. With one set, the whole animated element
        rendered and was invisible. */
-    <div className="relative min-h-screen lg:grid lg:grid-cols-[17.5rem_minmax(0,1fr)]">
+    <div className="relative min-h-screen lg:grid lg:grid-cols-[21.5rem_minmax(0,1fr)]">
       <Rail
         state={state}
         phaseIndex={phaseIndex}
@@ -420,16 +420,28 @@ export function AgentOnboarding() {
           prose being read and prose being written, and a bubble that runs the
           width of a desktop monitor is neither. */}
       <main className="relative flex min-h-screen flex-col bg-bone-100">
-        <p className="animate-fade-in pt-8 text-center font-mono text-[11px] uppercase tracking-[0.22em] text-ink-400">
-          {/* `analysing` covers two screens that say opposite things. When the
-              site could not be read, the page below is the manual brief — an
-              eyebrow reading "reading your company" over "I could not read
-              nosuch.com" is the screen contradicting itself in the first two
-              lines a person reads. */}
-          {state.phase === 'analysing' && state.site_unreadable
-            ? 'Tell me about your company'
-            : (PHASE_EYEBROW[state.phase] ?? '')}
-        </p>
+        {/* The phase, said the way a section of a product tour says itself: a
+            small step count over a display-face title. The count is real —
+            `phaseIndex` into the same array the rail draws — and `assembling`
+            has no index by design, so it says "one moment" rather than
+            inventing a step nobody pressed. */}
+        <header className="mx-auto w-full max-w-3xl px-6 pt-10">
+          <p className="animate-fade-in font-mono text-[11px] uppercase tracking-[0.22em] text-ink-400">
+            {phaseIndex >= 0 ? `Step ${phaseIndex + 1} of ${PHASES.length}` : 'One moment'}
+          </p>
+          {/* Keyed so the title rises again on each phase change — it is the
+              one line that announces the room has changed. `analysing` covers
+              two screens that say opposite things: when the site could not be
+              read, the page below is the manual brief, and a title reading
+              "reading your company" over "I could not read nosuch.com" is the
+              screen contradicting itself in the first two lines a person
+              reads. */}
+          <h1 key={state.phase} className="mt-1.5 animate-rise font-display text-title text-ink">
+            {state.phase === 'analysing' && state.site_unreadable
+              ? 'Tell me about your company'
+              : (PHASE_EYEBROW[state.phase] ?? '')}
+          </h1>
+        </header>
 
         <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 px-6 pb-10 pt-6">
           <Greeting viewer={state.viewer} />
@@ -659,13 +671,24 @@ function Rail({
   const initial = viewer?.name?.trim()?.[0]?.toUpperCase() ?? '\u00b7'
 
   return (
-    <aside className="z-10 flex flex-col border-b border-bone-200 bg-white px-6 py-6 lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r lg:py-8">
+    <aside className="z-10 flex flex-col border-b border-bone-200 bg-white px-5 py-6 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto lg:border-b-0 lg:border-r lg:px-7 lg:py-8">
       <span className="flex items-center gap-2.5 font-display text-base font-semibold text-ink">
         <PresenceMark state={aura} />
         NEXUS <span className="font-normal opacity-60">OS</span>
       </span>
 
-      <ol className="mt-9 flex flex-1 flex-col">
+      {/* The rail opens by saying welcome, because it is the first thing on the
+          first screen of the product and a list of steps is a strange way to
+          say hello. One sentence of what is about to happen; the greeting
+          bubble on the canvas still carries the personal half. */}
+      <div className="mt-8 animate-rise">
+        <h2 className="font-display text-xl font-semibold text-ink">Welcome to NEXUS OS.</h2>
+        <p className="mt-1.5 text-sm leading-relaxed text-ink-400">
+          A short conversation, and your workspace is built around your company — and you.
+        </p>
+      </div>
+
+      <ol className="mt-7 flex flex-1 flex-col gap-1.5">
         {PHASES.map((phase, index) => {
           const done = index < phaseIndex
           const here = index === phaseIndex
@@ -675,23 +698,35 @@ function Rail({
               // Staggered so the rail assembles downward on first paint rather
               // than appearing all at once. Inline because the delay is
               // per-index and Tailwind has no arbitrary-delay-by-loop utility.
-              className="animate-rise"
+              //
+              // The current step is a card rather than a bolder line: a soft
+              // fill and a warm bar at its edge, so where-you-are reads from
+              // across the room while done and upcoming stay quiet prose.
+              className={`relative animate-rise rounded-xl px-3 py-2.5 transition-colors duration-500 ${
+                here ? 'bg-bone-100' : ''
+              }`}
               style={{ animationDelay: `${index * 70}ms` }}
             >
+              {here && (
+                <span
+                  aria-hidden
+                  className="absolute -left-px bottom-3 top-3 w-[3px] rounded-full bg-gold-500"
+                />
+              )}
               <div className="flex items-start gap-3">
                 <span
                   aria-hidden
-                  className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full border text-[11px] font-medium transition-colors duration-500 ${
+                  className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border transition-colors duration-500 ${
                     done
                       ? 'border-ink bg-ink text-bone-50'
                       : here
-                        ? 'border-ink text-ink'
-                        : 'border-bone-300 text-ink-300'
+                        ? 'border-gold-300 bg-white text-gold-600 shadow-paper'
+                        : 'border-bone-200 bg-white text-ink-300'
                   }`}
                 >
-                  {done ? <CheckMark /> : index + 1}
+                  {done ? <CheckMark /> : <PhaseGlyph phase={phase.key} />}
                 </span>
-                <div className="min-w-0 pb-1">
+                <div className="min-w-0">
                   <p
                     aria-current={here ? 'step' : undefined}
                     className={`text-sm font-medium transition-colors ${
@@ -710,15 +745,6 @@ function Rail({
                   )}
                 </div>
               </div>
-
-              {index < PHASES.length - 1 && (
-                <span
-                  aria-hidden
-                  className={`ml-[0.84rem] block h-5 w-px transition-colors duration-500 ${
-                    done ? 'bg-ink/30' : 'bg-bone-300'
-                  }`}
-                />
-              )}
             </li>
           )
         })}
@@ -728,7 +754,7 @@ function Rail({
           greeting so the two cannot disagree — and `designation`, never `role`,
           because a permission is not small talk. */}
       {viewer?.name && (
-        <div className="mt-8 flex items-center gap-3 border-t border-bone-200 pt-5">
+        <div className="mt-6 flex items-center gap-3 rounded-2xl border border-bone-200 bg-bone-50 px-3.5 py-3">
           <span
             aria-hidden
             className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-ink text-sm font-medium text-bone-50"
@@ -760,6 +786,86 @@ function CheckMark() {
       className="h-3.5 w-3.5"
     >
       <path d="M4 12.5l5.5 5.5L20 6.5" />
+    </svg>
+  )
+}
+
+/**
+ * One glyph per step, in the product's own line weight.
+ *
+ * The rail used to number its steps. A number says how many there are and
+ * nothing a person can recognise; each of these says what *kind* of thing the
+ * step is — a site being read, a page, a conversation — before the label is
+ * read. `aria-hidden` on the tile that draws it: the label beside it is the
+ * accessible name, as it always was.
+ *
+ * `assembling` gets the same mark as `ready` only to keep the record total —
+ * it has no rail entry and the glyph is never drawn for it.
+ */
+function PhaseGlyph({ phase }: { phase: Phase }) {
+  const glyphs: Record<Phase, React.ReactNode> = {
+    analysing: (
+      <>
+        <circle cx="12" cy="12" r="8.5" />
+        <path d="M3.5 12h17" />
+        <ellipse cx="12" cy="12" rx="3.8" ry="8.5" />
+      </>
+    ),
+    brief: (
+      <>
+        <rect x="5" y="3.5" width="14" height="17" rx="2.5" />
+        <path d="M9 9h6" />
+        <path d="M9 13h6" />
+        <path d="M9 17h3.5" />
+      </>
+    ),
+    discovery: (
+      <path d="M12 20.5l-3.2-3H6.5A3.5 3.5 0 0 1 3 14V7.5A3.5 3.5 0 0 1 6.5 4h11A3.5 3.5 0 0 1 21 7.5V14a3.5 3.5 0 0 1-3.5 3.5h-2.3l-3.2 3z" />
+    ),
+    documents: (
+      <>
+        <rect x="8" y="3.5" width="12.5" height="14.5" rx="2.5" />
+        <path d="M3.5 8.5V18a2.5 2.5 0 0 0 2.5 2.5h10" />
+      </>
+    ),
+    tools: (
+      <>
+        <path d="M9 3.5V7" />
+        <path d="M15 3.5V7" />
+        <path d="M6.5 7h11v3.5a5.5 5.5 0 0 1-11 0z" />
+        <path d="M12 16v4.5" />
+      </>
+    ),
+    persona: (
+      <>
+        <circle cx="9" cy="8" r="3.4" />
+        <path d="M3.5 20.5a5.5 5.5 0 0 1 11 0" />
+        <path d="M15 11.5l2.2 2.2 3.8-4.2" />
+      </>
+    ),
+    assembling: (
+      <path d="M12 3.5l2.1 5.4 5.4 2.1-5.4 2.1L12 18.5l-2.1-5.4L4.5 11l5.4-2.1z" />
+    ),
+    ready: (
+      <>
+        <path d="M11 4l1.9 4.8L17.5 10.5l-4.6 1.7L11 17l-1.9-4.8L4.5 10.5l4.6-1.7z" />
+        <path d="M18 15.5l.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8z" />
+      </>
+    ),
+  }
+
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-[18px] w-[18px]"
+    >
+      {glyphs[phase]}
     </svg>
   )
 }
@@ -1418,24 +1524,91 @@ function MicIcon() {
   )
 }
 
+/**
+ * The last screen of setup, and the first impression the product makes.
+ *
+ * ## It used to print the model's own briefing
+ *
+ * `state.context.preamble` was rendered here verbatim. `SKILL.md` for
+ * `context-personalization` says what that field is: *"prose, under 400 words,
+ * written to be prepended to a system prompt"* — so a founder finishing
+ * onboarding read sentences addressed to an agent, including *"No pronoun is
+ * known for UI Walk; use the name or 'they'"* and *"access is resolved
+ * separately by the scope system per query"*.
+ *
+ * Showing somebody what the AI was told about them is a defensible feature and
+ * fits this product. Showing them a system prompt is not the same thing. So
+ * the preamble stays where it belongs and this renders `facts` — the same
+ * content, structured, which the skill produces precisely so a caller does not
+ * have to paste the prose.
+ *
+ * ## And it dropped the unlock it was holding
+ *
+ * The gap list showed `topic` only, joined with a middle dot, and then said
+ * *"Each names its own unlock in your workspace"* — the product telling
+ * somebody to go and look for what it already had in its hand. `unlocked_by`
+ * travelled the whole pipeline and was never rendered. It is the action, so it
+ * is the half worth showing.
+ *
+ * `readable_gaps` on the server normalises `topic` before it arrives: column
+ * names become phrases, sentences lose the trailing stop that produced
+ * *"exporting anything.."*, and a gap with no action is dropped rather than
+ * listed as a dead end.
+ */
 function ReadyCard({ state, router }: { state: AgentState; router: ReturnType<typeof useRouter> }) {
+  const facts = state.context.facts ?? []
+  const gaps = state.context.known_gaps ?? []
+
   return (
     <Card>
       <h2 className="font-display text-lg text-ink">Your Company Brain is live</h2>
-      {state.context.preamble && (
-        <p className="mt-2 whitespace-pre-line text-sm text-ink-600">{state.context.preamble}</p>
+      <p className="mt-2 max-w-prose text-sm leading-relaxed text-ink-600">
+        Every director reads this. You can correct any of it in Settings, and what you
+        say there outranks what we read.
+      </p>
+
+      {facts.length > 0 && (
+        <div className="mt-4">
+          <p className="font-mono text-2xs uppercase tracking-[0.12em] text-ink-400">
+            What it knows
+          </p>
+          <ul className="mt-2 flex flex-col gap-2">
+            {facts.map((fact) => (
+              <li key={fact.key} className="text-sm leading-relaxed text-ink-700">
+                {fact.value}
+                {/* The same scope tag the transcript showed as each answer was
+                    given, so the vocabulary does not change between the screen
+                    where you said it and the screen where it is kept. */}
+                <span className="ml-2 font-mono text-2xs uppercase tracking-[0.08em] text-ink-400">
+                  L{fact.scope}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
-      {(state.context.known_gaps ?? []).length > 0 && (
-        <p className="mt-3 text-xs text-ink-400">
-          Still locked:{' '}
-          {state.context.known_gaps?.map((gap) => gap.topic).join(' · ')}. Each names its own
-          unlock in your workspace.
-        </p>
+
+      {gaps.length > 0 && (
+        <div className="mt-5">
+          <p className="font-mono text-2xs uppercase tracking-[0.12em] text-ink-400">
+            Not yet, and what would change that
+          </p>
+          <ul className="mt-2 flex flex-col gap-1.5">
+            {gaps.map((gap) => (
+              <li key={gap.topic} className="text-sm leading-relaxed text-ink-500">
+                <span className="text-ink-700">{gap.topic}</span>
+                {' — '}
+                {gap.unlocked_by}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
+
       <button
         type="button"
         onClick={() => router.replace('/dashboard')}
-        className="mt-4 inline-block rounded-full bg-ink px-5 py-2 text-sm font-medium text-bone-50"
+        className="mt-6 inline-block rounded-full bg-ink px-5 py-2 text-sm font-medium text-bone-50"
       >
         Open my workspace
       </button>

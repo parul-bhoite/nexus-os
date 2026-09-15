@@ -118,12 +118,12 @@ async def budgets_for(
 _INSERT_SQL: Final = """
     INSERT INTO generation
       (workspace_id, module, prompt_version, input_snapshot, calculation_trace,
-       scope_key, outcome, unavailable_reason, input_tokens, output_tokens,
-       cost_micros, requested_by_user_id)
+       scope_key, outcome, unavailable_reason, prose, input_tokens,
+       output_tokens, cost_micros, requested_by_user_id)
     VALUES
       (:w, :module, :version, CAST(:snapshot AS json), CAST(:trace AS json),
-       :scope_key, :outcome, :reason, :input_tokens, :output_tokens,
-       :cost_micros, :user)
+       :scope_key, :outcome, :reason, :prose, :input_tokens,
+       :output_tokens, :cost_micros, :user)
     RETURNING id
 """
 
@@ -154,6 +154,13 @@ async def record(
     with a `WITH CHECK` on `workspace_id`, so an unscoped insert is refused
     outright rather than landing in the wrong tenant.
 
+    **`prose` is stored here and nowhere else.** Migration 0029 added it because
+    the table held everything about an answer except the answer: a narrated
+    sentence lived as long as its HTTP response, so a founder who reloaded a
+    tile lost it. One row keeps the sentence, the inputs it came from and the
+    arithmetic behind it as a single fact, which is what makes a disputed
+    sentence traceable at all.
+
     `cost_micros` stays 0 and is not estimated. There is no price table in the
     repository, and a made-up cost in a column called `cost_micros` is exactly
     the kind of number this whole phase exists to refuse. The budget is measured
@@ -171,6 +178,19 @@ async def record(
             " answered one must not claim a reason."
         )
 
+    # **The same rule for the sentence**, and the same reason for saying it
+    # here: `ck_generation_prose_matches_outcome` will refuse the row, but a
+    # constraint name off Neon does not tell a caller which of its branches
+    # forgot. An answered row with no prose claims success and can show
+    # nothing; an unavailable one carrying prose is prose nothing validated.
+    prose = answer.prose.strip()
+    if (answer.outcome is Outcome.ANSWERED) != bool(prose):
+        raise ValueError(
+            f"{module}: outcome {answer.outcome.value} with prose {prose[:40]!r}."
+            " An answered generation must carry the sentence it produced, and a"
+            " refusal must not carry one."
+        )
+
     result = await db.execute(
         text(_INSERT_SQL),
         {
@@ -185,6 +205,7 @@ async def record(
             "scope_key": scope_key,
             "outcome": answer.outcome.value,
             "reason": reason,
+            "prose": prose,
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
             "cost_micros": 0,

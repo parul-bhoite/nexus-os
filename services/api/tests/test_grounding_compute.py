@@ -79,14 +79,38 @@ def test_every_number_in_computed_came_from_the_calculator(capability_id: str) -
     "previous" figure with nothing behind it — and `answer._permitted` treats
     everything in `values` as a number the model is allowed to write. So an
     extra key here is a licence to state a figure no calculator produced.
+
+    **It grew from three to five when narration landed, and the reason has to
+    survive the growth.** `BlockCard` renders "6 of 9 checks passed" three
+    lines above where the narrated sentence goes. With only score, max_score
+    and percentage permitted, a narrator writing "6 of 9" was refused as
+    `INVENTED_NUMBER` — whose meaning is *"the model stated a figure no
+    calculation produced"*. That is a false accusation, rendered to the
+    customer, about the most sensitive claim this product makes, and it was the
+    easiest outcome in the enum to trigger.
+
+    Both additions are calculator outputs: `Computation.checks_passed` counts
+    the passing checks, `checks_total` is the length of the calculator's own
+    list. Nothing derived, nothing rounded, no "previous". The honest cost is
+    that `9` and `65` become numerals the prose may state in an unrelated
+    sense — which is why this widened by exactly two named outputs rather than
+    by everything that would be convenient.
     """
     result = compute_from_crawl(capability_id, snapshot())
     assert result is not None
 
-    assert set(result.computed.values) == {"score", "max_score", "percentage"}
+    assert set(result.computed.values) == {
+        "score",
+        "max_score",
+        "percentage",
+        "checks_passed",
+        "checks_total",
+    }
     assert result.computed.values["score"] == float(result.score.score)
     assert result.computed.values["max_score"] == float(result.score.max_score)
     assert result.computed.values["percentage"] == float(result.score.percentage)
+    assert result.computed.values["checks_passed"] == float(result.checks_passed)
+    assert result.computed.values["checks_total"] == float(len(result.score.checks))
 
 
 def test_the_figure_is_complete_so_the_pipeline_will_not_refuse_it(capability_id: str) -> None:
@@ -173,7 +197,16 @@ def test_the_trace_carries_the_keys_narrate_reads() -> None:
     """
     result = compute_from_crawl(next(iter(CRAWL_AUDITS)), snapshot())
     assert result is not None
-    for key in ("method", "window", "checks", "numerator", "denominator", "page", "measures"):
+    for key in (
+        "method",
+        "window",
+        "delta",
+        "checks",
+        "numerator",
+        "denominator",
+        "page",
+        "measures",
+    ):
         assert key in result.trace, f"narrate and ledger.record expect trace[{key!r}]"
 
 
@@ -263,3 +296,75 @@ def test_the_label_is_not_the_capability_name(capability_id: str) -> None:
         "measures must name what this figure does NOT cover, or the tile's wider "
         "promise reads as delivered"
     )
+
+
+# ── What the narrator is told about comparison ────────────────
+
+
+def test_a_single_crawl_declares_no_baseline_rather_than_an_empty_delta(
+    capability_id: str,
+) -> None:
+    """`SKILL.md` distinguishes three absences and this is one of them.
+
+    `narrate` sends `delta: trace.get("delta", "")`, and the runner's
+    `requires_grounding` check passes on a present-but-empty key — so the model
+    received `delta: ''` and had to guess what that meant. The prompt already
+    handles the real case verbatim: *"`no_baseline` — there is nothing to
+    compare against. Say so. Never call it flat, which claims a comparison you
+    did not make."*
+
+    Set in the calculator rather than defaulted in `narrate`, because it is the
+    calculator that knows it scored one snapshot. A default there would make a
+    future calculator that genuinely computed a zero delta and forgot to record
+    it silently assert that we did not compare when we did — the exact inverse
+    of the rule above.
+    """
+    result = compute_from_crawl(capability_id, snapshot())
+    assert result is not None
+
+    assert result.trace["delta"] == "no_baseline"
+    # No numeral in it, which is why it is safe to send. When re-crawling makes
+    # a real delta possible, a delta the prose may state has to go into
+    # `computed.values` too, or the invented-number guard rejects every
+    # sentence that mentions it.
+    assert not any(character.isdigit() for character in str(result.trace["delta"]))
+
+
+def test_the_narrator_is_never_given_a_fact_value() -> None:
+    """**Why a workspace-wide narration read-back is safe.**
+
+    The plan for this slice assumed both audits had empty `consumes_facts`, and
+    that a workspace-wide read of stored prose was safe because of it. That
+    assumption was wrong: `marketing.seo_gaps` consumes `arabic_in_scope`,
+    which is `Scope.L3_DEPARTMENT` — a Marketing fact. The one-line guard
+    written to check the assumption is what caught it.
+
+    The read is safe anyway, for a narrower and better-founded reason.
+    `narrate` sends the model exactly six grounding keys — label, value, unit,
+    window, sources, delta — and **not one of them is a fact.** The consumed
+    fact goes into `input_snapshot`, which is stored on the row and never sent
+    to the provider, so the model cannot write a value it was never shown. The
+    read-back then selects `prose` and five `calculation_trace` keys and
+    **never `input_snapshot`** (asserted where that query lives).
+
+    So the invariant is not "an audited capability consumes no facts" — it is
+    "the narrator is given no facts, and the display read does not carry the
+    ones we stored". Both halves are checkable, which the original assumption
+    was not.
+
+    The day the narrator *is* given facts — to say why a number moved, which is
+    what `because` is for — this test fails, and the read-back has to be scoped
+    before it can pass again. That is the intended tripwire.
+    """
+    from app.ai.runtime.skills import get_registry
+    from app.grounding.answer import NARRATOR
+
+    required = set(get_registry().get(NARRATOR).requires_grounding)
+
+    assert required == {"label", "value", "unit", "window", "sources", "delta"}
+    for key in required:
+        assert "fact" not in key, key
+
+    # And the skill cannot persist anything it was given, so a fact reaching it
+    # by some future route still could not be written back as an answer.
+    assert get_registry().get(NARRATOR).writes == ()

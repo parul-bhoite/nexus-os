@@ -1,4 +1,7 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { MODEL_TIMEOUT_MS } from '@/lib/auth-proxy'
 
 /**
  * The BFF proxy, tested where Playwright cannot reach.
@@ -152,5 +155,78 @@ describe('proxyToApi', () => {
 
     expect(response.status).toBe(204)
     expect(await response.text()).toBe('')
+  })
+
+  it('calls a timeout a timeout, not an unreachable service', async () => {
+    // **The fix for a message that sent a founder to the wrong diagnosis.**
+    //
+    // Every failure used to render the caller's `unavailable` sentence. A
+    // browser walkthrough hit it while the API was working: one onboarding
+    // request spent 37 seconds retrying a rejected question, the 30-second
+    // abort fired, and the screen said "Cannot reach the onboarding service
+    // right now." The service was reachable the whole time.
+    //
+    // Different words because different actions: an unreachable service is
+    // worth reporting, a slow one is worth retrying.
+    upstream.mockRejectedValue(new DOMException('aborted', 'AbortError'))
+
+    const response = await (await proxy())(request(), {
+      path: '/onboarding/agent/answer',
+      method: 'POST',
+      body: {},
+      unavailable: 'Cannot reach the onboarding service right now.',
+    })
+
+    expect(response.status).toBe(504)
+    const body = await response.json()
+    expect(body.detail).not.toContain('Cannot reach')
+    expect(body.detail).toMatch(/took longer/i)
+    expect(body.detail).toMatch(/nothing was lost|nothing is broken/i)
+  })
+
+  it('still says unreachable when the service really is unreachable', async () => {
+    // The other half. Narrowing the timeout case must not swallow a genuine
+    // connection failure into the same reassuring sentence.
+    upstream.mockRejectedValue(new TypeError('fetch failed'))
+
+    const response = await (await proxy())(request(), {
+      path: '/onboarding/agent/answer',
+      method: 'POST',
+      body: {},
+      unavailable: 'Cannot reach the onboarding service right now.',
+    })
+
+    expect(response.status).toBe(503)
+    expect((await response.json()).detail).toBe('Cannot reach the onboarding service right now.')
+  })
+
+  it('gives every model-backed onboarding route a model-sized timeout', () => {
+    // **The guard for the defect a browser found.** Three routes that invoke a
+    // skill — brief, answer, tools — were on the thirty-second default, which
+    // that constant's own comment says is sized for "a round trip to a managed
+    // database". The brief step aborted mid-call while the API was working and
+    // the founder was told the service could not be reached.
+    //
+    // Asserted against the files rather than against a list held here, so a
+    // seventh model-backed route cannot be added with the database number and
+    // a green suite. The six are the ones whose API handler calls
+    // `_require_model()`.
+    const modelBacked = ['read', 'brief', 'discovery', 'next', 'answer', 'tools']
+
+    for (const route of modelBacked) {
+      const source = readFileSync(
+        resolve(__dirname, `../../app/api/onboarding/agent/${route}/route.ts`),
+        'utf8',
+      )
+      const match = source.match(/timeoutMs:\s*([A-Z_0-9]+)/)
+      expect(match, `${route} has no timeoutMs and inherits the database default`).toBeTruthy()
+
+      const value = match![1]
+      const milliseconds = value === 'MODEL_TIMEOUT_MS' ? MODEL_TIMEOUT_MS : Number(value)
+      expect(
+        milliseconds,
+        `${route} allows ${milliseconds}ms, which is not enough for a model call`,
+      ).toBeGreaterThanOrEqual(60_000)
+    }
   })
 })

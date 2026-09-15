@@ -22,13 +22,19 @@ doc 06 §4.5, the same rule `filter_records` follows.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Annotated
+from datetime import UTC, datetime
+from typing import Annotated, Final
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import text
 
+from app.ai.registry import get_provider
 from app.ai.runtime.fields import FIELD_CATALOGUE
+from app.ai.runtime.hooks import get_hooks
+from app.ai.runtime.runner import SkillRunner
+from app.auth.csrf import require_csrf
+from app.config import Settings, get_settings
 from app.db import _unscoped_session
 from app.deps import CurrentScope
 from app.deps_scope import enforce_department
@@ -46,11 +52,13 @@ from app.domain.dashboards import (
 )
 from app.domain.department_answers import BINDING_ONLY_SQL
 from app.domain.departments import label_for, runs_department, selected_departments
+from app.domain.narration import sentence_for
 
 # Aliased: `BY_DEPARTMENT` already means the dashboard *offerings* here, and two
 # dictionaries with one name is how the wrong one gets read.
 from app.domain.question_bank import BY_DEPARTMENT as QUESTIONS_BY_DEPARTMENT
 from app.domain.registry import (
+    BY_ID,
     Capability,
     CapabilityKind,
     canonical_id,
@@ -68,8 +76,10 @@ from app.domain.sections import (
     Section,
     sections_for,
 )
-from app.grounding.compute import compute_from_crawl
+from app.grounding.answer import NARRATOR, narrate
+from app.grounding.compute import compute_from_crawl, computes
 from app.grounding.context import CompanyContext, assemble
+from app.grounding.pipeline import Outcome, UnavailableReason
 from app.retrieval.crawl import CrawlSnapshot, current_page_signals
 from app.retrieval.scoped import apply_workspace_scope, scoped_connection
 
@@ -179,6 +189,63 @@ class OfferingOut(BaseModel):
     needs: list[str]
     phase: int
     note: str
+
+
+class NarrateIn(BaseModel):
+    """What the client asks to have explained."""
+
+    key: str
+    """The canonical capability id — `marketing.seo_gaps`.
+
+    Exactly the string the client was served as `BlockOut.key`, so nothing is
+    derived and there is no second spelling of the same thing. Not a department
+    plus a block name: the block key *is* the capability id, and two ways to
+    name one thing is two ways to disagree about it.
+    """
+
+
+class NarrationOut(BaseModel):
+    """A sentence, and enough to trace it."""
+
+    prose: str
+    narrated_at: str
+    prompt_version: str
+    """Which `SKILL.md` wrote it. Shown in the working drawer beside the
+    calculator's `method`, so a disputed sentence traces to the instructions
+    that produced it as readily as a disputed figure traces to its arithmetic."""
+
+
+class NarrationResultOut(BaseModel):
+    """What just happened, which is not the same question as what is true.
+
+    The GET says what a tile holds; this says what one attempt did. That split
+    is why no refusal reason is stored on `BlockOut` — a reason kept there
+    would resurrect yesterday's "budget exhausted" on every page load, hours
+    after the allowance reset.
+    """
+
+    key: str
+    outcome: str
+    reason: str
+    """Empty unless `outcome` is `unavailable`."""
+
+    message: str
+    """Never empty, and always server-authored.
+
+    `BlockCard` already states the rule for `unlock`: the sentence comes from
+    the API so one wording change reaches every surface, and so a screen cannot
+    ship with the space drawn and the copy forgotten. A reason-to-sentence map
+    in the browser would be that failure with an extra step.
+    """
+
+    narration: NarrationOut | None = None
+    generation_id: str
+    """Empty when no row was written — which happens only when nothing ran."""
+
+    measured_at: str
+    """The figure this describes. The client compares it with the one it is
+    showing: if the page was re-crawled between load and click, the sentence is
+    about a number the reader cannot see."""
 
 
 class CheckOut(BaseModel):
@@ -776,19 +843,39 @@ def _watch_for(department: Department, context: CompanyContext) -> list[WatchOut
     ]
 
 
-@router.get("/{department}", response_model=DirectorOut)
-async def director_dashboard(
-    department: Department,
-    scope: CurrentScope,
-    chosen: RunningDepartments,
-    observed: ObservedSources,
-) -> DirectorOut:
-    """One director's page.
+async def reachable_director(
+    department: Department, scope: CurrentScope, chosen: RunningDepartments
+) -> Director:
+    """The four refusals that gate every director surface, in one place.
 
-    `enforce_department` is what refuses a department the caller does not hold,
-    and it 404s. The executive check is separate because it is a different rule
-    with a different answer: the Chief of Staff page is not a department someone
-    might be added to, so naming the requirement is safe and useful.
+    **Written twice before this existed** — in `director_dashboard` and
+    `director_setup` — and already drifting: the two copies differed by a
+    comment, which is how the next pair differs by a check. Slice 2 would have
+    made it three copies. A permission check duplicated per route is one that
+    diverges per route, and one handler refusing where another admits is the
+    shape of a leak rather than a cosmetic bug.
+
+    Extracted **before** the narration endpoint was written, so that route
+    could not be what introduced a divergence; the proof that nothing moved is
+    that `test_dashboard_scope.py` and `test_api_scope_enforcement.py` are
+    unchanged.
+
+    The order is the one both copies used, and each step answers a different
+    question:
+
+    1. **Is this a director at all?** 404 — an unknown department is not a
+       thing you may not see, it is a thing that does not exist.
+    2. **Is it the executive surface, and may this caller see it?** 403 *with a
+       sentence*, because the Chief of Staff page is not a department somebody
+       could be added to, so naming the requirement is safe and useful.
+    3. **Does the caller hold this department?** `enforce_department`, which
+       404s rather than 403s — a department you do not hold must not be
+       distinguishable from one that does not exist.
+    4. **Does the company run it?** Finding #21: an owner holds all seven while
+       running only the ones chosen at stage 4, and without this the list and
+       the detail disagreed — `GET /dashboards` omitted People while
+       `GET /dashboards/hr` served it. An empty `chosen` means the company has
+       not chosen yet, which reads as "show everything" in both places.
     """
     director = BY_DEPARTMENT.get(department)
     if director is None:
@@ -802,17 +889,28 @@ async def director_dashboard(
 
     enforce_department(scope, director.department)
 
-    # Finding #21. `enforce_department` asks whether the *caller* holds this
-    # department; `chosen` asks whether the *company runs* it, and an owner
-    # holds all seven while running only the ones they picked at stage 4.
-    # Without this the list and the detail disagreed: `GET /dashboards` omitted
-    # People and `GET /dashboards/hr` served it. `chosen` empty means the
-    # company has not chosen yet, which the list treats as "show everything"
-    # rather than "show nothing" — the same reading, so the two agree before
-    # stage 4 as well as after it.
     if not runs_department(chosen, director.department):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
 
+    return director
+
+
+ReachableDirector = Annotated[Director, Depends(reachable_director)]
+
+
+@router.get("/{department}", response_model=DirectorOut)
+async def director_dashboard(
+    director: ReachableDirector,
+    scope: CurrentScope,
+    observed: ObservedSources,
+) -> DirectorOut:
+    """One director's page.
+
+    `enforce_department` is what refuses a department the caller does not hold,
+    and it 404s. The executive check is separate because it is a different rule
+    with a different answer: the Chief of Staff page is not a department someone
+    might be added to, so naming the requirement is safe and useful.
+    """
     # **One read per request, not one per tile.** Both audited capabilities
     # score the same page, so a per-tile read would be the same round trip to
     # `us-east-2` twice for one answer — the shape `director_setup` already
@@ -924,37 +1022,84 @@ class SetupOut(BaseModel):
     watch: list[WatchOut]
 
 
+_NARRATED_MESSAGE: Final = "Written from the figure above and nothing else."
+"""What a success says. Short, because the sentence itself is the answer and
+this is the label on it."""
+
+
+def _narratable(key: str, director: Director) -> Capability:
+    """The capability this caller may have narrated, or a 404.
+
+    **Six checks, all before `narrate` sees the id**, because
+    `answer.narrate` does `BY_ID[capability_id]` and raises a bare `KeyError`
+    on a miss — deliberately, per its own docstring, which makes an unvalidated
+    id a 500 on a typo.
+
+    404 rather than 422 throughout. The client only ever gets keys from a
+    payload it just fetched, so any other value is a typo or a probe, and this
+    file's standing rule is that "this exists and you may not have it" is itself
+    a disclosure.
+    """
+    capability: Capability | None = BY_ID.get(key)
+    if capability is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+
+    # **The check with no precedent anywhere else in this codebase**, because
+    # no other route takes a capability id from the caller. `reachable_director`
+    # proved they may open *this* department; without this, a Marketing-only
+    # manager posts `finance.runway_alert` to `/dashboards/marketing/narrate`
+    # and has Finance narrated under a Marketing permission.
+    if capability.department is not director.department:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+
+    if capability.kind is not CapabilityKind.TILE:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+
+    # Nothing computes it, so there is no number to explain. Asking a model to
+    # account for a figure that does not exist is how a plausible one gets
+    # written.
+    if not computes(capability.id) or not capability.reachable:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+
+    # **There is deliberately no check on `consumes_facts` here**, and the
+    # first draft of this function had one — which would have refused
+    # `marketing.seo_gaps`, the tile the whole slice exists for, because it
+    # consumes `arabic_in_scope` (a `Scope.L3_DEPARTMENT` fact).
+    #
+    # Consuming a department fact is not what would make a workspace-wide
+    # read-back unsafe. Two narrower things guarantee that, and both are
+    # asserted rather than assumed:
+    #
+    #   `narrate` sends the model six grounding keys — label, value, unit,
+    #   window, sources, delta — and **not one of them is a fact**, so the
+    #   prose cannot contain a value the model was never shown
+    #   (`test_grounding_compute.py::test_the_narrator_is_never_given_a_fact_value`).
+    #
+    #   The consumed fact lands in `input_snapshot`, and
+    #   `retrieval/narration.py` **never selects that column**
+    #   (`test_narration_isolation.py::test_the_reader_never_selects_the_input_snapshot`).
+    #
+    # Refusing on `consumes_facts` would have been a guard aimed at the wrong
+    # thing, disabling a working feature while leaving the actual exposure —
+    # a future reader that does select the snapshot — untouched.
+    return capability
+
+
 @router.get("/{department}/setup", response_model=SetupOut)
-async def director_setup(
-    department: Department, scope: CurrentScope, chosen: RunningDepartments
-) -> SetupOut:
+async def director_setup(director: ReachableDirector, scope: CurrentScope) -> SetupOut:
     """The department's own answers, and the risks it named.
 
-    The same two refusals as the director page, in the same order, because a
-    caller who cannot open Finance must not be able to read Finance's answers
-    through a second door — which is exactly the shape of bug a lazily-loaded
-    tab invites.
+    **The same refusals as the director page, because they are literally the
+    same code** — `reachable_director`. They used to be a second copy here, on
+    the argument that "a caller who cannot open Finance must not be able to
+    read Finance's answers through a second door", which is right and is
+    exactly why the check should not have been duplicated to say it.
 
     Read through `grounding.context.assemble`, which is the single path (P14).
     A query of this route's own would be the second context the assembler exists
     to prevent: the one that forgets the superseded-fact filter and quotes last
     month's answer beside this month's.
     """
-    director = BY_DEPARTMENT.get(department)
-    if director is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
-
-    if director.executive_only and not scope.can_see_executive_surface:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN,
-            "The Chief of Staff view requires an Owner or Executive role.",
-        )
-
-    enforce_department(scope, director.department)
-
-    if not runs_department(chosen, director.department):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
-
     async with scoped_connection(scope) as db:
         context = await assemble(db, scope)
 
@@ -962,4 +1107,110 @@ async def director_setup(
         department=director.department.value,
         facts=_facts_for(director.department, context),
         watch=_watch_for(director.department, context),
+    )
+
+
+@router.post(
+    "/{department}/narrate",
+    response_model=NarrationResultOut,
+    dependencies=[Depends(require_csrf)],
+)
+async def narrate_block(
+    body: NarrateIn,
+    director: ReachableDirector,
+    scope: CurrentScope,
+    observed: ObservedSources,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> NarrationResultOut:
+    """Put a sentence around a figure this tile already shows.
+
+    **A button, not a page load.** `director_dashboard` makes no model call and
+    must not start: a key-less deployment is a *supported* state (ADR 0011), so
+    a model on the render path would turn a computable 45/65 into `unavailable`
+    for a whole page, and a founder reloading would spend their daily allowance
+    on prose they did not ask for. Here the spend is attributable to somebody
+    who pressed something.
+
+    **No `_require_model()` gate**, unlike `routes/onboarding_agent.py`. That
+    pattern exists because guided onboarding *requires* a model. A tile does
+    not: with no key, `narrate` catches `LlmUnavailableError`, writes its row
+    and returns `MODEL_UNAVAILABLE`, and the tile says so beside a figure that
+    never needed one. A 503 here would turn a documented configuration into an
+    outage on the one screen where somebody is deciding whether to trust us.
+
+    **No new quota.** `Budgets.exhausted` already binds, is counted from the
+    rows in the workspace's own reporting timezone, and returns a named reason.
+    A per-tile counter would be a second source of truth about spending, which
+    `ledger.py` refuses on principle.
+    """
+    capability = _narratable(body.key, director)
+
+    # No crawl is an answer, and a 200 carrying it. A 4xx would push the client
+    # into an error path and tempt it to render something of its own, when the
+    # tile already has the specific sentence: "Needs a read of your website."
+    #
+    # And no `generation` row: the rule that every refusal is recorded governs
+    # answers we *attempted*. Nothing ran here, and a row for a calculation
+    # that never happened is noise in the table the ledger exists to keep
+    # readable.
+    snapshot = observed.crawl
+    if snapshot is None:
+        return NarrationResultOut(
+            key=capability.id,
+            outcome=Outcome.UNAVAILABLE.value,
+            reason=UnavailableReason.MISSING_INPUT.value,
+            message=unlock_for_sources(capability.required_sources, connected=frozenset())
+            or sentence_for(UnavailableReason.MISSING_INPUT),
+            generation_id="",
+            measured_at="",
+        )
+
+    computation = compute_from_crawl(capability.id, snapshot)
+    if computation is None:  # pragma: no cover - `_narratable` already refused it
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+
+    runner = SkillRunner(get_provider(), hooks=get_hooks(), workspace_id=str(scope.workspace_id))
+
+    async with scoped_connection(scope) as db:
+        context = await assemble(db, scope)
+        result = await narrate(
+            db,
+            scope,
+            capability_id=capability.id,
+            context=context,
+            computed=computation.computed,
+            trace=computation.trace,
+            runner=runner,
+            settings=settings,
+        )
+        # The ledger row is written inside this transaction and committed with
+        # it, so the answer and its provenance are one fact — `ledger.record`
+        # declines to commit for exactly that reason.
+        await db.commit()
+
+    answer = result.answer
+    narrated = (
+        NarrationOut(
+            prose=answer.prose,
+            narrated_at=datetime.now(UTC).date().isoformat(),
+            prompt_version=runner.registry.get(NARRATOR).version,
+        )
+        if result.answered
+        else None
+    )
+
+    return NarrationResultOut(
+        key=capability.id,
+        outcome=answer.outcome.value,
+        reason=answer.reason.value if answer.reason else "",
+        message=(
+            _NARRATED_MESSAGE
+            if result.answered
+            else sentence_for(answer.reason)
+            if answer.reason
+            else sentence_for(UnavailableReason.SCHEMA_INVALID)
+        ),
+        narration=narrated,
+        generation_id=str(result.generation_id),
+        measured_at=computation.measured_at.date().isoformat(),
     )

@@ -40,8 +40,20 @@ not read the answer here.
 ## Shape
 
 `preamble` is prose, under 400 words, written to be prepended to a system prompt.
+**Nobody but another agent reads it**, so write it for a model: say what is
+known, what is not, and what must not be inferred. It is never shown to the
+person it describes.
+
 `facts` is the same content structured, for callers that want to filter by scope
-rather than paste the prose.
+rather than paste the prose. **This is what a person sees**, so each `value`
+should read as a sentence somebody would recognise about their own business.
+
+`known_gaps[].topic` is **a short noun phrase naming what is missing** — "Brand
+voice", "Products and services" — in title case, under six words, with no full
+stop. It is rendered as an item in a list on the last screen of setup, beside
+`unlocked_by`, which is the action that closes it. Do not put a column name
+there (`brain.brand_voice` is not a topic), and do not write a sentence: the
+screen supplies the punctuation and the surrounding words.
 
 Every entry in `facts` keeps its scope tag exactly as given. You do not assign
 scopes and you do not change them.

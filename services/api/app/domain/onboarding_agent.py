@@ -71,7 +71,23 @@ answer is for. Nothing is lost by not asking now: an unanswered field is a
 `known_gap` with its own unlock, and that is what the gap list is for.
 """
 
-MAX_REJECTIONS = 8
+MAX_REJECTIONS = 4
+"""How many refused questions before the hand-written fallback is served.
+
+**Eight, until a browser showed what eight costs.** Each
+`question-generation` call against the real provider takes 4.2 to 4.9 seconds,
+so a fully-rejected turn spent **37 seconds** — past the thirty-second abort in
+`apps/web/lib/auth-proxy.ts`, which means the founder saw a failure while the
+API was still working and the fallback arrived for a client that had gone.
+
+Four fits: four attempts is twenty seconds at the worst observed latency,
+leaving ten for storing the answer and the round trips to `us-east-2`. Four is
+also enough now that each attempt carries what the last one got wrong — the
+retries were previously identical to each other, so eight of them bought
+exactly as much as one.
+
+`tests/test_onboarding_retry_feedback.py` asserts the arithmetic rather than
+the number, so raising this fails the build with the reason attached."""
 """Consecutive rejected questions before the loop stops asking the model.
 
 **It was 3, and three validators now share it.** The undeclared-target gate it
@@ -307,14 +323,22 @@ class OnboardingAgent:
                 ),
             }
 
-        rejections = 0
-        while rejections < MAX_REJECTIONS:
+        # **The reasons, not a counter.** This was `rejections = 0` and a bare
+        # `continue`, which re-ran the command with identical arguments — so the
+        # model produced the same question and was refused for the same reason,
+        # eight times, in 37 seconds. Past the BFF's thirty-second abort, so the
+        # founder was told the onboarding service could not be reached while it
+        # was working normally. Found in a browser; the logs showed the same
+        # sentence eight times over.
+        rejections: list[str] = []
+        while len(rejections) < MAX_REJECTIONS:
             result = await self._commands.run(
                 "generate-questions",
                 self._ctx,
                 session_id=state.session_id,
                 already_known=state.answers,
                 conversation=state.conversation,
+                rejections=tuple(rejections),
             )
             if result.get("done"):
                 floor = self._floor(state)
@@ -330,7 +354,10 @@ class OnboardingAgent:
                     or "I have enough to build on.",
                 }
             if result.get("rejected"):
-                rejections += 1
+                # The reason travels to the next attempt. Without it the retry
+                # is the same call made twice.
+                reason = str(result.get("reason", "")).strip()
+                rejections.append(reason or "that was refused, for a reason nobody recorded")
                 continue
 
             state.asked += 1
