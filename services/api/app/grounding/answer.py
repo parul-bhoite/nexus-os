@@ -172,11 +172,17 @@ async def narrate(
         result = await runner.invoke(
             NARRATOR,
             # **One user turn, and it is not optional.** This was `[]`, and the
-            # Anthropic API refuses an empty message list outright —
+            # provider's API refuses an empty message list outright —
             # `messages: at least one message is required`, HTTP 400 — which
             # arrives here as `LlmRequestError` and leaves every tile reading
             # `PROVIDER_FAILED`. So narration could never have produced a
             # sentence in any deployment.
+            #
+            # The vendor is deliberately not named here, in a comment, because
+            # `test_ai_boundary` reads the prose as well as the imports — a
+            # mention in a docstring is what caught the *other* vendor once.
+            # This module depends on `LlmProvider` and must read as though it
+            # does not know who implements it.
             #
             # It survived because this function had no production caller and
             # `ScriptedProvider` did not check the list. Both are now closed:

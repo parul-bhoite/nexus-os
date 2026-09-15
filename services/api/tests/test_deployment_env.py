@@ -81,10 +81,16 @@ def test_the_deployment_document_matches_settings() -> None:
 
     expected = render()
     if os.environ.get("NEXUS_WRITE_ENV_DOC"):
-        DOC.write_text(expected)
+        # `encoding="utf-8"` on both sides, and the *write* is the dangerous one.
+        # `write_text` without it encodes in the locale codepage — cp1252 on
+        # Windows — so regenerating this document on a developer's machine would
+        # commit a mojibake version of it. The read has the mirror of the same
+        # fault: it decodes UTF-8 as cp1252 and the comparison fails on an
+        # em-dash that is identical in both files.
+        DOC.write_text(expected, encoding="utf-8")
 
     assert DOC.exists(), f"{DOC} is missing; regenerate with NEXUS_WRITE_ENV_DOC=1"
-    assert DOC.read_text() == expected, (
+    assert DOC.read_text(encoding="utf-8") == expected, (
         "doc/DEPLOYMENT-ENV.md disagrees with Settings. "
         "Regenerate with NEXUS_WRITE_ENV_DOC=1 and read the diff."
     )

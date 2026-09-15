@@ -313,7 +313,12 @@ def test_nothing_is_cached_across_an_entity_switch() -> None:
     cached: set[str] = set()
 
     for source in app_root.rglob("*.py"):
-        tree = ast.parse(source.read_text())
+        # `encoding="utf-8"`: without it `read_text` decodes with the locale
+        # codepage, which on Windows is cp1252, and this guard dies on the first
+        # em-dash in a docstring rather than on a cached function. An I5 check
+        # that cannot run is worse than one that fails — it reports as an error
+        # in the test rather than as a cache nobody scoped.
+        tree = ast.parse(source.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
                 continue
@@ -322,7 +327,13 @@ def test_nothing_is_cached_across_an_entity_switch() -> None:
                 if name is None and isinstance(decorator, ast.Attribute):
                     name = decorator.attr
                 if name in {"lru_cache", "cache"}:
-                    cached.add(f"{source.relative_to(app_root)}::{node.name}")
+                    # `as_posix()`, so the key is the same on every platform.
+                    # `str()` gives `ai\registry.py::get_provider` on Windows,
+                    # which fails this equality against a list written with
+                    # forward slashes — reported as "a new process-level cache
+                    # appeared", naming two caches that have been there all
+                    # along.
+                    cached.add(f"{source.relative_to(app_root).as_posix()}::{node.name}")
 
     # Six, and every one is keyed by the **process** rather than by anything
     # narrower: settings, three engines/sessionmakers, the language-model

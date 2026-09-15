@@ -54,8 +54,22 @@ PATTERN: Final = re.compile(r"""set_config\(\s*['"]nexus\.""")
 def _sites() -> set[str]:
     found = set()
     for path in APP.rglob("*.py"):
-        if PATTERN.search(path.read_text()):
-            found.add(str(path.relative_to(APP)))
+        # `encoding="utf-8"` is not optional. Without it `read_text` uses the
+        # *locale* codepage, which on Windows is cp1252 — and this repository's
+        # prose is full of em-dashes and curly quotes, so the read raises
+        # `UnicodeDecodeError` and the containment ratchet fails to run at all.
+        # It passes on a UTF-8 runner, which is the whole problem: the guard was
+        # green in CI and unrunnable on a developer's machine.
+        if PATTERN.search(path.read_text(encoding="utf-8")):
+            # `as_posix()`, not `str()`. On Windows `str()` yields
+            # `retrieval\scoped.py`, which matches neither `SANCTIONED` nor
+            # `ALLOWED_FOR_NOW` — so the one sanctioned site was reported as an
+            # unlisted offender *and* as missing from the sanctioned set, in the
+            # same run. Both readings were wrong, and both looked alarming: the
+            # ratchet appeared to have caught a tenancy violation in the very
+            # module that exists to prevent them. `test_ai_boundary` already
+            # normalises this way.
+            found.add(path.relative_to(APP).as_posix())
     return found
 
 
