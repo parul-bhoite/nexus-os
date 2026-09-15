@@ -752,7 +752,7 @@ function Rail({
   const initial = viewer?.name?.trim()?.[0]?.toUpperCase() ?? '\u00b7'
 
   return (
-    <aside className="z-10 flex flex-col border-b border-bone-200 bg-white px-5 py-6 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto lg:border-b-0 lg:border-r lg:px-7 lg:py-8">
+    <aside className="z-10 flex flex-col border-b border-bone-200 bg-white px-4 py-4 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto lg:border-b-0 lg:border-r lg:px-7 lg:py-8">
       <span className="flex items-center gap-2.5 font-display text-base font-semibold text-ink">
         <PresenceMark state={aura} />
         NEXUS <span className="font-normal opacity-60">OS</span>
@@ -761,15 +761,24 @@ function Rail({
       {/* The rail opens by saying welcome, because it is the first thing on the
           first screen of the product and a list of steps is a strange way to
           say hello. One sentence of what is about to happen; the greeting
-          bubble on the canvas still carries the personal half. */}
-      <div className="mt-8 animate-rise">
+          bubble on the canvas still carries the personal half.
+
+          Desktop only. On a phone the rail is a band across the top of the
+          conversation rather than a column beside it, and a welcome heading
+          there costs most of the first screen — the greeting bubble says the
+          same thing a few hundred pixels further down, personally, and that is
+          the one worth keeping. */}
+      <div className="mt-8 hidden animate-rise lg:block">
         <h2 className="font-display text-xl font-semibold text-ink">Welcome to NEXUS OS.</h2>
         <p className="mt-1.5 text-sm leading-relaxed text-ink-400">
           A short conversation, and your workspace is built around your company — and you.
         </p>
       </div>
 
-      <ol className="mt-7 flex flex-1 flex-col gap-1.5">
+      {/* Across on a phone, down on a desktop. Three sections fit a narrow row;
+          seven never did, which is part of why the rail was a column that ate
+          the first screen on mobile. */}
+      <ol className="mt-5 flex flex-1 flex-row items-stretch gap-1.5 lg:mt-7 lg:flex-col">
         {SECTIONS.map((section, index) => {
           const done = index < sectionIndex
           const here = index === sectionIndex
@@ -783,21 +792,23 @@ function Rail({
               // The current step is a card rather than a bolder line: a soft
               // fill and a warm bar at its edge, so where-you-are reads from
               // across the room while done and upcoming stay quiet prose.
-              className={`relative animate-rise rounded-xl px-3 py-2.5 transition-colors duration-500 ${
+              className={`relative flex-1 animate-rise rounded-xl px-2.5 py-2 transition-colors duration-500 lg:flex-none lg:px-3 lg:py-2.5 ${
                 here ? 'bg-bone-100' : ''
               }`}
               style={{ animationDelay: `${index * 70}ms` }}
             >
+              {/* Under the step on a phone, beside it on a desktop — the edge
+                  the eye follows in each layout. */}
               {here && (
                 <span
                   aria-hidden
-                  className="absolute -left-px bottom-3 top-3 w-[3px] rounded-full bg-gold-500"
+                  className="absolute inset-x-2.5 bottom-0 h-[3px] rounded-full bg-gold-500 lg:inset-x-auto lg:-left-px lg:bottom-3 lg:top-3 lg:h-auto lg:w-[3px]"
                 />
               )}
-              <div className="flex items-start gap-3">
+              <div className="flex items-center gap-2 lg:items-start lg:gap-3">
                 <span
                   aria-hidden
-                  className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border transition-colors duration-500 ${
+                  className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl border transition-colors duration-500 lg:h-9 lg:w-9 ${
                     done
                       ? 'border-ink bg-ink text-bone-50'
                       : here
@@ -810,13 +821,20 @@ function Rail({
                 <div className="min-w-0">
                   <p
                     aria-current={here ? 'step' : undefined}
-                    className={`text-sm font-medium transition-colors ${
+                    className={`truncate text-xs font-medium transition-colors lg:text-sm ${
                       here ? 'text-ink' : done ? 'text-ink-500' : 'text-ink-300'
                     }`}
                   >
                     {section.label}
                   </p>
-                  <p className={`mt-0.5 text-xs ${here || done ? 'text-ink-400' : 'text-ink-300'}`}>
+                  {/* The hint is the half that explains; on a phone there is no
+                      room for it beside two other steps, and the section title
+                      on the canvas is saying the same thing in larger type. */}
+                  <p
+                    className={`mt-0.5 hidden text-xs lg:block ${
+                      here || done ? 'text-ink-400' : 'text-ink-300'
+                    }`}
+                  >
                     {section.hint}
                   </p>
                   {/* Where inside the section you are — the granularity the
@@ -826,7 +844,7 @@ function Rail({
                       because reading a website is not a countable quantity and
                       a fraction over it would be invented. */}
                   {here && (
-                    <p className="mt-1.5 animate-fade-in text-xs font-medium text-steel-600">
+                    <p className="mt-1 animate-fade-in truncate text-[11px] font-medium text-steel-600 lg:mt-1.5 lg:text-xs">
                       {sectionDetail(state, asked, ceiling)}
                     </p>
                   )}
@@ -841,7 +859,10 @@ function Rail({
           greeting so the two cannot disagree — and `designation`, never `role`,
           because a permission is not small talk. */}
       {viewer?.name && (
-        <div className="mt-6 flex items-center gap-3 rounded-2xl border border-bone-200 bg-bone-50 px-3.5 py-3">
+        // Desktop only, for the same reason as the welcome block: on a phone
+        // this sits under the step band and pushes the conversation off the
+        // first screen, and the greeting bubble already says the personal half.
+        <div className="mt-6 hidden items-center gap-3 rounded-2xl border border-bone-200 bg-bone-50 px-3.5 py-3 lg:flex">
           <span
             aria-hidden
             className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-ink text-sm font-medium text-bone-50"
