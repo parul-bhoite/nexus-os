@@ -65,6 +65,39 @@ green again on restore.
   shows **no composite**, stating why, rather than averaging two of nine.
 - No console errors on either screen.
 
+**The backend gate, run in full for the first time on this machine.** 1,317
+passed, **8 failed**, 66 minutes against Neon (the ~5 minutes quoted elsewhere in
+this file is the onboarding suite alone, not the whole run). Six of the eight
+were the suite being unable to run rather than the code being wrong, and are
+fixed:
+
+- **One real breach.** `grounding/answer.py` named the vendor in a comment,
+  added by `5683098`. `test_ai_boundary` reads prose as well as imports. That
+  commit was red when it landed — worth knowing when deciding what to do with
+  the revert that was staged over it.
+- **Four guards could not run on Windows**: `read_text()` with no encoding
+  decodes UTF-8 as cp1252 and dies on the first em-dash. Two had a second fault
+  underneath, visible only once they could read: paths keyed with `str()` rather
+  than `as_posix()`, which made the containment ratchet report
+  `retrieval\scoped.py` as an unlisted tenancy violation *and* as missing from
+  the sanctioned set in the same run. Neither was true.
+  `test_deployment_env` also *wrote* without an encoding, so regenerating
+  `doc/DEPLOYMENT-ENV.md` here would have committed mojibake.
+
+**Two remain open, diagnosed rather than guessed at:**
+
+- 🟠 `test_db_timeouts::test_pre_ping_can_be_turned_off_but_defaults_on` — the
+  local `.env` carries `NEXUS_DB_POOL_PRE_PING=false` and `hermetic_settings`
+  does not pin it, so the fallback leaks into a test asserting the default. Red
+  locally, green in CI — the same shape as the `NEXUS_JOBS_DATABASE_URL` lesson,
+  inverted. A question about which variables `conftest.py` pins.
+- 🟠 `test_upload_limits::test_the_phase_acceptance_three_files_in_one_go` — the
+  refusal renders `26112 KB` where the test expects the `25 MB` the product
+  promises. **Pre-existing since `98a532e`**, so a phase acceptance test has been
+  red for four commits. The fix is a formatter that picks its unit, because the
+  same middleware guards 64–256 KB JSON bodies too — that is product copy and
+  wants a decision.
+
 **Not verified, and why.** A logged-in walkthrough of the *new* onboarding
 sections was not possible: the only workspace on this account has completed
 onboarding, so `/onboarding/agent` correctly redirects. Seeing the new sections
