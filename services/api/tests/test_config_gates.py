@@ -245,6 +245,13 @@ FUTURE: dict[str, str] = {
     "NEXUS_GOOGLE_CLIENT_ID": "P18 — GA4 and Search Console OAuth (D3)",
     "NEXUS_GOOGLE_CLIENT_SECRET": "P18 — GA4 and Search Console OAuth (D3)",
     "NEXUS_PAGESPEED_API_KEY": "P18 — PageSpeed Insights (D3)",
+    # doc/14 step 9. The connector spine is built (ADR 0031) and nothing can
+    # connect until these exist: a key to encrypt a token at rest, and one
+    # provider's OAuth app to get a token in the first place.
+    "NEXUS_CONNECTOR_SECRET_KEY": "doc/14 S9 — encrypts provider tokens at rest (D27)",
+    "NEXUS_HUBSPOT_CLIENT_ID": "doc/14 S9 — the first connector, over HubSpot's MCP server",
+    "NEXUS_HUBSPOT_CLIENT_SECRET": "doc/14 S9 — the first connector, over HubSpot's MCP server",
+    "NEXUS_HUBSPOT_REDIRECT_URI": "doc/14 S9 — OAuth callback, must match the app's registration",
 }
 
 

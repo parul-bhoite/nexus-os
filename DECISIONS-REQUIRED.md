@@ -321,6 +321,33 @@ so it is written and tested rather than remembered later.
 
 ---
 
+### D27 — How is a provider's token held at rest? *(blocks every connector)*
+
+`doc/14`'s connector spine is built (ADR 0031) and there is nowhere to put a
+token. `workspace_connection` holds `provider` and `state`; its own migration
+says the rest is *"null until the OAuth half lands"*. So a workspace can declare
+*"we use HubSpot"* and nothing can read HubSpot.
+
+Three options, argued in full in ADR 0032:
+
+- **A. Encrypted column, key from `NEXUS_CONNECTOR_SECRET_KEY`.** Adds
+  `cryptography`; the column carries a key id so rotation is possible.
+- **B. A managed secret store.** Rotation and audit come free; adds a cloud
+  dependency whose outage mode is every connector going quiet at once.
+- **C. Hold only a refresh token**, access tokens in memory per sweep. A
+  modifier on A or B rather than an alternative.
+
+**My recommendation: A with C.** B is right at a scale this has not reached, and
+A's column can hold a reference later without another migration. The sequence
+after an answer is short: add the dependency, write an additive migration, and
+step 9 is unblocked.
+
+**This one is worth your attention rather than a default.** A provider token is
+read-access to the customer's entire pipeline, and how it is held is not an
+implementation detail to settle inside a step.
+
+---
+
 ### ~~D26 — Is `executive.morning_brief` widened, or kept separate?~~ — **answered: A, keep them separate**, 16 September 2026
 
 The dashboard redraw puts a morning brief at the top of **one common surface with no

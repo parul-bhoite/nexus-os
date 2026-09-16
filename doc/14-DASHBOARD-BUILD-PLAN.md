@@ -35,12 +35,17 @@ fills in.
   Directors                Chief of Staff · Marketing · Sales · Finance
                            Operations · People · Strategy
   ───────────────
-  Your data                Company Brain · Documents · Connections · Your answers
+  Your data                Workspace setup
   ───────────────
-  Settings                 Workspace · Team · Reporting · Billing
+  Settings                 Workspace · Account
 ```
 
-Fifteen destinations, and the **Directors** group is composed per viewer — a Marketing
+**Corrected while building S1.** This sketch had four entries under *Your data* and four
+under *Settings*. Only `/onboarding`, `/settings` and `/account` exist — a nav entry
+pointing at a route nobody built is a 404 with a friendly name — so the group holds what
+is real and grows when the pages do. Eleven destinations today.
+
+The **Directors** group is composed per viewer — a Marketing
 contributor sees one entry, not seven greyed out. Greying out advertises what somebody
 cannot have; omitting is the same rule `DirectorPage` already follows for empty tabs.
 
@@ -54,15 +59,16 @@ navigation. If it ends up with more than three controls, the third belongs in th
 
 | # | Region | Provenance | Status |
 |---|---|---|---|
-| 1 | Morning brief | measured | **Specified** — ADR 0029. Three states, four item kinds |
-| 2 | Where the product is | counted | **Specified** — ADR 0030. Three bands over 89 |
-| 3 | Open on your side | needs you | Questions only. Sources moved to region 2 |
-| 4 | The seven directors | mixed | The tab rail, demoted to a summary row |
-| 5 | Measured today | measured | Built — `BlockCard` with figure and narration |
-| 6 | Company Brain | you told us | Seven fields plus the assumptions block |
+| 1 | Morning brief | measured | **Live** — ADR 0029. Three states, four item kinds |
+| 2 | Where the product is | counted | **Live** — ADR 0030. Three bands over 89 |
+| 3 | Measured today | measured | **Live** — `BlockCard`, identical to the director page |
+| 4 | Open on your side | needs you | **Live** — questions only; sources are region 2's |
+| 5 | The seven directors | mixed | **Live** — the tab rail, demoted to a summary |
+| 6 | Company Brain | you told us | **Live** — the fields plus the assumptions block |
 
-Regions 1 and 2 are designed and argued. Regions 3, 4 and 6 are drawn but not yet settled —
-each gets a design pass inside its build step rather than a separate one.
+All six ship, in that order. Coverage sits above the questions deliberately: its *not built
+yet* band is what makes *"28 more are waiting on us"* legible a moment later, and the
+reverse order reads as a list of chores with the reason arriving too late.
 
 ---
 
@@ -124,12 +130,14 @@ never leaks into the capability model:
 
 ```
 app/connectors/
-  base.py          SourceAdapter protocol: fetch(scope, since) -> typed rows
-  transport/
-    mcp.py         an MCP client — tools called by name, from code
-    rest.py        an HTTP client — the fallback
-  crm/hubspot.py   picks its transport; the rest of the system cannot tell which
+  contracts.py     SourceAdapter and Transport protocols, ToolCall, Fetched
+  mcp.py           McpTransport — tools called by name, from code
+  rest.py          RestTransport — the fallback
+  <provider>.py    picks a transport; nothing above can tell which
 ```
+
+Flatter than the sketch, matching the package's existing shape (`rate_limit.py`,
+`domain_check.py` are already flat). Both transports and the contracts shipped in S8.
 
 `connectors/rate_limit.py` and `connectors/domain_check.py` already exist and stay.
 
@@ -170,50 +178,77 @@ implementation convenience. If it is ever wanted, it is an ADR of its own.
 
 Each has one acceptance test. Nothing starts until the previous has run green.
 
-### S1 — The shell: left panel and header
+**S1–S8 are done** and on `feature/dashboard-command-surface`, one commit each.
+**S9–S11 are blocked**, and on decisions rather than on effort — see §6.
+
+### S1 — The shell: left panel and header ✅
+
+> **Done.** Two corrections while building: the planned four-entry *Your data* group is one, because three of those pages do not exist; and the shell took over the single `/api/dashboards` fetch that `DirectorPage` had been making a second time.
+
 Build the panel, the header and the composed navigation. Remove the department tab rail.
 **Acceptance:** every existing route renders inside the new shell; a Department Manager
 holding one department sees one Directors entry and no others; keyboard traversal and focus
 states work; `tsc`, `vitest`, `next lint` green.
 
-### S2 — `coverage()` in the registry
+### S2 — `coverage()` in the registry ✅
+
+> **Done.** Every figure in the design's first draft was estimated and every one was wrong — the denominator counted the one `RULE`, and a band called *unlockable by answering* held seven where the truth is zero.
+
 ADR 0030's recorded debt. Derive the three bands rather than typing them.
 **Acceptance:** a test asserts `coverage()`, `completeness()` and `openable_count()` share
 the 89 denominator, and that the bands sum to it. No count appears as a literal in any
 component.
 
-### S3 — `domain/brief.py` and the brief region
+### S3 — `domain/brief.py` and the brief region ✅
+
+> **Done.** The design negated check labels (*"Not served over HTTPS"*), which generalises to nonsense — *"Not Page has a title"*. Labels are used verbatim.
+
 ADR 0029. `BriefItem`, the ranking, the three states, the four item kinds. Scope-composed.
 **Acceptance:** against Neon, an Owner and a Marketing-only contributor both receive a
 brief; the ranking matches the calculator's weights; the *not measured* state appears for a
 workspace with no crawl and is distinguishable from *all held*; no model is called.
 
-### S4 — The Coverage region
+### S4 — The Coverage region ✅
+
+> **Done.**
+
 Renders S2's output.
 **Acceptance:** the rendered numbers change when a capability's `implemented` flag changes,
 proving nothing is hard-coded.
 
-### S5 — Open on your side
+### S5 — Open on your side ✅
+
+> **Done.** Of twenty-nine open questions, exactly one changes a figure today.
+
 Questions only, with the honest framing: answering informs, it does not unlock.
 **Acceptance:** every listed question names a capability that consumes it; a question with
 no consumer cannot render.
 
-### S6 — The directors row
+### S6 — The directors row ✅
+
+> **Done.** The open question is answered: four states, and `empty` is unreachable today with a test asserting the reason rather than the outcome.
+
 **Acceptance:** composed per viewer; a department the reader cannot reach is absent, not
 greyed; the status line for a department holding nothing is settled and tested.
 
-### S7 — Measured today, and Company Brain
+### S7 — Measured today, and Company Brain ✅
+
+> **Done.** `figure_out` and `narration_out` are module level and shared, so two renderings of one figure is structurally impossible.
+
 Largely a move of existing components onto the surface.
 **Acceptance:** the figure and narration are byte-identical to what the director page serves
 today — this step changes location, not content.
 
-### S8 — The connector spine
+### S8 — The connector spine ✅
+
+> **Done.** The no-model rule is asserted as an import graph. Two MCP protocol details would have become I10 violations — see the commit.
+
 `SourceAdapter`, both transports, credential storage, the untrusted-boundary rule.
 **Acceptance:** two adapters over a fake provider — one MCP transport, one REST — land
 identical rows through `retrieval/`; a test asserts no adapter output can reach a model
 without passing through a calculator; credentials are never logged.
 
-### S9 — The first real connector, paired with a calculator
+### S9 — The first real connector, paired with a calculator ⛔ blocked
 **CRM via HubSpot's official MCP server**, plus one calculator so something appears.
 Chosen over accounting because **D7 is open** — whether Finance brings accounting in at all
 is undecided, and building its connector first would be building on a decision nobody has
@@ -222,18 +257,36 @@ made.
 `locked` to a figure with its denominator, and disconnecting returns it to `locked` rather
 than to a zero.
 
-### S10 — `ops_layer`
+### S10 — `ops_layer` ⛔ needs its own plan
 The largest blocker, and a product to build rather than a connector to write: projects and
 tasks inside NEXUS, feeding 23 capabilities. **This needs its own plan** — it is named here
 so the sequence is honest about where the weight actually is.
 
-### S11 — The remaining connectors
+### S11 — The remaining connectors ⛔ blocked behind S9
 Accounting (after D7), GA4, ads, enrichment, tender feeds. Each paired with at least one
 calculator, each re-checking its MCP status at implementation time.
 
 ---
 
-## 5. Not in this plan
+## 5. What S9 is waiting on
+
+Nothing here is work. Each is a decision or a credential, and the sequence after them is
+short.
+
+| # | Blocker | Who |
+|---|---|---|
+| 1 | **D27 — how a provider token is held at rest.** ADR 0032 argues it and recommends an encrypted column keyed from the environment. Until it is answered there is nowhere to put a token, and `workspace_connection` has no credential column — migration 0026 says so itself | Parul |
+| 2 | **`cryptography`** as a base dependency, following D27's answer | Follows 1 |
+| 3 | **`NEXUS_CONNECTOR_SECRET_KEY`** in `.env`, and in the deployed-required list beside `database_url` | Follows 1 |
+| 4 | **The official `mcp` SDK.** Not a dependency. `McpTransport.Session` is the one seam it plugs into; hand-rolling JSON-RPC session setup, version negotiation, SSE framing and OAuth against five vendors is the kind of thing that works in a test and fails on the third provider | Parul — a dependency choice |
+| 5 | **A HubSpot developer app**: client id, client secret, redirect URI, and a sandbox portal to read | Parul |
+| 6 | **D7** — whether Finance brings accounting in at all. Not a blocker for S9, which is why S9 is CRM; it blocks the accounting half of S11 | Parul |
+
+Every one of these is in `.env.example` with the reason, and in `FUTURE` in
+`tests/test_config_gates.py` with the step that wires it — so adding one without saying
+why fails the build.
+
+## 6. Not in this plan
 
 - **Auto-narration.** ADR 0028 and 0029 both put prose behind a decision; nothing here
   changes that.
