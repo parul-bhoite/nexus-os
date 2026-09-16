@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Coverage } from '@/components/dashboard/Coverage'
+import { DirectorRows } from '@/components/dashboard/DirectorRows'
 import { MorningBrief } from '@/components/dashboard/MorningBrief'
 import { OpenOnYourSide } from '@/components/dashboard/OpenOnYourSide'
 import { useDashboards } from '@/components/shell/AppShell'
@@ -91,6 +92,7 @@ export function DashboardLanding() {
           late. */}
       <Coverage bands={state.surface.coverage} />
       <OpenOnYourSide questions={state.surface.questions} />
+      <DirectorRows rows={state.surface.directors} />
       <NoDepartment />
     </div>
   )

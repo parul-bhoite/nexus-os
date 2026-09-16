@@ -53,6 +53,7 @@ from app.domain.dashboards import (
 )
 from app.domain.department_answers import BINDING_ONLY_SQL
 from app.domain.departments import label_for, runs_department, selected_departments
+from app.domain.director_rows import compose as compose_rows
 from app.domain.narration import StoredNarration, describes, sentence_for
 from app.domain.open_questions import compose as compose_questions
 
@@ -710,6 +711,31 @@ class OpenQuestionsOut(BaseModel):
     total: int
 
 
+class DirectorRowOut(BaseModel):
+    """One department, as the common surface summarises it.
+
+    **The tab rail, demoted.** It used to gate a director page; here it is a
+    row a founder reads past on the way to something else, and `path` is how
+    they open it when they want to.
+    """
+
+    department: str
+    label: str
+    path: str
+    measuring: int
+    """Capabilities in this department producing a figure today."""
+
+    unanswered: int
+    state: str
+    """`measuring`, `answerable`, `waiting` or `empty` — four, because each has
+    a different sentence and a state whose sentence is wrong is worse than no
+    row. `empty` is the one `doc/14` left open: a department where nothing
+    computes, nothing is asked, and nothing is coming."""
+
+    line: str
+    """Server-authored, never empty — the same rule `unlock` follows."""
+
+
 class SurfaceOut(BaseModel):
     """Everything the common surface needs, in one response.
 
@@ -722,6 +748,7 @@ class SurfaceOut(BaseModel):
     brief: BriefOut
     coverage: CoverageOut
     questions: OpenQuestionsOut
+    directors: list[DirectorRowOut]
 
 
 @router.get("/surface", response_model=SurfaceOut)
@@ -784,7 +811,36 @@ async def command_surface(
         measuring=mine,
     )
 
+    outstanding = {
+        department: sum(
+            1
+            for question in QUESTIONS_BY_DEPARTMENT.get(department, ())
+            if (department.value, question.key) not in answered
+        )
+        for department in departments
+    }
+
     return SurfaceOut(
+        directors=[
+            DirectorRowOut(
+                department=row.department.value,
+                label=label_for(row.department),
+                path=_path(row.department),
+                measuring=row.measuring,
+                unanswered=row.unanswered,
+                state=row.state.value,
+                line=row.line,
+            )
+            for row in compose_rows(
+                departments=departments,
+                measuring=mine,
+                unanswered=outstanding,
+                # The display name, so the ordering matches what a reader sees.
+                # `hr` renders as "People", and sorting on the enum value put it
+                # between Finance and Marketing.
+                label=label_for,
+            )
+        ],
         questions=OpenQuestionsOut(
             changes_a_figure=[
                 OpenQuestionOut(

@@ -447,11 +447,32 @@ export type OpenQuestions = {
   total: number
 }
 
+/**
+ * One department, as the common surface summarises it — `doc/14` step 6.
+ *
+ * The tab rail, demoted to a block a reader passes on the way somewhere else.
+ * Four states, because four different sentences are true, and a state whose
+ * sentence is wrong is worse than no row: telling somebody to answer questions
+ * for a department whose questions are all answered sends them looking for a
+ * form that is not there.
+ */
+export type DirectorRow = {
+  department: string
+  label: string
+  path: string
+  measuring: number
+  unanswered: number
+  state: 'measuring' | 'answerable' | 'waiting' | 'empty'
+  /** Server-authored, never empty. */
+  line: string
+}
+
 /** Everything the common surface needs, in one response. */
 export type Surface = {
   brief: Brief
   coverage: Coverage
   questions: OpenQuestions
+  directors: DirectorRow[]
 }
 
 async function get(path: string): Promise<unknown> {
