@@ -321,6 +321,29 @@ so it is written and tested rather than remembered later.
 
 ---
 
+### ~~D26 — Is `executive.morning_brief` widened, or kept separate?~~ — **answered: A, keep them separate**, 16 September 2026
+
+The dashboard redraw puts a morning brief at the top of **one common surface with no
+department tabs**. `executive.morning_brief` already exists in the registry (`doc/05`
+§2.1, `app/domain/sections.py:179`) and has never been built — but
+`/dashboards/executive` is gated to **Owner or Executive**, so a Marketing contributor
+would get a 403 at the top of their own dashboard.
+
+Two ways out:
+
+- **A. Keep them separate.** The common brief is a scope-composed assembly with no
+  capability id; `executive.morning_brief` stays the Owner's cross-department version.
+- **B. Widen the executive gate** so the brief capability is reachable by everyone, with
+  its contents scoped per reader.
+
+**Answered: A.** B relaxes the guard on the one department whose entire remit is
+*reading every other department*, which would relax it for everything the executive
+surface ever carries — not just the brief. The cost of A is that two things end up called
+"morning brief"; ADR 0029's consequences name that, and require the composition to be
+called something else in code (`domain/brief.py`, `BriefItem` — never `MorningBrief`).
+
+---
+
 ### D24 — How does somebody reach a human? *(blocks two of the three pricing CTAs)*
 
 The Growth and Enterprise tiers are priced **"Let's talk"** and their buttons read

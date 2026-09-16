@@ -50,3 +50,6 @@ apps/web/blob-report/
 
 # CI-generated, never committed: the SMTP sink certificate for the E2E job.
 .certs/
+
+# Scratch for the published design artifact — the ADRs carry the decisions.
+.nexus-design/
