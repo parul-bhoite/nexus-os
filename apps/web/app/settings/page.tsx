@@ -23,5 +23,21 @@ export const metadata: Metadata = {
  * screen.
  */
 export default function SettingsPage() {
-  return <SettingsPanel />
+  return (
+    <>
+      {/* The page's h1 and its standfirst. Both lived inside the chrome this
+          file used to draw itself, and moving to the shell took them with it —
+          a regression, caught by a heading audit rather than by any test. */}
+      <h1 className="font-display text-title font-medium text-ink-900">Settings</h1>
+      <p className="mt-3 max-w-prose text-[0.95rem] leading-relaxed text-ink-600">
+        Proving your domain, the people in your company, and the assumptions every
+        figure on every dashboard is cut against. The first two reach beyond your own
+        account, which is why the domain check gates them; the third decides what your
+        numbers mean.
+      </p>
+      <div className="mt-10">
+        <SettingsPanel />
+      </div>
+    </>
+  )
 }

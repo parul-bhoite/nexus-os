@@ -87,6 +87,17 @@ export function DashboardLanding() {
 
   return (
     <div className="flex flex-col gap-10">
+      {/* The page's one h1. It was lost when this route stopped redirecting into
+          a director page — that page had `<h1>{director.title}</h1>` and the
+          common surface inherited six h2s and no top-level heading, which
+          leaves a screen reader with no name for where it is. "Today" rather
+          than a greeting, because a greeting needs the reader's name and that
+          is another request for a word. */}
+      <header>
+        <h1 className="font-display text-title font-medium text-ink-900">Today</h1>
+        <p className="mt-1 text-sm text-ink-500">What needs you, and what it was read from.</p>
+      </header>
+
       <MorningBrief brief={state.surface.brief} />
       {/* Coverage before the questions, deliberately: its "not built yet" band
           is what makes "28 more are waiting on us" legible a moment later. The

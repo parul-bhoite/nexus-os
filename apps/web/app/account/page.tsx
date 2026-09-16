@@ -20,5 +20,15 @@ export const metadata: Metadata = {
  * of truth.
  */
 export default function AccountPage() {
-  return <AccountPanel />
+  return (
+    <>
+      <h1 className="font-display text-title font-medium text-ink-900">Your account</h1>
+      <p className="mt-3 max-w-xl text-[0.95rem] leading-relaxed text-ink-600">
+        Everything below is read from the API. Nothing on this page is generated.
+      </p>
+      <div className="mt-10">
+        <AccountPanel />
+      </div>
+    </>
+  )
 }
