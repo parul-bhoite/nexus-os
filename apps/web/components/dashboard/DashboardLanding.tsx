@@ -3,26 +3,33 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { MorningBrief } from '@/components/dashboard/MorningBrief'
+import { useDashboards } from '@/components/shell/AppShell'
 import { Button } from '@/components/ui/Button'
 import { AuthError } from '@/lib/auth-client'
-import { fetchDashboards, type Dashboards } from '@/lib/dashboard-client'
+import { fetchSurface, type Surface } from '@/lib/dashboard-client'
 import { Waiting } from '@/components/ui/Waiting'
 
 /**
- * Sends a person to their own director.
+ * Today — the common surface, and where signing in now lands.
  *
- * Which one is decided by the API from their **membership**, not from the
- * department they typed during setup. The wizard's answer is a stated fact about
- * a person; the membership is what authorises, and landing someone on a page
- * their scope refuses would produce a 404 immediately after finishing setup.
+ * **This used to be a redirect.** It read the caller's membership and forwarded
+ * them to their own director page, because a department page was the only thing
+ * there was to land on. `doc/14` makes the surface common: a founder does not
+ * think in departments, and being bounced into one before the product says
+ * anything is the tab rail's problem wearing a different hat. The left panel
+ * still reaches every director.
  *
- * `replace` rather than `push`: this route is a redirect, and leaving it in the
- * history means Back lands here and bounces the person forward again.
+ * The one case that survives unchanged is somebody in **no** department. Doc 06
+ * §2.3 gives a Viewer company-wide material and no L3 at all, so there is no
+ * director to send them to and inventing one would mean putting them in a
+ * department nobody assigned. They get the brief — which is scope-composed and
+ * will simply be thin — and the explanation below it.
  */
 
 type State =
   | { status: 'loading' }
-  | { status: 'nowhere'; dashboards: Dashboards }
+  | { status: 'ready'; surface: Surface }
   | { status: 'error'; message: string }
 
 export function DashboardLanding() {
@@ -31,14 +38,9 @@ export function DashboardLanding() {
 
   useEffect(() => {
     let live = true
-    fetchDashboards()
-      .then((dashboards) => {
-        if (!live) return
-        if (dashboards.landing) {
-          router.replace(dashboards.landing)
-          return
-        }
-        setState({ status: 'nowhere', dashboards })
+    fetchSurface()
+      .then((surface) => {
+        if (live) setState({ status: 'ready', surface })
       })
       .catch((caught: unknown) => {
         if (!live) return
@@ -64,7 +66,7 @@ export function DashboardLanding() {
   }, [router])
 
   if (state.status === 'loading') {
-    return <Waiting>Finding your dashboard…</Waiting>
+    return <Waiting>Reading what changed…</Waiting>
   }
 
   if (state.status === 'error') {
@@ -78,9 +80,28 @@ export function DashboardLanding() {
     )
   }
 
-  // No department, so no director. A Viewer is the ordinary case: doc 06 §2.3
-  // gives them company-wide material and no L3 at all, and inventing a landing
-  // page for them would mean putting them in a department nobody assigned.
+  return (
+    <div className="flex flex-col gap-10">
+      <MorningBrief brief={state.surface.brief} />
+      <NoDepartment />
+    </div>
+  )
+}
+
+/**
+ * Shown only to somebody in no department at all.
+ *
+ * A Viewer is the ordinary case and not an error: doc 06 §2.3 gives them
+ * company-wide material and no L3. Drawn under the brief rather than instead of
+ * it, because the brief is scope-composed and has already told them the truth
+ * about what can be seen — this explains *why* it is thin.
+ */
+function NoDepartment() {
+  const all = useDashboards()
+  // `null` is still loading, and rendering "you hold no department" during a
+  // fetch would state an absence nobody has established yet (I10).
+  if (all === null || all.directors.length > 0) return null
+
   return (
     <div className="flex flex-col gap-6">
       <div className="rounded-2xl border border-gold-300 bg-gold-100 px-5 py-5">

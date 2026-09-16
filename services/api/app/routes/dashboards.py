@@ -38,6 +38,7 @@ from app.config import Settings, get_settings
 from app.db import _unscoped_session
 from app.deps import CurrentScope
 from app.deps_scope import enforce_department
+from app.domain.brief import compose
 from app.domain.dashboards import (
     BY_DEPARTMENT,
     DIRECTORS,
@@ -59,11 +60,13 @@ from app.domain.narration import StoredNarration, describes, sentence_for
 from app.domain.question_bank import BY_DEPARTMENT as QUESTIONS_BY_DEPARTMENT
 from app.domain.registry import (
     BY_ID,
+    TILES,
     Capability,
     CapabilityKind,
     canonical_id,
     capabilities_for,
     completeness,
+    coverage,
     is_reachable,
     openable_count,
     score_denominator,
@@ -77,7 +80,7 @@ from app.domain.sections import (
     sections_for,
 )
 from app.grounding.answer import NARRATOR, narrate
-from app.grounding.compute import compute_from_crawl, computes
+from app.grounding.compute import CRAWL_AUDITS, compute_from_crawl, computes
 from app.grounding.context import CompanyContext, assemble
 from app.grounding.pipeline import Outcome, UnavailableReason
 from app.logging import get_logger
@@ -608,6 +611,135 @@ def _reachable(scope: CurrentScope, director: Director) -> bool:
     if director.executive_only:
         return scope.can_see_executive_surface
     return scope.may_reach_department(director.department)
+
+
+class BriefItemOut(BaseModel):
+    """One finding. Never a recommendation — ADR 0029."""
+
+    kind: str
+    headline: str
+    """The check's own label, verbatim. The API does not negate it and neither
+    should a client: "Page has a title" has no sensible negation, and the one
+    that reads well for `seo.https` generalises to nothing."""
+
+    detail: str
+    """`Check.evidence` — what was observed."""
+
+    cost: int
+    check_id: str
+    capability_id: str
+    method: str
+
+
+class BriefOut(BaseModel):
+    """The morning brief, computed in code and costing nothing to render."""
+
+    state: str
+    """`findings`, `all_held` or `not_measured`. The third is **not** the second
+    with zeroes in it: an audit that never ran must not read as one that found
+    nothing (I10)."""
+
+    items: list[BriefItemOut]
+    message: str
+    """Server-authored, never empty, for the reason `unlock` already gives — one
+    wording change has to reach every surface."""
+
+    points_held: int
+    points_total: int
+    checks_passed: int
+    checks_total: int
+    measured_on: str
+    """Empty only when nothing was measured."""
+
+
+class SurfaceOut(BaseModel):
+    """Everything the common surface needs, in one response.
+
+    Separate from `GET /dashboards` on purpose. The shell fetches that on every
+    signed-in page to draw its navigation, and folding the brief into it would
+    compute an audit for somebody sitting in Settings. This is the Today page's
+    own payload and is fetched only there.
+    """
+
+    brief: BriefOut
+
+
+@router.get("/surface", response_model=SurfaceOut)
+async def command_surface(
+    scope: CurrentScope,
+    chosen: RunningDepartments,
+    observed: ObservedSources,
+) -> SurfaceOut:
+    """The common surface — one page, composed from what this reader can see.
+
+    **Declared before `/{department}`**, or FastAPI matches `surface` as a
+    department name and every request 404s on an unknown enum. The other static
+    sibling, `/company`, sits above the same wildcard for the same reason.
+
+    ## Scoped by the same two filters as the nav
+
+    Which departments the *company runs* and which the *caller may reach* —
+    identical to `list_dashboards`, deliberately. A brief that surfaced a
+    finding from a department the left panel does not list would be a
+    disclosure by a different route, and ADR 0029 makes this composition
+    scoped from day one precisely so the first department-scoped finding does
+    not become one silently.
+
+    ## No model, no ledger row, no cost
+
+    `compose` is pure and the figures come from `calculators/`. There is
+    nothing here to refuse, nothing to bill, and nothing that behaves
+    differently with an API key absent (ADR 0011).
+    """
+    departments = frozenset(
+        d.department
+        for d in DIRECTORS
+        if _reachable(scope, d) and runs_department(chosen, d.department)
+    )
+    mine = frozenset(
+        c.id for c in TILES if c.department in departments and c.reachable and computes(c.id)
+    )
+
+    snapshot = observed.crawl
+    computations = (
+        ()
+        if snapshot is None
+        else tuple(
+            computation
+            for capability_id in sorted(mine)
+            if (computation := compute_from_crawl(capability_id, snapshot)) is not None
+        )
+    )
+
+    brief = compose(
+        computations,
+        expected=mine,
+        unobserved=coverage(frozenset(CRAWL_AUDITS), departments).not_built,
+    )
+
+    return SurfaceOut(
+        brief=BriefOut(
+            state=brief.state.value,
+            items=[
+                BriefItemOut(
+                    kind=item.kind.value,
+                    headline=item.headline,
+                    detail=item.detail,
+                    cost=item.cost,
+                    check_id=item.check_id,
+                    capability_id=item.capability_id,
+                    method=item.method,
+                )
+                for item in brief.items
+            ],
+            message=brief.message,
+            points_held=brief.points_held,
+            points_total=brief.points_total,
+            checks_passed=brief.checks_passed,
+            checks_total=brief.checks_total,
+            measured_on=brief.measured_on,
+        )
+    )
 
 
 @router.get("", response_model=DashboardsOut)

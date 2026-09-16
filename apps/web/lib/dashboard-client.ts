@@ -351,6 +351,58 @@ export type Director = {
   assistant?: Assistant
 }
 
+/**
+ * One finding on the morning brief.
+ *
+ * `headline` is the check's own label and `detail` is the calculator's
+ * evidence, both verbatim — the API does not negate the one or rewrite the
+ * other, and neither does this client. "0 / 37 images" is a finding; "add alt
+ * text" would be guidance nobody computed.
+ */
+export type BriefItem = {
+  /** `unmeasured` sorts above every `check_failed`, whatever the cost: a
+   *  missing measurement qualifies every number beneath it. */
+  kind: 'unmeasured' | 'check_failed'
+  headline: string
+  detail: string
+  /** Points this check was worth. `0` for `unmeasured`, where nothing was
+   *  scored and a number would be invented. */
+  cost: number
+  check_id: string
+  capability_id: string
+  method: string
+}
+
+/**
+ * The morning brief — ADR 0029.
+ *
+ * Computed in code, so it costs nothing, cannot refuse, and behaves the same
+ * with no API key configured. Ranked by points lost; it reports what was
+ * **found** and never what changed, because nothing re-crawls yet.
+ */
+export type Brief = {
+  /**
+   * `not_measured` is not `all_held` with zeroes in it. An audit that never ran
+   * must not read as one that found nothing, so the region is never hidden and
+   * never shows a zero (I10).
+   */
+  state: 'findings' | 'all_held' | 'not_measured'
+  items: BriefItem[]
+  /** Server-authored, never empty. One wording change reaches every surface. */
+  message: string
+  points_held: number
+  points_total: number
+  checks_passed: number
+  checks_total: number
+  /** Empty only when nothing was measured. */
+  measured_on: string
+}
+
+/** Everything the common surface needs, in one response. */
+export type Surface = {
+  brief: Brief
+}
+
 async function get(path: string): Promise<unknown> {
   const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store' })
   const payload = await response.json().catch(() => null)
@@ -368,6 +420,10 @@ export async function fetchSetup(department: string): Promise<DirectorSetup> {
   return (await get(
     `/api/dashboards/${encodeURIComponent(department)}/setup`,
   )) as DirectorSetup
+}
+
+export async function fetchSurface(): Promise<Surface> {
+  return (await get('/api/dashboards/surface')) as Surface
 }
 
 export async function fetchDirector(department: string): Promise<Director> {
