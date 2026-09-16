@@ -473,6 +473,10 @@ export type Surface = {
   coverage: Coverage
   questions: OpenQuestions
   directors: DirectorRow[]
+  /** The tiles that carry a figure, served exactly as the director page serves
+   *  them. The surface changes where a founder reads a number, never what it
+   *  says — asserted end to end in `test_surface_tiles.py`. */
+  measured: DirectorBlock[]
 }
 
 async function get(path: string): Promise<unknown> {

@@ -4,13 +4,15 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Coverage } from '@/components/dashboard/Coverage'
+import { BlockCard } from '@/components/dashboard/BlockCard'
+import { CompanyBrain } from '@/components/dashboard/CompanyBrain'
 import { DirectorRows } from '@/components/dashboard/DirectorRows'
 import { MorningBrief } from '@/components/dashboard/MorningBrief'
 import { OpenOnYourSide } from '@/components/dashboard/OpenOnYourSide'
 import { useDashboards } from '@/components/shell/AppShell'
 import { Button } from '@/components/ui/Button'
 import { AuthError } from '@/lib/auth-client'
-import { fetchSurface, type Surface } from '@/lib/dashboard-client'
+import { fetchSurface, type DirectorBlock, type Surface } from '@/lib/dashboard-client'
 import { Waiting } from '@/components/ui/Waiting'
 
 /**
@@ -91,10 +93,48 @@ export function DashboardLanding() {
           reverse order reads as a list of chores with the reason arriving too
           late. */}
       <Coverage bands={state.surface.coverage} />
+      <Measured blocks={state.surface.measured} />
       <OpenOnYourSide questions={state.surface.questions} />
       <DirectorRows rows={state.surface.directors} />
+      <CompanyBrain />
       <NoDepartment />
     </div>
+  )
+}
+
+/**
+ * The tiles that carry a figure, on the common surface.
+ *
+ * `BlockCard` unchanged — same component, same props, same narration button as
+ * the director page. `doc/14` step 7 moves where a number is read and not what
+ * it says, and reusing the component rather than writing a compact variant is
+ * most of how that stays true.
+ *
+ * The department passed to each card is the capability's own namespace, because
+ * that is where its narration POST has to go: the API refuses a capability id
+ * that does not belong to the department in the path.
+ */
+function Measured({ blocks }: { blocks: DirectorBlock[] }) {
+  if (blocks.length === 0) return null
+
+  return (
+    <section aria-labelledby="measured-heading">
+      <h2 id="measured-heading" className="font-display text-title font-medium text-ink-900">
+        Measured today
+      </h2>
+      <p className="mt-1 max-w-prose text-sm text-ink-500">
+        Each with its denominator, the page it was read from, and its working.
+      </p>
+      <ul className="mt-4 grid gap-4 lg:grid-cols-2">
+        {blocks.map((block) => (
+          <BlockCard
+            key={block.key}
+            block={block}
+            department={block.key.split('.')[0]}
+          />
+        ))}
+      </ul>
+    </section>
   )
 }
 

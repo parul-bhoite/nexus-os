@@ -749,6 +749,113 @@ class SurfaceOut(BaseModel):
     coverage: CoverageOut
     questions: OpenQuestionsOut
     directors: list[DirectorRowOut]
+    measured: list[BlockOut]
+    """The tiles that carry a figure, served exactly as the director page serves
+    them — same `figure_out`, same `narration_out`, same stored sentence. The
+    surface changes where a founder reads a number, never what it says."""
+
+
+def figure_out(capability: Capability, snapshot: CrawlSnapshot | None) -> FigureOut | None:
+    """The computed figure for one capability, or `None` when nothing scores it.
+
+    **Module level, and shared by every route that serves a tile.** This was
+    a closure inside the director handler, and `doc/14` step 7 puts the same
+    tiles on the common surface — two copies would be two ways to render one
+    number, which is the disagreement the grounding layer exists to prevent.
+    `test_surface_tiles.py` asserts both routes serve an identical figure for
+    an identical capability.
+    """
+    if snapshot is None:
+        return None
+    computation = compute_from_crawl(capability.id, snapshot)
+    if computation is None:
+        return None
+    return FigureOut(
+        label=computation.label,
+        measures=computation.measures,
+        score=computation.score.score,
+        max_score=computation.score.max_score,
+        percentage=computation.score.percentage,
+        checks=[
+            CheckOut(
+                id=check.id,
+                label=check.label,
+                passed=check.passed,
+                weight=check.weight,
+                evidence=check.evidence,
+            )
+            for check in computation.score.checks
+        ],
+        checks_passed=computation.checks_passed,
+        source_url=computation.source_url,
+        measured_at=computation.measured_at.date().isoformat(),
+        method=str(computation.trace["method"]),
+    )
+
+
+def narration_out(
+    capability: Capability,
+    snapshot: CrawlSnapshot | None,
+    narrations: dict[str, StoredNarration],
+) -> NarrationOut | None:
+    """The stored sentence, if it still describes what the tile now shows.
+
+    `describes` compares five fields of the stored trace against the live
+    computation — numerator, denominator, percentage, page and window — and
+    all five must match. The one that catches what nothing else does is
+    `window`: a re-crawl the next day with an identical score leaves every
+    number matching and the date wrong, and the prose may cite the date.
+
+    A mismatch logs rather than renders, so the rate is observable without
+    anybody having to notice a missing sentence.
+    """
+    stored = narrations.get(capability.id)
+    if stored is None or snapshot is None:
+        return None
+
+    computation = compute_from_crawl(capability.id, snapshot)
+    if computation is None:
+        return None
+
+    if not describes(stored, computation):
+        log.info(
+            "dashboard.narration_superseded",
+            capability=capability.id,
+            narrated_at=stored.narrated_at.isoformat(),
+        )
+        return None
+
+    return NarrationOut(
+        prose=stored.prose,
+        narrated_at=stored.narrated_at.date().isoformat(),
+        prompt_version=stored.prompt_version,
+    )
+
+
+def _measured_block(
+    capability: Capability, snapshot: CrawlSnapshot | None, observed: Observed
+) -> BlockOut:
+    """One tile for the common surface, built the way the director page builds it.
+
+    Shares `figure_out` and `narration_out` rather than reimplementing them, so
+    the two surfaces cannot disagree about a number or about whether a stored
+    sentence still describes it.
+    """
+    connected = connected_sources(observed)
+    return BlockOut(
+        key=capability.id,
+        doc05_id=capability.doc05_id,
+        name=capability.name,
+        shows=capability.shows,
+        block=capability.block.value if capability.block else "",
+        state=state_from_sources(
+            capability.required_sources, connected=connected, reachable=capability.reachable
+        ).value,
+        unlock=unlock_for_sources(capability.required_sources, connected=connected),
+        needs=[source.value for source in capability.required_sources],
+        figure=figure_out(capability, snapshot),
+        narration=narration_out(capability, snapshot, observed.narrations),
+    )
 
 
 @router.get("/surface", response_model=SurfaceOut)
@@ -821,6 +928,17 @@ async def command_surface(
     }
 
     return SurfaceOut(
+        measured=[
+            block
+            for block in (
+                _measured_block(BY_ID[capability_id], snapshot, observed)
+                for capability_id in sorted(mine)
+            )
+            # A capability that should compute and did not is already reported
+            # by the brief as `unmeasured`. An empty tile here would say the
+            # same absence a second time, in a shape that looks like a figure.
+            if block.figure is not None
+        ],
         directors=[
             DirectorRowOut(
                 department=row.department.value,
@@ -1244,68 +1362,6 @@ async def director_dashboard(
         if capability.kind is CapabilityKind.TILE
     ]
 
-    def figure_out(capability: Capability) -> FigureOut | None:
-        if snapshot is None:
-            return None
-        computation = compute_from_crawl(capability.id, snapshot)
-        if computation is None:
-            return None
-        return FigureOut(
-            label=computation.label,
-            measures=computation.measures,
-            score=computation.score.score,
-            max_score=computation.score.max_score,
-            percentage=computation.score.percentage,
-            checks=[
-                CheckOut(
-                    id=check.id,
-                    label=check.label,
-                    passed=check.passed,
-                    weight=check.weight,
-                    evidence=check.evidence,
-                )
-                for check in computation.score.checks
-            ],
-            checks_passed=computation.checks_passed,
-            source_url=computation.source_url,
-            measured_at=computation.measured_at.date().isoformat(),
-            method=str(computation.trace["method"]),
-        )
-
-    def narration_out(capability: Capability) -> NarrationOut | None:
-        """The stored sentence, if it still describes what the tile now shows.
-
-        `describes` compares five fields of the stored trace against the live
-        computation — numerator, denominator, percentage, page and window — and
-        all five must match. The one that catches what nothing else does is
-        `window`: a re-crawl the next day with an identical score leaves every
-        number matching and the date wrong, and the prose may cite the date.
-
-        A mismatch logs rather than renders, so the rate is observable without
-        anybody having to notice a missing sentence.
-        """
-        stored = observed.narrations.get(capability.id)
-        if stored is None or snapshot is None:
-            return None
-
-        computation = compute_from_crawl(capability.id, snapshot)
-        if computation is None:
-            return None
-
-        if not describes(stored, computation):
-            log.info(
-                "dashboard.narration_superseded",
-                capability=capability.id,
-                narrated_at=stored.narrated_at.isoformat(),
-            )
-            return None
-
-        return NarrationOut(
-            prose=stored.prose,
-            narrated_at=stored.narrated_at.date().isoformat(),
-            prompt_version=stored.prompt_version,
-        )
-
     def block_out(capability: Capability) -> BlockOut:
         state = state_from_sources(
             capability.required_sources,
@@ -1323,8 +1379,8 @@ async def director_dashboard(
             state=state.value,
             unlock=unlock_for_sources(capability.required_sources, connected=connected),
             needs=[source.value for source in capability.required_sources],
-            figure=figure_out(capability),
-            narration=narration_out(capability),
+            figure=figure_out(capability, snapshot),
+            narration=narration_out(capability, snapshot, observed.narrations),
         )
 
     def section_out(section: Section) -> SectionOut:
