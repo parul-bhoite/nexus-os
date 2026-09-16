@@ -5,19 +5,15 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { AssistantPanel } from '@/components/dashboard/AssistantPanel'
 import { BlockCard } from '@/components/dashboard/BlockCard'
+// Still used by `ChooseEntity` below — that is the chooser itself, not the
+// header control the shell now owns.
 import { EntitySwitcher } from '@/components/dashboard/EntitySwitcher'
 import { OfferingTile } from '@/components/dashboard/OfferingTile'
 import { SectionRail } from '@/components/dashboard/SectionRail'
 import { SetupSection } from '@/components/dashboard/SetupSection'
-import { Logo } from '@/components/ui/Logo'
+import { useDashboards } from '@/components/shell/AppShell'
 import { AuthError } from '@/lib/auth-client'
-import {
-  fetchDashboards,
-  fetchDirector,
-  type Dashboards,
-  type Director,
-} from '@/lib/dashboard-client'
-import { departmentLabel } from '@/lib/onboarding-client'
+import { fetchDirector, type Dashboards, type Director } from '@/lib/dashboard-client'
 import { Waiting } from '@/components/ui/Waiting'
 
 /**
@@ -30,28 +26,36 @@ import { Waiting } from '@/components/ui/Waiting'
  * very page built to demonstrate it. What is here is the header, the director
  * switcher, and the offering list with each tile's real state.
  *
- * The switcher shows only the directors this caller may open — the API returns
- * no others, so a department the caller cannot reach is not merely hidden from
- * the nav, it is absent from the response.
+ * **The department tab rail is gone** (`doc/14` step 1). It sat here and gated
+ * the surface, so a founder had to pick a department before the product would
+ * say anything — and a founder does not think in departments, they think about
+ * what needs them today. Navigating between directors is the shell's left
+ * panel now, and it still lists only what the caller may open, because the API
+ * returns no others.
+ *
+ * The chrome this file used to draw — logo, header links, entity switcher —
+ * belongs to `AppShell`, and `all` arrives through its context rather than
+ * from a second fetch of the same endpoint (finding #23).
  */
 
 type State =
   | { status: 'loading' }
   | { status: 'choose' }
   | { status: 'error'; message: string; code: number }
-  | { status: 'ready'; director: Director; all: Dashboards }
+  | { status: 'ready'; director: Director }
 
 export function DirectorPage({ department }: { department: string }) {
   const router = useRouter()
+  const all = useDashboards()
   const [state, setState] = useState<State>({ status: 'loading' })
 
   useEffect(() => {
     let live = true
     setState({ status: 'loading' })
 
-    Promise.all([fetchDirector(department), fetchDashboards()])
-      .then(([director, all]) => {
-        if (live) setState({ status: 'ready', director, all })
+    fetchDirector(department)
+      .then((director) => {
+        if (live) setState({ status: 'ready', director })
       })
       .catch((caught: unknown) => {
         if (!live) return
@@ -87,63 +91,29 @@ export function DirectorPage({ department }: { department: string }) {
     }
   }, [department, router])
 
-  return (
-    <main className="min-h-screen bg-bone-50">
-      <div className="mx-auto max-w-6xl px-6 py-8 sm:px-10">
-        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-ink-100 pb-6">
-          <Link
-            href="/"
-            className="inline-flex rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gold-500"
-            aria-label="NEXUS OS home"
-          >
-            <Logo />
-          </Link>
-          <div className="flex items-center gap-4">
-            <Link
-              href="/onboarding"
-              className="text-sm font-medium text-steel-600 underline decoration-steel-300 underline-offset-2 hover:text-steel-700"
-            >
-              Workspace setup
-            </Link>
-            <Link
-              href="/settings"
-              className="text-sm font-medium text-steel-600 underline decoration-steel-300 underline-offset-2 hover:text-steel-700"
-            >
-              Settings
-            </Link>
-            <Link
-              href="/account"
-              className="text-sm font-medium text-steel-600 underline decoration-steel-300 underline-offset-2 hover:text-steel-700"
-            >
-              Account
-            </Link>
-          </div>
-        </header>
-
-        <div className="py-10">
-          {state.status === 'loading' ? (
-            <Waiting>Loading this dashboard…</Waiting>
-          ) : state.status === 'choose' ? (
-            <ChooseEntity />
-          ) : state.status === 'error' ? (
-            <Unavailable message={state.message} code={state.code} />
-          ) : (
-            <Ready director={state.director} all={state.all} />
-          )}
-        </div>
-      </div>
-    </main>
+  return state.status === 'loading' ? (
+    <Waiting>Loading this dashboard…</Waiting>
+  ) : state.status === 'choose' ? (
+    <ChooseEntity />
+  ) : state.status === 'error' ? (
+    <Unavailable message={state.message} code={state.code} />
+  ) : (
+    <Ready director={state.director} all={all} />
   )
 }
 
-function Ready({ director, all }: { director: Director; all: Dashboards }) {
+function Ready({ director, all }: { director: Director; all: Dashboards | null }) {
   const sections = director.sections ?? []
   // How many capabilities here carry a real computed figure. Used only for the
   // score copy below, which said "no source can be measured yet" for a year and
   // became false the moment the first tile computed one.
   const measured = sections.flatMap((section) => section.blocks).filter((b) => b.figure).length
   const catalogue = director.catalogue ?? []
-  const unanswered = all.directors.find((d) => d.department === director.department)
+  // `all` is null while the shell's single fetch is still in flight. Left
+  // `undefined` in that case rather than defaulted to 0: the count drives copy
+  // that says how much is still unanswered, and a zero standing in for
+  // "not known yet" is exactly the substitution I10 forbids.
+  const unanswered = all?.directors.find((d) => d.department === director.department)
     ?.unanswered_questions
 
   // The first tab, which is Overview for every department except the Executive
@@ -165,33 +135,12 @@ function Ready({ director, all }: { director: Director; all: Dashboards }) {
 
   return (
     <>
-      {/* Above the directors, because it changes what they are. ADR 0026: the
-          company name in the shell is a control rather than a label once a
-          login holds more than one — and it renders nothing at all for the
-          almost-everybody who holds one. */}
-      <EntitySwitcher />
-
-      <nav aria-label="Directors" className="mt-4 flex flex-wrap gap-2">
-        {all.directors.map((entry) => (
-          <Link
-            key={entry.department}
-            href={entry.path}
-            aria-current={entry.department === director.department ? 'page' : undefined}
-            className={`rounded-full px-3.5 py-1.5 font-mono text-2xs uppercase tracking-[0.1em] transition-colors ${
-              entry.department === director.department
-                ? 'bg-ink-800 text-bone-50'
-                : 'border border-ink-100 text-ink-500 hover:border-ink-300 hover:text-ink-800'
-            }`}
-          >
-            {/* Served, not derived. This special-cased `hr` into "People" and
-                left every other department as its raw key — the third of the
-                three spellings finding F13 counted. */}
-            {entry.label ?? departmentLabel(entry.department)}
-          </Link>
-        ))}
-      </nav>
-
-      <header className="mt-8">
+      {/* The entity switcher and the department rail that used to open this
+          page are both the shell's now. The rail in particular was navigation
+          that gated a surface, and `doc/14` step 1 removes it: the left panel
+          lists the same departments, from the same scoped response, without
+          standing between a founder and what they came to read. */}
+      <header>
         <h1 className="font-display text-title font-medium text-ink-900">{director.title}</h1>
         <p className="mt-2 max-w-prose text-[0.95rem] leading-relaxed text-ink-600">
           {director.remit}
