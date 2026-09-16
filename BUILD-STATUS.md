@@ -15,7 +15,58 @@ command that produced it is named.
 
 ---
 
-## 0. Latest work — the onboarding redesign (15 September 2026)
+## 0. Latest work — the common command surface (17 September 2026)
+
+**One dashboard for everybody, no department tab rail.** `doc/14`, ADR 0029–0032,
+on `feature/dashboard-command-surface`. Eight of eleven steps shipped, one
+commit each; the remaining three are blocked on decisions, not effort.
+
+`/dashboard` was a redirect that read a caller's membership and forwarded them
+into a director page. It is now the product's front door: a left panel for
+navigation, a thin header, and six regions composed from what the reader's
+`ScopedSession` can reach.
+
+| Region | What it says |
+|---|---|
+| Morning brief | Eight checks failed, ranked by points lost. Computed in code — no model, no cost, cannot refuse |
+| Where the product is | 2 measuring · 10 reading your answers back · 77 not built yet, of 89 |
+| Measured today | The two audit tiles, byte-identical to the director page |
+| Open on your side | Of 29 open questions, exactly one changes a figure today |
+| The seven directors | The tab rail, demoted to a summary |
+| Company Brain | The founder's own words, and what NEXUS assumed |
+
+**Every number on it was derived, and the first draft's were not.** Designing the
+region produced four estimated figures and all four were wrong: the denominator
+counted the one `RULE`, and a band called *unlockable by answering* held seven
+where the registry says **zero** — every fact-consuming tile also needs a source,
+so answering a question changes what a tile counts and never whether it exists.
+
+**The largest blocker is not a connector.** `ops_layer` blocks 23 tiles, more
+than accounting, and is a feature NEXUS contains rather than anything a customer
+connects. Connecting every source in existence would move the figure-producing
+count from 2 to 2, because 77 capabilities have no calculator. Both facts are now
+said on the dashboard rather than only in a document.
+
+**The connector spine is built and cannot be used yet.** ADR 0031 makes MCP a
+transport for fetches made from code — the model never sees a provider, because a
+director that called a CRM's MCP server would be *fetching* and I1 would be gone
+while every answer stayed plausible. Asserted as an import graph, not by review.
+It holds a token and there is nowhere to put one: see **D27** and ADR 0032.
+
+Corrections the build forced on the design, each recorded in its commit: check
+labels are used verbatim rather than negated; collapsed findings carry both
+halves, because "137 characters" identifies nothing; the directors block is
+ordered by state rather than by an enum value that only looks alphabetical; and
+`/settings` and `/account` lost their `h1` when the shell took their chrome —
+found by an audit, not by a test, and now guarded by one.
+
+**Verified in the browser against the live Prosoft workspace** at every step, and
+the brief's arithmetic was derived by hand first and matched exactly: 8 of 18
+checks failed, 50 of 135 points not held, two at ten and six at five.
+
+---
+
+## 0b. Before that — the onboarding redesign (15 September 2026)
 
 **Three sections over eight phases. ADR 0027.** The guided onboarding drew a
 seven-step rail that mirrored the server's `Phase` enum; four of those steps are
