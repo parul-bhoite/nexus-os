@@ -417,10 +417,41 @@ export type Coverage = {
   total: number
 }
 
+/** One question still open, and what answering it would change. */
+export type OpenQuestion = {
+  key: string
+  department: string
+  /** The bank's own wording — the question here has to be the question setup
+   *  will ask, or a founder who answers one has not answered the other. */
+  prompt: string
+  /** What the answer is for, from the bank. A question with no stated purpose
+   *  is a form field (doc 06). */
+  why: string
+  consumed_by: string
+  consumer_name: string
+}
+
+/**
+ * What is open on the founder's side — `doc/14` step 5.
+ *
+ * **Answering informs; it does not unlock.** Every fact-consuming tile also
+ * requires a source, so no question switches a tile on by itself. The split is
+ * what makes that honest: `changes_a_figure` moves a number already on the
+ * page, and the rest are waiting on us.
+ */
+export type OpenQuestions = {
+  changes_a_figure: OpenQuestion[]
+  /** Counted, not listed — a founder cannot act on these yet, and a long list
+   *  would bury the ones they can. */
+  waiting_on_us: number
+  total: number
+}
+
 /** Everything the common surface needs, in one response. */
 export type Surface = {
   brief: Brief
   coverage: Coverage
+  questions: OpenQuestions
 }
 
 async function get(path: string): Promise<unknown> {

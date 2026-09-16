@@ -54,6 +54,7 @@ from app.domain.dashboards import (
 from app.domain.department_answers import BINDING_ONLY_SQL
 from app.domain.departments import label_for, runs_department, selected_departments
 from app.domain.narration import StoredNarration, describes, sentence_for
+from app.domain.open_questions import compose as compose_questions
 
 # Aliased: `BY_DEPARTMENT` already means the dashboard *offerings* here, and two
 # dictionaries with one name is how the wrong one gets read.
@@ -677,6 +678,38 @@ class CoverageOut(BaseModel):
     all three agree rather than leaving three docstrings to."""
 
 
+class OpenQuestionOut(BaseModel):
+    """One question still open, and what answering it would change."""
+
+    key: str
+    department: str
+    prompt: str
+    """The bank's own wording — the question on the dashboard has to be the
+    question the setup flow will ask."""
+
+    why: str
+    consumed_by: str
+    consumer_name: str
+
+
+class OpenQuestionsOut(BaseModel):
+    """`doc/14` step 5. Questions only — what you *connect* is coverage's half.
+
+    **Answering informs; it does not unlock.** Every fact-consuming tile also
+    requires a source, so no question in the bank switches one on by itself.
+    The split below is what makes that honest rather than merely stated:
+    `changes_a_figure` moves a number already on the page, and the rest are
+    waiting on us.
+    """
+
+    changes_a_figure: list[OpenQuestionOut]
+    waiting_on_us: int
+    """Counted rather than listed. A founder cannot act on these usefully
+    today, and forty rows would bury the handful that can."""
+
+    total: int
+
+
 class SurfaceOut(BaseModel):
     """Everything the common surface needs, in one response.
 
@@ -688,12 +721,14 @@ class SurfaceOut(BaseModel):
 
     brief: BriefOut
     coverage: CoverageOut
+    questions: OpenQuestionsOut
 
 
 @router.get("/surface", response_model=SurfaceOut)
 async def command_surface(
     scope: CurrentScope,
     chosen: RunningDepartments,
+    answered: AnsweredQuestions,
     observed: ObservedSources,
 ) -> SurfaceOut:
     """The common surface — one page, composed from what this reader can see.
@@ -739,8 +774,32 @@ async def command_surface(
 
     bands = coverage(frozenset(CRAWL_AUDITS), departments)
     brief = compose(computations, expected=mine, unobserved=bands.not_built)
+    # `mine` rather than every capability with a calculator: a question is only
+    # in the first tier if its consumer produces a figure **this reader can
+    # see**, which is the same scoping the brief and the nav apply.
+    open_questions = compose_questions(
+        bank=QUESTIONS_BY_DEPARTMENT,
+        departments=departments,
+        answered=answered,
+        measuring=mine,
+    )
 
     return SurfaceOut(
+        questions=OpenQuestionsOut(
+            changes_a_figure=[
+                OpenQuestionOut(
+                    key=question.key,
+                    department=question.department,
+                    prompt=question.prompt,
+                    why=question.why,
+                    consumed_by=question.consumed_by,
+                    consumer_name=question.consumer_name,
+                )
+                for question in open_questions.changes_a_figure
+            ],
+            waiting_on_us=open_questions.waiting_on_us,
+            total=open_questions.total,
+        ),
         coverage=CoverageOut(
             measuring=bands.measuring,
             reading_back=bands.reading_back,

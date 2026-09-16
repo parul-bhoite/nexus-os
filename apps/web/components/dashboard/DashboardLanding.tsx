@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Coverage } from '@/components/dashboard/Coverage'
 import { MorningBrief } from '@/components/dashboard/MorningBrief'
+import { OpenOnYourSide } from '@/components/dashboard/OpenOnYourSide'
 import { useDashboards } from '@/components/shell/AppShell'
 import { Button } from '@/components/ui/Button'
 import { AuthError } from '@/lib/auth-client'
@@ -84,7 +85,12 @@ export function DashboardLanding() {
   return (
     <div className="flex flex-col gap-10">
       <MorningBrief brief={state.surface.brief} />
+      {/* Coverage before the questions, deliberately: its "not built yet" band
+          is what makes "28 more are waiting on us" legible a moment later. The
+          reverse order reads as a list of chores with the reason arriving too
+          late. */}
       <Coverage bands={state.surface.coverage} />
+      <OpenOnYourSide questions={state.surface.questions} />
       <NoDepartment />
     </div>
   )
