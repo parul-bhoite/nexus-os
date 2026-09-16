@@ -76,6 +76,7 @@ reason to distrust every other number we show them.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Collection
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Final
@@ -856,6 +857,70 @@ def openable_count() -> int:
     refuses to build in that case.
     """
     return sum(1 for c in TILES if c.reachable)
+
+
+@dataclass(frozen=True, slots=True)
+class Coverage:
+    """Where the product is for one company, split by who has to move next.
+
+    ADR 0030. Three bands rather than a percentage, because a percentage of
+    "done" invites being read as a verdict on the business — which is the same
+    thing the composite score is refused for — and because the three have
+    genuinely different remedies. Two of them are ours.
+    """
+
+    measuring: int
+    """Capabilities that put a computed figure on a tile today."""
+
+    reading_back: int
+    """Reachable, and not a measurement — the Setup and Watchlist tabs, which
+    show a founder their own answers. Real, and deliberately not a figure: doc
+    05 §0 requires that what somebody typed and what we measured never look
+    alike."""
+
+    not_built: int
+    """No route serves them. **Ours to fix, not the customer's** — no connection
+    anybody makes switches one on, and saying so is the only thing that makes
+    the other two numbers mean anything."""
+
+    total: int
+    """Tiles only. A `RULE` is excluded for `completeness`'s reason: it shapes
+    what other capabilities say and is not something a customer acquires."""
+
+    def __post_init__(self) -> None:
+        if self.measuring + self.reading_back + self.not_built != self.total:
+            raise CapabilityRegistryError(
+                f"coverage bands {self.measuring}+{self.reading_back}+"
+                f"{self.not_built} do not sum to {self.total}; a band is "
+                "double-counting or a capability has fallen between them"
+            )
+
+
+def coverage(measured: Collection[str], selected: frozenset[Department]) -> Coverage:
+    """The three bands, for the departments this company runs.
+
+    **`measured` is passed in rather than imported.** Which capabilities have a
+    calculator is `grounding.compute`'s fact, and `domain` importing
+    `grounding` would drag `retrieval` and the calculators in behind it — a
+    dependency running the wrong way for a table that has to import at module
+    scope. `test_coverage_bands.py` asserts the caller passes the real set, so
+    the injection cannot quietly become a second list.
+
+    **The first band counts `reachable`, not `implemented`.** `completeness`
+    argues it: the two came apart once already, when Marketing's audits had a
+    real calculation and no route serving it, and counting `implemented` then
+    would have told a founder they held two capabilities they could not open.
+    A capability that computes but is unreachable is dead code, not coverage.
+    """
+    theirs = [c for c in TILES if c.department in selected]
+    reachable = [c for c in theirs if c.reachable]
+    measuring = sum(1 for c in reachable if c.id in measured)
+    return Coverage(
+        measuring=measuring,
+        reading_back=len(reachable) - measuring,
+        not_built=len(theirs) - len(reachable),
+        total=len(theirs),
+    )
 
 
 def capabilities_for(department: Department) -> tuple[Capability, ...]:
