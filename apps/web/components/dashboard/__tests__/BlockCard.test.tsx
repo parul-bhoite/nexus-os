@@ -102,7 +102,7 @@ describe('BlockCard, across every state', () => {
     expect(labels.size).toBe(ALL_STATES.length)
 
     for (const state of ALL_STATES) {
-      const { unmount } = render(<BlockCard block={block({ state })} />)
+      const { unmount } = render(<BlockCard department="marketing" block={block({ state })} />)
       expect(screen.getByText(STATE_LABEL[state])).toBeTruthy()
       unmount()
     }
@@ -120,7 +120,7 @@ describe('BlockCard, across every state', () => {
     // The two cases the old form was really protecting are asserted below and
     // in the test that follows, so the coverage went up, not down.
     for (const state of ALL_STATES) {
-      const { container, unmount } = render(<BlockCard block={block({ state })} />)
+      const { container, unmount } = render(<BlockCard department="marketing" block={block({ state })} />)
       expect(container.textContent).not.toMatch(/(^|\s)0(\s|$)/)
       unmount()
     }
@@ -130,7 +130,7 @@ describe('BlockCard, across every state', () => {
     // The half of the old zero rule that mattered: not "no 0" but "no digits
     // pretending to be a measurement".
     for (const state of ALL_STATES) {
-      const { container, unmount } = render(<BlockCard block={block({ state })} />)
+      const { container, unmount } = render(<BlockCard department="marketing" block={block({ state })} />)
       expect(container.textContent).not.toMatch(/\d+\s*\/\s*\d+/)
       unmount()
     }
@@ -141,7 +141,7 @@ describe('BlockCard, across every state', () => {
     // signals, so the API sends `locked` and no figure — it must not arrive as
     // 0 out of 65, which would tell a founder their website failed everything.
     const { container } = render(
-      <BlockCard
+      <BlockCard department="marketing"
         block={block({ state: 'locked', unlock: 'Needs a read of your website.', figure: null })}
       />,
     )
@@ -151,14 +151,14 @@ describe('BlockCard, across every state', () => {
   })
 
   it('states its unlock when locked, and offers none when planned', () => {
-    const { unmount } = render(<BlockCard block={block({ state: 'locked' })} />)
+    const { unmount } = render(<BlockCard department="marketing" block={block({ state: 'locked' })} />)
     expect(screen.getByText('Needs your accounting system.')).toBeTruthy()
     unmount()
 
     // An unbuilt widget cannot be unlocked by connecting anything, and saying
     // otherwise is a promise the product then breaks. The unlock is present in
     // the data and must not be shown.
-    render(<BlockCard block={block({ state: 'planned' })} />)
+    render(<BlockCard department="marketing" block={block({ state: 'planned' })} />)
     expect(screen.queryByText('Needs your accounting system.')).toBeNull()
   })
 
@@ -166,7 +166,7 @@ describe('BlockCard, across every state', () => {
     // The distinction `warming` exists for. `partial` means connect another
     // source; `warming` means wait. Telling somebody to connect what they have
     // already connected is how a product loses trust in its own instructions.
-    render(<BlockCard block={block({ state: 'warming' })} />)
+    render(<BlockCard department="marketing" block={block({ state: 'warming' })} />)
 
     expect(screen.queryByText('Needs your accounting system.')).toBeNull()
     expect(screen.getByText(/nothing to do but wait/i)).toBeTruthy()
@@ -175,7 +175,7 @@ describe('BlockCard, across every state', () => {
   it('says a stale figure is real and out of date, rather than hiding it', () => {
     // Not `live` with a quiet timestamp, and not `unavailable`: the number is
     // real and still worth seeing, with its age attached.
-    render(<BlockCard block={block({ state: 'stale' })} />)
+    render(<BlockCard department="marketing" block={block({ state: 'stale' })} />)
 
     expect(screen.getByText(/real and out of date/i)).toBeTruthy()
   })
@@ -183,7 +183,7 @@ describe('BlockCard, across every state', () => {
   it('labels a self-reported figure as an answer rather than a measurement', () => {
     // Doc 05 §0: a number they typed and a number we measured must never look
     // identical, because the second can contradict them and the first cannot.
-    render(<BlockCard block={block({ state: 'self_reported' })} />)
+    render(<BlockCard department="marketing" block={block({ state: 'self_reported' })} />)
 
     expect(screen.getByText(/your own answer, not a measurement/i)).toBeTruthy()
   })
@@ -192,13 +192,13 @@ describe('BlockCard, across every state', () => {
     // The drawer opens onto the checks that produced the number, so offering it
     // on a tile with no number would open onto nothing.
     for (const state of ['live', 'partial', 'stale'] as WidgetState[]) {
-      const { unmount } = render(<BlockCard block={block({ state, figure: figure() })} />)
+      const { unmount } = render(<BlockCard department="marketing" block={block({ state, figure: figure() })} />)
       expect(screen.getByRole('button', { name: /why this number/i })).toBeTruthy()
       unmount()
     }
 
     for (const state of ['locked', 'warming', 'planned', 'unavailable'] as WidgetState[]) {
-      const { unmount } = render(<BlockCard block={block({ state, figure: figure() })} />)
+      const { unmount } = render(<BlockCard department="marketing" block={block({ state, figure: figure() })} />)
       expect(screen.queryByRole('button', { name: /why this number/i })).toBeNull()
       unmount()
     }
@@ -212,7 +212,7 @@ describe('BlockCard, across every state', () => {
     // falls back to saying what it will draw, which is what every other
     // unbuilt tile says.
     for (const state of ['live', 'partial', 'stale'] as WidgetState[]) {
-      const { unmount } = render(<BlockCard block={block({ state, figure: null })} />)
+      const { unmount } = render(<BlockCard department="marketing" block={block({ state, figure: null })} />)
       expect(screen.queryByRole('button', { name: /why this number/i })).toBeNull()
       unmount()
     }
@@ -223,7 +223,7 @@ describe('BlockCard, with a computed figure', () => {
   it('shows the figure with its denominator, never the bare number', () => {
     // `ShellOut`'s rule for `ShellOut`'s reason: a score on its own is a claim
     // the reader cannot check, and 45 out of 65 lets them count.
-    render(<BlockCard block={block({ state: 'partial', figure: figure() })} />)
+    render(<BlockCard department="marketing" block={block({ state: 'partial', figure: figure() })} />)
 
     expect(screen.getByText('45')).toBeTruthy()
     expect(screen.getByText(/\/ 65/)).toBeTruthy()
@@ -234,7 +234,7 @@ describe('BlockCard, with a computed figure', () => {
     // than "you passed 45 of 65 weighted points". The percentage is served and
     // deliberately not the headline.
     const { container } = render(
-      <BlockCard block={block({ state: 'partial', figure: figure() })} />,
+      <BlockCard department="marketing" block={block({ state: 'partial', figure: figure() })} />,
     )
 
     expect(container.textContent).not.toMatch(/69\s*%/)
@@ -248,7 +248,7 @@ describe('BlockCard, with a computed figure', () => {
     // headline, with no sentence narrowing it, is a lie the reader cannot
     // detect.
     render(
-      <BlockCard
+      <BlockCard department="marketing"
         block={block({
           name: 'Brand Intelligence',
           shows: 'Voice consistency, positioning, messaging gaps',
@@ -271,14 +271,14 @@ describe('BlockCard, with a computed figure', () => {
     // The only thing standing in for the `stale` state the route deliberately
     // does not reach: nothing re-crawls on a schedule, so deriving staleness
     // would mark every audit out of date a week after signup.
-    render(<BlockCard block={block({ state: 'partial', figure: figure() })} />)
+    render(<BlockCard department="marketing" block={block({ state: 'partial', figure: figure() })} />)
 
     expect(screen.getByText(/Measured 2026-09-09/)).toBeTruthy()
   })
 
   it('links the page the score was measured from', () => {
     // A score whose page cannot be opened is a number nobody can check.
-    render(<BlockCard block={block({ state: 'partial', figure: figure() })} />)
+    render(<BlockCard department="marketing" block={block({ state: 'partial', figure: figure() })} />)
 
     const link = screen.getByRole('link', { name: 'https://muscat-marine.om/' })
     expect(link.getAttribute('href')).toBe('https://muscat-marine.om/')
@@ -289,7 +289,7 @@ describe('BlockCard, with a computed figure', () => {
     // something is still missing. Showing only one of the two is what the
     // deleted `marketing_state` got wrong in each direction.
     render(
-      <BlockCard
+      <BlockCard department="marketing"
         block={block({ state: 'partial', unlock: 'Needs keyword data.', figure: figure() })}
       />,
     )
@@ -302,7 +302,7 @@ describe('BlockCard, with a computed figure', () => {
     // `figure.checks` *is* the calculator's working, so the drawer needs no
     // endpoint and no `generation` row. Closed by default: nine rows unfurled
     // on every tile would bury the number they explain.
-    render(<BlockCard block={block({ state: 'partial', figure: figure() })} />)
+    render(<BlockCard department="marketing" block={block({ state: 'partial', figure: figure() })} />)
 
     expect(screen.queryByText('Served over HTTPS')).toBeNull()
 
@@ -316,7 +316,7 @@ describe('BlockCard, with a computed figure', () => {
   it('shows a failed check as an observation, not as an error', () => {
     // A page without structured data has not done anything wrong. Nine rows
     // styled red would turn the calculator's observations into a reprimand.
-    render(<BlockCard block={block({ state: 'partial', figure: figure() })} />)
+    render(<BlockCard department="marketing" block={block({ state: 'partial', figure: figure() })} />)
     fireEvent.click(screen.getByRole('button', { name: /why this number/i }))
 
     // The evidence is carried through in the calculator's words, unrestated
@@ -335,7 +335,7 @@ describe('BlockCard, across every kind', () => {
 
     for (const kind of ALL_KINDS) {
       const { container, unmount } = render(
-        <BlockCard block={block({ block: kind, state: 'planned' })} />,
+        <BlockCard department="marketing" block={block({ block: kind, state: 'planned' })} />,
       )
       const text = container.textContent ?? ''
       expect(text).toContain(kind)
@@ -347,14 +347,14 @@ describe('BlockCard, across every kind', () => {
   })
 
   it('carries the canonical id, and the doc 05 number only when there is one', () => {
-    const { unmount } = render(<BlockCard block={block()} />)
+    const { unmount } = render(<BlockCard department="marketing" block={block()} />)
     expect(screen.getByText('finance.runway_alert')).toBeTruthy()
     expect(screen.getByText('5.4')).toBeTruthy()
     unmount()
 
     // The thirteen capabilities doc 08 specified and doc 05 never did. An empty
     // reference rendered as a chip would be a label pointing at no paragraph.
-    render(<BlockCard block={block({ key: 'finance.approvals_queue', doc05_id: '' })} />)
+    render(<BlockCard department="marketing" block={block({ key: 'finance.approvals_queue', doc05_id: '' })} />)
     expect(screen.getByText('finance.approvals_queue')).toBeTruthy()
     expect(screen.queryByText('5.4')).toBeNull()
   })

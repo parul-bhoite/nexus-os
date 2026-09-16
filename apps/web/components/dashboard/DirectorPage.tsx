@@ -268,7 +268,7 @@ function Ready({ director, all }: { director: Director; all: Dashboards }) {
           ) : current ? (
             <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {current.blocks.map((block) => (
-                <BlockCard key={block.key} block={block} />
+                <BlockCard key={block.key} block={block} department={director.department} />
               ))}
             </ul>
           ) : null}
@@ -297,7 +297,7 @@ function Ready({ director, all }: { director: Director; all: Dashboards }) {
           </p>
           <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {catalogue.map((block) => (
-              <BlockCard key={block.key} block={block} />
+              <BlockCard key={block.key} block={block} department={director.department} />
             ))}
           </ul>
         </section>

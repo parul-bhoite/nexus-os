@@ -3,8 +3,10 @@
 import { useState } from 'react'
 import {
   STATE_LABEL,
+  narrateBlock,
   type BlockKind,
   type DirectorBlock,
+  type Narration,
   type WidgetState,
 } from '@/lib/dashboard-client'
 
@@ -44,6 +46,20 @@ import {
  * - **The date the page was fetched.** Standing in for the `stale` state the
  *   route deliberately does not reach: nothing re-crawls on a schedule, so
  *   deriving staleness would mark every audit out of date a week after signup.
+ *
+ * ## The sentence sits with the number, not with the consequence
+ *
+ * A narration is a gloss on the figure, so it goes on the figure's side of the
+ * line this file already draws: figure, then sentence, then "needs keyword
+ * data". Put below the consequence it would read as a footnote to a footnote.
+ * Not inside the working drawer either — the drawer is the arithmetic, the
+ * sentence is a reading of it, and a reader who wants one rarely wants the
+ * other.
+ *
+ * **It is a button, never automatic.** A page load that wrote seven sentences
+ * would spend the founder's daily allowance on tiles nobody looked at, and a
+ * GET that spends money breaks the promise `require_csrf` relies on when it
+ * exempts safe methods.
  *
  * ## The working drawer needs no endpoint
  *
@@ -157,7 +173,13 @@ function Figure({ block }: { block: DirectorBlock }) {
  * structured data has not done anything wrong, and colouring nine rows red
  * would turn an observation into a reprimand.
  */
-function Working({ block }: { block: DirectorBlock }) {
+function Working({
+  block,
+  narration,
+}: {
+  block: DirectorBlock
+  narration: Narration | null
+}) {
   const [open, setOpen] = useState(false)
   const figure = block.figure
   if (!figure) return null
@@ -195,9 +217,152 @@ function Working({ block }: { block: DirectorBlock }) {
           </ul>
           <p className="border-t border-ink-100 bg-bone-50 px-4 py-2 font-mono text-2xs text-ink-400">
             {figure.method}
+            {/* Which `SKILL.md` wrote the sentence above, beside the arithmetic
+                that produced the number. A disputed sentence should trace back
+                to its instructions as readily as a disputed figure traces back
+                to its working — otherwise the prose is the one thing on the
+                tile with no provenance at all. */}
+            {narration ? (
+              <span className="block">explained by narrate-metric {narration.prompt_version}</span>
+            ) : null}
           </p>
         </div>
       ) : null}
+    </div>
+  )
+}
+
+/**
+ * The reasons that mean asking again is pointless.
+ *
+ * The button is **hidden** for these rather than disabled. A disabled button
+ * reads as broken and invites a support conversation about the wrong thing; an
+ * absent one, beside a score that has not changed, reads as "this deployment
+ * does not do that" — which is what ADR 0011 says a missing key actually is.
+ */
+const NOTHING_TO_RETRY: ReadonlySet<string> = new Set([
+  'model_unavailable',
+  'skill_disabled',
+  'budget_exhausted',
+])
+
+/**
+ * The reasons where trying again is the honest suggestion.
+ *
+ * `invented_number` is in here deliberately. It means the guard caught a model
+ * stating a figure no calculation produced — the system working, not failing —
+ * and a second attempt usually succeeds.
+ */
+const WORTH_RETRYING: ReadonlySet<string> = new Set([
+  'provider_failed',
+  'schema_invalid',
+  'invented_number',
+])
+
+/**
+ * The sentence, and the one control that writes it.
+ *
+ * Every word the reader sees on a refusal is the server's `message`. There is
+ * no reason-to-sentence map here, for the reason `unlock` already gives: one
+ * wording change has to reach every surface, and a screen must not be able to
+ * ship with the space drawn and the copy forgotten.
+ *
+ * Refusals render in `text-ink-500`, not `text-clay-600`. This file reserves
+ * clay for calls to action about the *data*, and a refusal about the
+ * *explanation* is not one — the number beside it is fine and must not start
+ * reading as though it were in doubt.
+ */
+function Explanation({
+  block,
+  department,
+  narration,
+  onNarration,
+}: {
+  block: DirectorBlock
+  department: string
+  narration: Narration | null
+  onNarration: (narration: Narration) => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState('')
+  const [reason, setReason] = useState('')
+  const [superseded, setSuperseded] = useState(false)
+
+  const figure = block.figure
+  if (!figure) return null
+
+  async function explain() {
+    setBusy(true)
+    setMessage('')
+    setReason('')
+    setSuperseded(false)
+    try {
+      const result = await narrateBlock(department, block.key)
+
+      // The page was re-crawled between load and click. The sentence is true
+      // about a number the reader cannot see, and showing it beside the one
+      // they can is the single way this feature can state something false.
+      if (figure && result.measured_at !== figure.measured_at) {
+        setSuperseded(true)
+        return
+      }
+
+      if (result.outcome === 'answered' && result.narration) {
+        onNarration(result.narration)
+        return
+      }
+      setReason(result.reason)
+      setMessage(result.message)
+    } catch (error) {
+      // A transport failure, not a refusal — the API never got to have an
+      // opinion. Kept out of `reason` so the button stays offered.
+      setMessage(error instanceof Error ? error.message : 'Could not write that explanation.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const label = busy
+    ? 'Writing…'
+    : WORTH_RETRYING.has(reason)
+      ? 'Try again'
+      : narration
+        ? 'Explain again'
+        : 'Explain this score'
+
+  return (
+    <div className="mt-3">
+      {narration ? (
+        <p className="max-w-prose text-[0.95rem] leading-relaxed text-ink-700">
+          {narration.prose}
+        </p>
+      ) : null}
+
+      {superseded ? (
+        <p className="mt-2 max-w-prose text-sm leading-relaxed text-ink-500">
+          This score has changed since the page loaded. Reload to see it.
+        </p>
+      ) : message ? (
+        <p className="mt-2 max-w-prose text-sm leading-relaxed text-ink-500">{message}</p>
+      ) : null}
+
+      {NOTHING_TO_RETRY.has(reason) ? null : (
+        <button
+          type="button"
+          onClick={explain}
+          disabled={busy}
+          aria-busy={busy}
+          className={`mt-2 self-start rounded-lg px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed ${
+            narration
+              ? // Quiet once there is a sentence. Re-narrating spends tokens,
+                // so it must not be the dominant control on the tile.
+                'text-ink-500 underline decoration-ink-300 underline-offset-2 hover:text-ink-700'
+              : 'border border-ink-200 text-ink-700 hover:border-ink-300 hover:text-ink-900'
+          }`}
+        >
+          {label}
+        </button>
+      )}
     </div>
   )
 }
@@ -256,8 +421,19 @@ function Consequence({ block }: { block: DirectorBlock }) {
   }
 }
 
-export function BlockCard({ block }: { block: DirectorBlock }) {
+export function BlockCard({
+  block,
+  department,
+}: {
+  block: DirectorBlock
+  department: string
+}) {
   const dimmed = block.state === 'planned'
+
+  // Seeded from the served payload and updated from the POST — **never
+  // re-fetched**. Re-reading the director to pick up one sentence would
+  // recompute both figures and flicker the whole rail.
+  const [narration, setNarration] = useState<Narration | null>(block.narration ?? null)
 
   return (
     <li
@@ -283,6 +459,18 @@ export function BlockCard({ block }: { block: DirectorBlock }) {
           where the reverse order reads as an error with a number attached. */}
       <Figure block={block} />
 
+      {/* Between the figure and the consequence: a gloss on the number belongs
+          on the number's side of that line. Both conditions again, for the same
+          reason the drawer gives below. */}
+      {hasFigure(block.state) && block.figure ? (
+        <Explanation
+          block={block}
+          department={department}
+          narration={narration}
+          onNarration={setNarration}
+        />
+      ) : null}
+
       <Consequence block={block} />
 
       {/* Both conditions, not either. A state in `hasFigure` with no figure is
@@ -291,7 +479,7 @@ export function BlockCard({ block }: { block: DirectorBlock }) {
           we were told we should not have. Requiring both means neither is
           papered over. */}
       {hasFigure(block.state) && block.figure ? (
-        <Working block={block} />
+        <Working block={block} narration={narration} />
       ) : (
         <p className="mt-4 text-sm leading-relaxed text-ink-400">
           {KIND_PROMISE[block.block]}

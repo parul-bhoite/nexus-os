@@ -34,6 +34,7 @@ from app.domain.research import (
     state_for,
 )
 from app.logging import get_logger
+from app.retrieval.research_quota import manual_runs_this_month
 from app.retrieval.scoped import scoped_connection
 
 router = APIRouter(prefix="/research", tags=["research"])
@@ -88,22 +89,11 @@ async def start_run(scope: CurrentScope) -> StartOut:
     and both are our failure rather than theirs.
     """
     async with scoped_connection(scope) as db:
-        used = int(
-            (
-                await db.execute(
-                    text(
-                        "SELECT count(*) FROM research_run"
-                        " WHERE requested_at >= date_trunc('month', now())"
-                        "   AND requested_by_user_id IS NOT NULL"
-                    )
-                )
-            ).scalar_one()
-        )
+        # The month is the **workspace's**, not UTC. This used to be an inline
+        # `date_trunc('month', now())`, which truncates in the session timezone
+        # and reset the allowance four hours early — see `research_quota.py`.
+        used = await manual_runs_this_month(db, scope)
 
-        # `requested_by_user_id IS NOT NULL` is what distinguishes a manual run
-        # from the weekly sweep. The sweep has no requester, and charging it to
-        # the founder's three would mean the product quietly consuming the
-        # allowance it gave them.
         refusal = may_start(Trigger.MANUAL, manual_this_month=used, automatic_this_week=0)
         if refusal is not None:
             raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, refusal)

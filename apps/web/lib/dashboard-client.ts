@@ -1,5 +1,5 @@
 import { messageFrom } from '@/lib/api-error'
-import { AuthError } from '@/lib/auth-client'
+import { AuthError, csrfToken } from '@/lib/auth-client'
 
 /**
  * The seven director pages.
@@ -97,6 +97,73 @@ export type Figure = {
   method: string
 }
 
+/**
+ * A stored sentence about a figure, and enough to trace it.
+ *
+ * `prompt_version` names the `SKILL.md` that wrote it, and is shown in the
+ * working drawer beside the calculator's `method` — so a disputed sentence
+ * traces back to its instructions as readily as a disputed number traces back
+ * to its arithmetic.
+ */
+export type Narration = {
+  prose: string
+  narrated_at: string
+  prompt_version: string
+}
+
+/**
+ * Why there is no sentence, named rather than described.
+ *
+ * Mirrors `UnavailableReason` on the API. The strings matter to this client for
+ * exactly one decision — whether to offer the button again — and never for
+ * composing copy: the wording is always the server's `message`.
+ */
+export type NarrationReason =
+  | 'missing_input'
+  | 'model_unavailable'
+  | 'skill_disabled'
+  | 'budget_exhausted'
+  | 'provider_failed'
+  | 'schema_invalid'
+  | 'invented_number'
+  | 'refused'
+
+/**
+ * What one attempt did — which is a different question from what a tile holds.
+ *
+ * The GET says what is true now; this says what just happened. That is why no
+ * refusal reason is stored on `DirectorBlock`: a reason kept there would
+ * resurrect yesterday's "your allowance is spent" on every page load, hours
+ * after the allowance reset.
+ */
+export type NarrationResult = {
+  key: string
+  outcome: 'answered' | 'unavailable'
+  /** Empty unless `outcome` is `unavailable`. */
+  reason: string
+  /**
+   * Never empty, and always the server's words.
+   *
+   * A reason-to-sentence map in the browser is the failure `unlock` already
+   * avoids: one wording change would then have to be made in as many places as
+   * there are clients, and a screen could ship with the space drawn and the
+   * copy forgotten.
+   */
+  message: string
+  narration?: Narration | null
+  /** Empty when no row was written, which happens only when nothing ran. */
+  generation_id: string
+  /**
+   * The figure the sentence describes.
+   *
+   * Compared against the one on screen: if the page was re-crawled between load
+   * and click, the sentence explains a number the reader cannot see, and saying
+   * so is better than showing it.
+   */
+  measured_at: string
+  tokens_left_today: number
+}
+
 /** One capability, as the rail renders it. */
 export type DirectorBlock = {
   /** The canonical capability id — `finance.runway_alert`. */
@@ -119,6 +186,22 @@ export type DirectorBlock = {
    * case arrives as no figure plus a `locked` state.
    */
   figure?: Figure | null
+  /**
+   * The stored sentence, when one still describes the figure above it.
+   *
+   * **A sibling of `figure`, not a field on it.** Every field on `Figure` is
+   * either the calculator's output or the provenance that makes it checkable;
+   * prose is neither — it is a model's output *about* that output, and nesting
+   * it would make the figure object partly generated. They also have different
+   * lifetimes: the figure is recomputed on every page load, the sentence is
+   * stored and can be absent while the figure is present.
+   *
+   * **Absent rather than stale.** A sentence that describes an older
+   * measurement is dropped by the API, not labelled — to a reader, "superseded"
+   * and "never explained" both render as the button, and surfacing the
+   * difference invites showing the old sentence anyway.
+   */
+  narration?: Narration | null
 }
 
 /** One tab on the rail. */
@@ -289,6 +372,53 @@ export async function fetchSetup(department: string): Promise<DirectorSetup> {
 
 export async function fetchDirector(department: string): Promise<Director> {
   return (await get(`/api/dashboards/${encodeURIComponent(department)}`)) as Director
+}
+
+/**
+ * Ask a director to explain one figure.
+ *
+ * **A POST, and it carries CSRF**, because it spends tokens. A GET that spent
+ * money would break the promise `require_csrf` relies on to exempt safe methods
+ * — and a page load that quietly billed the customer for seven sentences
+ * nobody asked for is the version of this feature that cannot be undone.
+ *
+ * `key` is the capability id exactly as it arrived in `DirectorBlock.key`.
+ * Nothing is composed here from a department plus a block name: two ways to
+ * name one thing is two ways to disagree about it, and the API refuses a key
+ * that does not belong to the department in the path.
+ *
+ * A refusal is a **200 with a reason**, not a thrown error. There is a real
+ * number on the screen beside it, and pushing this into a catch block is what
+ * tempts a client to render an error state over a figure that is perfectly
+ * good.
+ */
+export async function narrateBlock(
+  department: string,
+  key: string,
+): Promise<NarrationResult> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  const token = csrfToken()
+  if (token) headers['X-CSRF-Token'] = token
+
+  const response = await fetch(
+    `/api/dashboards/${encodeURIComponent(department)}/narrate`,
+    {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ key }),
+      credentials: 'same-origin',
+      cache: 'no-store',
+    },
+  )
+
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new AuthError(
+      messageFrom(payload, 'Could not write that explanation.'),
+      response.status,
+    )
+  }
+  return payload as NarrationResult
 }
 
 export const STATE_LABEL: Record<WidgetState, string> = {

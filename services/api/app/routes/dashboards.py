@@ -21,7 +21,7 @@ doc 06 §4.5, the same rule `filter_records` follows.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Annotated, Final
 
@@ -52,7 +52,7 @@ from app.domain.dashboards import (
 )
 from app.domain.department_answers import BINDING_ONLY_SQL
 from app.domain.departments import label_for, runs_department, selected_departments
-from app.domain.narration import sentence_for
+from app.domain.narration import StoredNarration, describes, sentence_for
 
 # Aliased: `BY_DEPARTMENT` already means the dashboard *offerings* here, and two
 # dictionaries with one name is how the wrong one gets read.
@@ -80,8 +80,12 @@ from app.grounding.answer import NARRATOR, narrate
 from app.grounding.compute import compute_from_crawl, computes
 from app.grounding.context import CompanyContext, assemble
 from app.grounding.pipeline import Outcome, UnavailableReason
+from app.logging import get_logger
 from app.retrieval.crawl import CrawlSnapshot, current_page_signals
+from app.retrieval.narration import current_narrations
 from app.retrieval.scoped import apply_workspace_scope, scoped_connection
+
+log = get_logger(__name__)
 
 router = APIRouter(prefix="/dashboards", tags=["dashboards"])
 
@@ -108,6 +112,20 @@ class Observed:
     from onboarding having finished — a crawl that found nothing readable is a
     completed onboarding with no signals, which is exactly the case a tile must
     render as `locked`.
+    """
+
+    narrations: dict[str, StoredNarration] = field(default_factory=dict)
+    """Every capability's most recent stored sentence, keyed by capability id.
+
+    Defaulted, so the hermetic permission tests that construct an `Observed`
+    with no database keep compiling — and so a workspace that has never
+    narrated anything costs the same as one that has.
+
+    What is stored is not necessarily what is shown: `describes` decides
+    whether a sentence still applies to the figure recomputed beside it, and
+    that decision is made per tile in `block_out`, not here. A read that
+    quietly dropped rows it judged stale would make the rule invisible to
+    anybody reading either half.
     """
 
     @property
@@ -164,7 +182,13 @@ async def observed_sources(scope: CurrentScope) -> Observed:
     this way since step C.
     """
     async with scoped_connection(scope) as db:
-        return Observed(crawl=await current_page_signals(db, scope))
+        # Two reads, one connection, once per request. Both feed every tile on
+        # the page, so a per-tile read would be the same round trip to
+        # `us-east-2` repeated for one answer.
+        return Observed(
+            crawl=await current_page_signals(db, scope),
+            narrations=await current_narrations(db, scope),
+        )
 
 
 ObservedSources = Annotated[Observed, Depends(observed_sources)]
@@ -328,6 +352,27 @@ class BlockOut(BaseModel):
     state: str
     unlock: str
     needs: list[str]
+
+    narration: NarrationOut | None = None
+    """The stored sentence, when one still describes the figure above it.
+
+    **A sibling of `figure`, not a field on it.** `FigureOut`'s own docstring
+    says every field there is either the calculator's output or the provenance
+    that makes it checkable; prose is neither — it is a model's output *about*
+    that output, and nesting it would make the figure object partly generated,
+    which is the conflation I1 exists to prevent. They also have different
+    lifetimes: the figure is recomputed from the crawl on every page load, the
+    sentence is stored and can be absent while the figure is present.
+
+    **Absent rather than stale.** If the stored sentence describes an older
+    measurement it is dropped, not labelled — to a reader, "superseded" and
+    "never narrated" both render as the button, and surfacing the difference
+    only invites showing it anyway.
+
+    No refusal reason travels here either. This says what is true; the POST
+    says what just happened. A reason kept on the tile would resurrect
+    yesterday's "budget exhausted" on every page load.
+    """
 
     figure: FigureOut | None = None
     """The computed number, when there is one.
@@ -951,6 +996,40 @@ async def director_dashboard(
             method=str(computation.trace["method"]),
         )
 
+    def narration_out(capability: Capability) -> NarrationOut | None:
+        """The stored sentence, if it still describes what the tile now shows.
+
+        `describes` compares five fields of the stored trace against the live
+        computation — numerator, denominator, percentage, page and window — and
+        all five must match. The one that catches what nothing else does is
+        `window`: a re-crawl the next day with an identical score leaves every
+        number matching and the date wrong, and the prose may cite the date.
+
+        A mismatch logs rather than renders, so the rate is observable without
+        anybody having to notice a missing sentence.
+        """
+        stored = observed.narrations.get(capability.id)
+        if stored is None or snapshot is None:
+            return None
+
+        computation = compute_from_crawl(capability.id, snapshot)
+        if computation is None:
+            return None
+
+        if not describes(stored, computation):
+            log.info(
+                "dashboard.narration_superseded",
+                capability=capability.id,
+                narrated_at=stored.narrated_at.isoformat(),
+            )
+            return None
+
+        return NarrationOut(
+            prose=stored.prose,
+            narrated_at=stored.narrated_at.date().isoformat(),
+            prompt_version=stored.prompt_version,
+        )
+
     def block_out(capability: Capability) -> BlockOut:
         state = state_from_sources(
             capability.required_sources,
@@ -969,6 +1048,7 @@ async def director_dashboard(
             unlock=unlock_for_sources(capability.required_sources, connected=connected),
             needs=[source.value for source in capability.required_sources],
             figure=figure_out(capability),
+            narration=narration_out(capability),
         )
 
     def section_out(section: Section) -> SectionOut:

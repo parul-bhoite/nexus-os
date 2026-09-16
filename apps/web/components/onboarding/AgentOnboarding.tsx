@@ -376,6 +376,63 @@ export function AgentOnboarding() {
     (turn) => turn.role === 'user' && turn.target === DISCOVERY_FIELD,
   )
 
+  /**
+   * The open question, if there is one: its wording, its chips, where the
+   * answer goes, and what the composer should say it will be stored as.
+   *
+   * One descriptor rather than two `<Ask>` blocks, because the composer is no
+   * longer rendered inside the question — it is a band at the foot of the
+   * shell, and a band can only be rendered once. The two branches are the two
+   * questions that exist: the opener, which the model does not word, and every
+   * question after it, which it does.
+   */
+  const ask: {
+    question: string
+    choices?: string[]
+    hint?: string
+    onSubmit: (text: string) => void
+  } | null =
+    state.phase === 'discovery' && !discoveryAnswered && !question
+      ? {
+          // The one question the model does not word. The same string is
+          // `persona.stated_purpose.fallback_question` in the catalogue, which
+          // is what `/discovery` writes into the transcript as the agent turn
+          // this answer replies to — `test_the_opening_question_is_worded_once`
+          // reads this file to prove the two have not drifted. Change both or
+          // neither.
+          question: 'What are you responsible for, day to day?',
+          hint: 'This decides what gets asked next.',
+          onSubmit: (text) =>
+            void guard('Thinking…', async () => {
+              const turn = await openDiscovery(text)
+              setState(turn.state)
+              setDraft('')
+              setQuestion(turn.question ?? (await nextQuestion()))
+            }),
+        }
+      : question && !question.done && question.question
+        ? {
+            question: question.question,
+            choices: question.choices,
+            hint:
+              question.scope !== null
+                ? `Stored as ${SCOPE_LABEL[question.scope] ?? `L${question.scope}`}`
+                : undefined,
+            onSubmit: (text) =>
+              void guard('Thinking…', async () => {
+                // One request, not two. The question arrives with the answer;
+                // `nextQuestion()` is the fallback for the case the server
+                // stored the answer but could not generate a question, which it
+                // reports as a null rather than by failing and discarding the
+                // answer. See `AnswerTurn`.
+                const turn = await submitAnswer(text)
+                setState(turn.state)
+                setDraft('')
+                setQuestion(turn.question ?? (await nextQuestion()))
+              }),
+          }
+        : null
+
   const aura: AuraState = busy
     ? 'thinking'
     : listening
@@ -561,59 +618,17 @@ export function AgentOnboarding() {
             />
           )}
 
-          {state.phase === 'discovery' && !discoveryAnswered && !question && (
+          {ask && (
             <Ask
-              // The one question the model does not word. The same string is
-              // `persona.stated_purpose.fallback_question` in the catalogue,
-              // which is what `/discovery` writes into the transcript as the
-              // agent turn this answer replies to —
-              // `test_the_opening_question_is_worded_once` reads this file to
-              // prove the two have not drifted. Change both or neither.
-              question="What are you responsible for, day to day?"
-              hint="This decides what gets asked next."
-              value={draft}
+              question={ask.question}
+              choices={ask.choices}
               onChange={setDraft}
-              onListening={setListening}
               disabled={busy !== null}
-              onSubmit={(text) =>
-                void guard('Thinking…', async () => {
-                  const turn = await openDiscovery(text)
-                  setState(turn.state)
-                  setDraft('')
-                  setQuestion(turn.question ?? (await nextQuestion()))
-                })
-              }
+              onSubmit={ask.onSubmit}
             />
           )}
 
-          {question && !question.done && question.question && (
-            <Ask
-              question={question.question}
-              choices={question.choices}
-              hint={
-                question.scope !== null
-                  ? `Stored as ${SCOPE_LABEL[question.scope] ?? `L${question.scope}`}`
-                  : undefined
-              }
-              value={draft}
-              onChange={setDraft}
-              onListening={setListening}
-              disabled={busy !== null}
-              onSubmit={(text) =>
-                void guard('Thinking…', async () => {
-                  // One request, not two. The question arrives with the answer;
-                  // `nextQuestion()` is the fallback for the case the server
-                  // stored the answer but could not generate a question, which
-                  // it reports as a null rather than by failing and discarding
-                  // the answer. See `AnswerTurn`.
-                  const turn = await submitAnswer(text)
-                  setState(turn.state)
-                  setDraft('')
-                  setQuestion(turn.question ?? (await nextQuestion()))
-                })
-              }
-            />
-          )}
+
 
           {/* The interview closing. It used to carry the button that started the
               assembly; the assembly now waits for the documents and the tools,
@@ -713,6 +728,28 @@ export function AgentOnboarding() {
           )}
           <div ref={endRef} />
         </div>
+
+        {/* The composer, once, at the foot of the shell rather than inside the
+            transcript. It is a sibling of the canvas so that it spans the whole
+            column, and so that the canvas above — which is `flex-1` — takes the
+            free space on a short transcript and leaves the band on the floor.
+            Rendered only while there is a question open, so the tools and
+            summary screens do not carry a dead input. */}
+        {ask && (
+          <Composer
+            label={
+              ask.choices && ask.choices.length > 0
+                ? 'Or answer in your own words'
+                : 'Answer in your own words'
+            }
+            value={draft}
+            onChange={setDraft}
+            onSubmit={ask.onSubmit}
+            onListening={setListening}
+            disabled={busy !== null}
+            hint={ask.hint}
+          />
+        )}
       </main>
     </div>
   )
@@ -1528,32 +1565,28 @@ function PersonaConfirm({
  * question is an agent bubble in the transcript and the answer lands under it,
  * so an interview reads as one continuous conversation rather than as a
  * conversation that stops and hands over a widget every second turn.
+ *
+ * The composer is no longer part of this. It is rendered once, by the shell,
+ * as a band across the foot of the canvas — see the note on `Composer`. What
+ * stays here is the question itself and its chips, because those belong to the
+ * transcript and scroll with it.
  */
 function Ask({
   question,
   choices = [],
-  hint,
-  value,
   onChange,
   onSubmit,
-  onListening,
   disabled,
 }: {
   question: string
   choices?: string[]
-  hint?: string
-  value: string
   onChange: (value: string) => void
   onSubmit: (text: string) => void
-  onListening: (listening: boolean) => void
   disabled: boolean
 }) {
   return (
     <div className="flex flex-col gap-2">
       <AgentBubble>{question}</AgentBubble>
-      {/* The composer is a different kind of thing from a bubble and was sitting
-          flush against one. A little air is what says "your turn". */}
-      <div className="h-2" aria-hidden />
       {choices.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {choices.map((choice) => (
@@ -1577,15 +1610,6 @@ function Ask({
           ))}
         </div>
       )}
-      <Composer
-        label={choices.length > 0 ? 'Or answer in your own words' : 'Answer in your own words'}
-        value={value}
-        onChange={onChange}
-        onSubmit={onSubmit}
-        onListening={onListening}
-        disabled={disabled}
-        hint={hint}
-      />
     </div>
   )
 }
@@ -1640,12 +1664,25 @@ function Composer({
   }, [disabled, listening, stop])
 
   return (
-    /* Pinned to the bottom of the canvas rather than sitting wherever the
-       transcript happens to end. Where you type should not move as the
-       conversation grows, and on a long transcript the inline version put the
-       one control on screen below the fold. `-mx-6 px-6` so the band spans the
-       canvas while the field keeps the reading measure. */
-    <div className="sticky bottom-0 -mx-6 border-t border-bone-200 bg-bone-50/95 px-6 pb-5 pt-4 backdrop-blur">
+    /* A band across the foot of the canvas, not a card that follows the
+       transcript. Where you type should not move as the conversation grows.
+
+       It sits at the bottom in both directions, which took two mechanisms
+       because they cover opposite cases. `sticky bottom-0` pins it once the
+       transcript is long enough to scroll. On a *short* transcript nothing
+       scrolls, so sticky never engages and the band used to sit wherever the
+       conversation happened to end — question one had it floating mid-screen
+       over a field of empty canvas. That case is handled instead by the shell:
+       this is a direct child of the `min-h-screen` flex column and the
+       transcript above it is `flex-1`, so the free space is absorbed above the
+       band rather than below it.
+
+       Full width, and deliberately: the bar is chrome belonging to the screen.
+       The field inside keeps the same reading measure as the bubbles, because
+       what is being typed is prose and a textarea the width of a monitor is
+       not a thing anybody wants to write into. */
+    <div className="sticky bottom-0 z-10 w-full border-t border-bone-200 bg-bone-50/95 pb-5 pt-4 backdrop-blur">
+      <div className="mx-auto w-full max-w-3xl px-6">
       <label htmlFor="answer" className="text-xs font-medium text-ink-600">
         {label}
       </label>
@@ -1736,6 +1773,7 @@ function Composer({
           )}
         </p>
       )}
+      </div>
     </div>
   )
 }
