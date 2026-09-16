@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { Coverage } from '@/components/dashboard/Coverage'
 import { MorningBrief } from '@/components/dashboard/MorningBrief'
 import { useDashboards } from '@/components/shell/AppShell'
 import { Button } from '@/components/ui/Button'
@@ -83,6 +84,7 @@ export function DashboardLanding() {
   return (
     <div className="flex flex-col gap-10">
       <MorningBrief brief={state.surface.brief} />
+      <Coverage bands={state.surface.coverage} />
       <NoDepartment />
     </div>
   )

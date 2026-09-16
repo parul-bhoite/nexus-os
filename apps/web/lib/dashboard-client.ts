@@ -398,9 +398,29 @@ export type Brief = {
   measured_on: string
 }
 
+/**
+ * Where the product is for this company — ADR 0030.
+ *
+ * Three counts, never a percentage. A percentage of "done" invites being read
+ * as a verdict on the business, and the three bands have different remedies:
+ * `not_built` is ours, and the other two are already working.
+ */
+export type Coverage = {
+  measuring: number
+  /** Reachable and not a measurement — the Setup and Watchlist tabs. Kept
+   *  apart because a number somebody typed and a number we measured must never
+   *  look alike. */
+  reading_back: number
+  /** Ours. No connection the customer makes switches one of these on. */
+  not_built: number
+  /** Tiles only; shared with the API's other two coverage counters. */
+  total: number
+}
+
 /** Everything the common surface needs, in one response. */
 export type Surface = {
   brief: Brief
+  coverage: Coverage
 }
 
 async function get(path: string): Promise<unknown> {

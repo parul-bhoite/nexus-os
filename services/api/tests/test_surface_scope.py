@@ -198,3 +198,50 @@ def test_it_is_a_get_and_therefore_needs_no_csrf(client: TestClient) -> None:
     response = client.get("/dashboards/surface")
 
     assert response.status_code == 200
+
+
+# ── Coverage, scoped the same way ─────────────────────────────
+
+
+def test_coverage_is_counted_over_the_departments_this_reader_holds(
+    client: TestClient,
+) -> None:
+    """The region says *where the product is, **for you***. A Marketing-only
+    manager counted over all 89 would be shown a denominator of capabilities
+    they cannot open — the same over-claim the whole surface exists to avoid."""
+    as_role(client, Role.OWNER, frozenset(Department))
+    everything = surface(client)["coverage"]
+
+    as_role(client, Role.DEPARTMENT_MANAGER, frozenset({Department.MARKETING}))
+    theirs = surface(client)["coverage"]
+
+    assert everything["total"] == 89
+    assert theirs["total"] < everything["total"]
+
+
+def test_the_bands_are_served_summing_to_the_denominator(client: TestClient) -> None:
+    """Three counts that do not sum still render as three plausible numbers.
+    The domain object refuses to exist in that state; this asserts the serialiser
+    did not reintroduce the gap on the way out."""
+    as_role(client, Role.OWNER, frozenset(Department))
+    bands = surface(client)["coverage"]
+
+    assert bands["measuring"] + bands["reading_back"] + bands["not_built"] == bands["total"]
+    assert bands["not_built"] > bands["measuring"] + bands["reading_back"]
+
+
+def test_coverage_does_not_depend_on_whether_anything_was_crawled(
+    client: TestClient,
+) -> None:
+    """**Coverage is about the catalogue, the brief is about the data.**
+
+    There is no crawl in this fixture and the brief is correctly `not_measured`,
+    but two capabilities still have calculators and a route serving them. A
+    coverage number that fell to zero with the crawl would be answering the
+    brief's question twice instead of its own.
+    """
+    as_role(client, Role.OWNER, frozenset(Department))
+    body = surface(client)
+
+    assert body["brief"]["state"] == "not_measured"
+    assert body["coverage"]["measuring"] == 2

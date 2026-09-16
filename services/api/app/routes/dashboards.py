@@ -652,6 +652,31 @@ class BriefOut(BaseModel):
     """Empty only when nothing was measured."""
 
 
+class CoverageOut(BaseModel):
+    """Where the product is for this company, split by who has to move next.
+
+    ADR 0030. Three counts rather than a percentage: a percentage of "done"
+    invites being read as a verdict on the business — the thing the composite
+    score is refused for — and the three bands have genuinely different
+    remedies, two of which are ours.
+    """
+
+    measuring: int
+    reading_back: int
+    """Reachable and not a measurement: the Setup and Watchlist tabs, which show
+    a founder their own answers. Kept separate because doc 05 §0 requires that
+    a number somebody typed and a number we measured never look alike."""
+
+    not_built: int
+    """Ours, not the customer's. No connection anybody makes switches one on,
+    and saying so is what makes the other two numbers mean anything."""
+
+    total: int
+    """Tiles only — a `RULE` is not something a customer acquires. Shared with
+    `completeness` and `openable_count`, and `test_coverage_bands.py` asserts
+    all three agree rather than leaving three docstrings to."""
+
+
 class SurfaceOut(BaseModel):
     """Everything the common surface needs, in one response.
 
@@ -662,6 +687,7 @@ class SurfaceOut(BaseModel):
     """
 
     brief: BriefOut
+    coverage: CoverageOut
 
 
 @router.get("/surface", response_model=SurfaceOut)
@@ -711,13 +737,16 @@ async def command_surface(
         )
     )
 
-    brief = compose(
-        computations,
-        expected=mine,
-        unobserved=coverage(frozenset(CRAWL_AUDITS), departments).not_built,
-    )
+    bands = coverage(frozenset(CRAWL_AUDITS), departments)
+    brief = compose(computations, expected=mine, unobserved=bands.not_built)
 
     return SurfaceOut(
+        coverage=CoverageOut(
+            measuring=bands.measuring,
+            reading_back=bands.reading_back,
+            not_built=bands.not_built,
+            total=bands.total,
+        ),
         brief=BriefOut(
             state=brief.state.value,
             items=[
@@ -738,7 +767,7 @@ async def command_surface(
             checks_passed=brief.checks_passed,
             checks_total=brief.checks_total,
             measured_on=brief.measured_on,
-        )
+        ),
     )
 
 
