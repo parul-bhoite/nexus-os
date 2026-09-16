@@ -1,7 +1,9 @@
 # doc 14 — The dashboard build plan
 
 **Narrows:** `doc/13` (shape) into a sequence.
-**Depends on:** ADR 0029 (the brief), ADR 0030 (coverage).
+**Depends on:** ADR 0029 (the brief), ADR 0030 (coverage), ADR 0031 (MCP as a
+transport), ADR 0032 (provider tokens at rest — *proposed*, and **D27** blocks every
+connector until it is answered).
 **Does not supersede `doc/12`** — that still owns the phase numbering for the product as a
 whole. This is the dashboard's own ordering, and every step below is written to
 `CLAUDE.md`'s rule: one at a time, and a step is done when its acceptance test has run
@@ -110,6 +112,10 @@ Two consequences that must not be lost:
 ---
 
 ## 3. MCP: how it is used, and how it is not
+
+**Settled in ADR 0031**, which carries the full argument, the consequences and the
+revisit triggers. This section is the shape; that is the reasoning, and the two must not
+drift — if they disagree, the ADR wins.
 
 ### The rule
 
@@ -239,7 +245,7 @@ Largely a move of existing components onto the surface.
 **Acceptance:** the figure and narration are byte-identical to what the director page serves
 today — this step changes location, not content.
 
-### S8 — The connector spine ✅
+### S8 — The connector spine ✅ — ADR 0031
 
 > **Done.** The no-model rule is asserted as an import graph. Two MCP protocol details would have become I10 violations — see the commit.
 
