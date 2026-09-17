@@ -101,7 +101,22 @@ Three options, and I do not think this one should be defaulted:
 
 **My recommendation: (3) now, (2) later.** Manual entry gets a working Finance page immediately under a rule the documents already established, and does not commit you to an accounting vendor before you know which one your design partners use. The label is doing real work here — a margin the owner typed is a different claim from a margin fetched from Xero, and the product's whole position rests on not blurring that.
 
-**Still open, and now the only part of D7 left: which of the three above?**
+**Resolved: option 3 — manual entry, visibly labelled self-reported.** Recorded in
+`doc/11` §"Stage 9", which states it twice: *"Finance ships with manual entry,
+visibly labelled self-reported"* and *"D7 resolved."*
+
+*(This register said "still open" for as long as `doc/11` said "resolved" — found
+on 17 September 2026 while being asked to decide it, which is the worst way to
+find it. `doc/14` §5 had it as an open blocker too. Both now match `doc/11`,
+which is higher in the precedence order and is where flow decisions live.)*
+
+**What that leaves, and it is work rather than a decision:** Finance's twelve
+tiles are still locked, because manual entry has nothing to enter into. The
+decision sanctions a surface nobody has built — the same shape the ops layer took
+in `doc/15`, and the same rule: a figure somebody typed must never render where a
+measured one would (`doc/13` §7, ADR 0035). **Accounting is deferred, not
+refused**: option 2 remains the later move, and `doc/14` S11 should say so rather
+than wait on a decision already made.
 
 ---
 

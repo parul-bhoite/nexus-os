@@ -24,8 +24,35 @@ company stage: the scope travels with the question, not with the caller.
 
 from __future__ import annotations
 
-from app.domain.onboarding import AnswerType, Pass, Question
+from typing import Final
+
+from app.domain.onboarding import AnswerType, Choice, Pass, Question
 from app.domain.scopes import Department, Scope
+
+GRACE_DAYS: Final[tuple[Choice, ...]] = (
+    Choice("0", "The day after the date we promised"),
+    Choice("1", "One day past it"),
+    Choice("2", "Two days past it"),
+    Choice("3", "Three days past it"),
+    Choice("7", "A week past it"),
+)
+"""How much grace an order gets before it counts as late.
+
+**The values are days, and that is the point.** This question was typed
+`SINGLE_CHOICE` with no options for as long as it existed, so it collected free
+prose — and `operations.on_time_dispatch` declared it consumed while nothing
+could read it. D32 had to invent a separate numeric setting because no parser
+can turn "a day or two after we said" into a threshold without choosing one on
+the customer's behalf.
+
+A closed set fixes the question rather than working around it: the answer is
+already the number the figure needs, and `routes/spine` writes it to
+`workspace.dispatch_grace_days` — the single place the rate reads (ADR 0036).
+
+Five options, not a free number. A grace measured in weeks is a different promise
+rather than a longer one, and a text box invites "it depends", which is the state
+this question exists to leave.
+"""
 
 
 def _q(
@@ -36,6 +63,7 @@ def _q(
     why: str,
     consumed_by: str,
     scope: Scope = Scope.L3_DEPARTMENT,
+    options: tuple[Choice, ...] = (),
 ) -> Question:
     return Question(
         key=key,
@@ -46,6 +74,7 @@ def _q(
         department=department,
         why=why,
         consumed_by=consumed_by,
+        options=options,
     )
 
 
@@ -212,6 +241,7 @@ OPERATIONS = (
         AnswerType.SINGLE_CHOICE,
         'The definition of "late". Every lateness figure is meaningless without it.',
         consumed_by="operations.on_time_dispatch",
+        options=GRACE_DAYS,
     ),
     _q(
         "supplier_concentration",

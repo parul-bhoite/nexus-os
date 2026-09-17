@@ -11,6 +11,8 @@ answer and the database holds it.
 
 from __future__ import annotations
 
+from typing import Final
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
@@ -54,6 +56,14 @@ from app.routes.setup import store_answer
 
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 log = get_logger(__name__)
+
+LATE_DEFINITION: Final = "late_definition"
+"""The one department answer that is also a workspace setting.
+
+Named rather than written inline at its single use, so the coupling between the
+question bank and `workspace.dispatch_grace_days` is greppable from both ends —
+a string literal buried in a loop is how the two drift apart.
+"""
 
 
 class StageOut(BaseModel):
@@ -749,6 +759,21 @@ async def answer_department_block(
                 value=answer.value,
                 answer_state=binding.value,
             )
+
+            # **`late_definition` is the one answer that is also a setting.**
+            # `operations.on_time_dispatch` declares it consumed, and until now
+            # nothing read it: the question collected free prose and D32 had to
+            # add a separate numeric rule because no parser can turn "a day or
+            # two after we said" into a threshold without choosing one for the
+            # customer. The question now offers days as a closed set, so the
+            # answer *is* the number, and writing it here keeps
+            # `workspace.dispatch_grace_days` the single place the rate reads
+            # (ADR 0036) rather than adding a second source that can disagree.
+            if answer.key == LATE_DEFINITION and answer.value.isdigit():
+                await db.execute(
+                    text("UPDATE workspace SET dispatch_grace_days = :g WHERE id = :w"),
+                    {"g": int(answer.value), "w": str(scope.workspace_id)},
+                )
 
         # **The restate rule** (`doc/13` §10). A first answer is an answer; a
         # changed one moves figures somebody may already have acted on, so it is

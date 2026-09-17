@@ -256,9 +256,11 @@ without passing through a calculator; credentials are never logged.
 
 ### S9 — The first real connector, paired with a calculator 🟡 code complete
 **CRM via HubSpot's official MCP server**, plus one calculator so something appears.
-Chosen over accounting because **D7 is open** — whether Finance brings accounting in at all
-is undecided, and building its connector first would be building on a decision nobody has
-made.
+Chosen over accounting because of **D7** — which, it turns out, was *resolved* in `doc/11`
+("Finance ships with manual entry, visibly labelled self-reported") while this plan and
+`DECISIONS-REQUIRED.md` both went on calling it open. The conclusion is unchanged and the
+reason is better: accounting is **deferred by decision**, not blocked by indecision, so a
+CRM was the right first connector either way.
 **Built:** the OAuth round trip (`routes/connections.py`, with `state` bound to workspace,
 person and provider), sealed credential storage (`retrieval/connections.py`), migration
 0031's `crm_deal` with RLS forced, and `calculators/pipeline.py`.
@@ -293,8 +295,13 @@ tasks inside NEXUS, feeding 23 capabilities. **This needs its own plan** — it 
 so the sequence is honest about where the weight actually is.
 
 ### S11 — The remaining connectors ⛔ blocked behind S9
-Accounting (after D7), GA4, ads, enrichment, tender feeds. Each paired with at least one
-calculator, each re-checking its MCP status at implementation time.
+GA4, ads, enrichment, tender feeds — each paired with at least one calculator, each
+re-checking its MCP status at implementation time.
+
+**Accounting is not in this list.** D7 chose manual entry labelled self-reported for
+Finance, so what Finance needs is a *surface to type into*, not a connector — the shape
+`doc/15` built for Operations, under `doc/13` §7's rule that a typed figure never renders
+where a measured one would. Accounting stays the later move D7 called option 2.
 
 ---
 
@@ -310,7 +317,7 @@ short.
 | ~~3~~ | ~~**`NEXUS_CONNECTOR_SECRET_KEY`**~~ — a real `Settings` field, in `_DEPLOYED_REQUIRES` and in `doc/DEPLOYMENT-ENV.md`. Generate with `Fernet.generate_key()` | ✅ **set this in `.env`** |
 | ~~4~~ | ~~**The official `mcp` SDK**~~ — `mcp>=2.2`, a base dependency. It brings `httpx2`, a second HTTP client library, confined to `connectors/session.py` (ADR 0031) | ✅ done |
 | 5 | **A HubSpot developer app**: client id, client secret, redirect URI, and a sandbox portal to read. **The only thing still blocking S9** — the code is written and tested against a fake session | Parul |
-| 6 | **D7** — whether Finance brings accounting in at all. Not a blocker for S9, which is why S9 is CRM; it blocks the accounting half of S11 | Parul |
+| ~~6~~ | ~~**D7** — whether Finance brings accounting in at all~~ — **already answered in `doc/11`**: manual entry, visibly labelled self-reported. It was never a blocker; this table and the register had simply not caught up. What it leaves is Finance's manual-entry surface, which is work | ✅ decided |
 
 Every one of these is in `.env.example` with the reason, and in `FUTURE` in
 `tests/test_config_gates.py` with the step that wires it — so adding one without saying
