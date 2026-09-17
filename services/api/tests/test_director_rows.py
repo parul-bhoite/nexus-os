@@ -124,8 +124,7 @@ def test_singulars_and_plurals_agree_with_their_counts() -> None:
     assert "1 question open" in one.line
 
 
-def test_the_row_that_measures_comes_first(  # noqa: D401
-) -> None:
+def test_the_row_that_measures_comes_first() -> None:
     """A summary leads with the only row worth opening. Ordered by state, then
     by display name — sorting on the enum value looks alphabetical and is not,
     because `hr` renders as "People" and landed between Finance and Marketing."""

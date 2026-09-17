@@ -244,6 +244,35 @@ class Settings(BaseSettings):
     # for a key that is present and wrong.
     connector_secret_key: SecretStr = Field(default=SecretStr(""))
 
+    # HubSpot — the first connector (`doc/14` S9, ADR 0031). Registered as an
+    # app in HubSpot's developer portal; the redirect URI must match what is
+    # registered there character for character, or the exchange fails at the
+    # vendor with a message about the redirect and nothing about why.
+    #
+    # **Deliberately not in `_DEPLOYED_REQUIRES`.** A deployment with no CRM
+    # connector configured is a deployment where the Connect button is absent,
+    # which is a supported state in the way ADR 0011 means it — unlike the
+    # encryption key, whose absence would let us accept an authorisation we
+    # cannot store.
+    hubspot_client_id: str = ""
+    hubspot_client_secret: SecretStr = Field(default=SecretStr(""))
+    hubspot_redirect_uri: str = ""
+
+    @property
+    def hubspot_configured(self) -> bool:
+        """Whether the Connect button for HubSpot should exist at all.
+
+        All three or none. Two of the three is the state that fails at the
+        vendor rather than here, and a screen that offered the button on a
+        partial configuration would send a customer to an error page carrying
+        our client id.
+        """
+        return bool(
+            self.hubspot_client_id
+            and self.hubspot_client_secret.get_secret_value()
+            and self.hubspot_redirect_uri
+        )
+
     # ── Email (P3) ────────────────────────────────────────────
     # `file` writes RFC-822 `.eml` files to `mail_root`; `smtp` sends. The file
     # backend is not a stub — it is what makes the whole verification and

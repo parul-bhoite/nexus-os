@@ -53,15 +53,30 @@ TOKEN = "secret-token-do-not-log"
 # ── A fake provider, reachable both ways ──────────────────────
 
 
+class FakeResult:
+    """`mcp.types.CallToolResult` narrowed to the two fields that decide anything.
+
+    Matching the SDK's attribute spelling rather than a shape of our own: the
+    first version of this fake implemented an invented `send(method, params)`
+    seam, and when `McpTransport` was corrected to the SDK's `call_tool` the
+    fake was the only thing still speaking the old protocol. A double that
+    cannot be swapped for the real object is a double that proves nothing.
+    """
+
+    def __init__(self, content: dict[str, Any] | None, *, is_error: bool = False) -> None:
+        self.structured_content = content
+        self.is_error = is_error
+
+
 class FakeSession:
     """An MCP session that answers from a dict."""
 
-    def __init__(self, result: Mapping[str, Any]) -> None:
+    def __init__(self, result: FakeResult) -> None:
         self.result = result
-        self.sent: list[tuple[str, Mapping[str, Any]]] = []
+        self.calls: list[tuple[str, Mapping[str, Any]]] = []
 
-    async def send(self, method: str, params: Mapping[str, Any]) -> Mapping[str, Any]:
-        self.sent.append((method, params))
+    async def call_tool(self, name: str, arguments: dict[str, Any] | None = None) -> FakeResult:
+        self.calls.append((name, dict(arguments or {})))
         return self.result
 
 
@@ -102,9 +117,7 @@ async def test_both_transports_land_identical_rows() -> None:
 
     over_rest = await _adapter_rows(_rest(handler))
     over_mcp = await _adapter_rows(
-        McpTransport(
-            session=FakeSession({"structuredContent": DEALS}), tools={"deals": "list_deals"}
-        )
+        McpTransport(session=FakeSession(FakeResult(DEALS)), tools={"deals": "list_deals"})
     )
 
     assert over_rest.rows == over_mcp.rows
@@ -121,7 +134,7 @@ async def test_a_call_the_connector_never_declared_is_a_misconfiguration() -> No
 
     for transport in (
         _rest(handler),
-        McpTransport(session=FakeSession({}), tools={"deals": "list_deals"}),
+        McpTransport(session=FakeSession(FakeResult(None)), tools={"deals": "list_deals"}),
     ):
         with pytest.raises(ProviderMisconfiguredError):
             await transport.call(ToolCall("invoices"))
@@ -194,7 +207,7 @@ async def test_an_mcp_tool_failure_is_not_an_empty_success() -> None:
     nothing where the truth is that nobody could look.
     """
     transport = McpTransport(
-        session=FakeSession({"isError": True, "content": [{"type": "text", "text": "nope"}]}),
+        session=FakeSession(FakeResult(None, is_error=True)),
         tools={"deals": "list_deals"},
     )
 
@@ -208,7 +221,9 @@ async def test_a_number_is_never_read_out_of_an_mcp_text_block() -> None:
     one is reading a number from generated text, however convenient the string
     looks — so a result with no `structuredContent` is unavailable, not parsed."""
     transport = McpTransport(
-        session=FakeSession({"content": [{"type": "text", "text": "You have 42 open deals."}]}),
+        # A text-only answer: prose written for a model to read. Mining "42" out
+        # of it would be reading a figure from generated text.
+        session=FakeSession(FakeResult(None)),
         tools={"deals": "list_deals"},
     )
 

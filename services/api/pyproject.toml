@@ -22,6 +22,18 @@ dependencies = [
   # cannot decrypt its token is not a supported state — it is a connection that
   # silently stops working.
   "cryptography>=44.0",
+  # The official MCP SDK (ADR 0031). A **base** dependency because a connector
+  # that cannot open a session is not a degraded state, it is a connection that
+  # does nothing — and five of the vendors this product connects to publish a
+  # vendor-hosted MCP server.
+  #
+  # It brings `httpx2`, which is a *different distribution* from the `httpx`
+  # this service already uses, not a different version of it. The two are not
+  # reconciled: `app/connectors/session.py` is the only file that imports
+  # httpx2, and `connectors/rest.py` and the crawler keep httpx untouched.
+  # Migrating the service for tidiness on a path with no shared state would be
+  # a large change for nothing; the cost is a second package in the image.
+  "mcp>=2.2",
   "tenacity>=9.0",
   "structlog>=24.4",
   # Scheduler for expiry sweeps and, later, crawls and score recomputation.

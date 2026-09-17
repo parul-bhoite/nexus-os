@@ -87,6 +87,20 @@ ADR rather than arriving inside this one.
 - **Credentials multiply.** Each provider brings an OAuth or key exchange, and MCP does not
   reduce that — it standardises the calls, not the consent. `SourceEntry.read_only` stays
   `True` everywhere; write scope is A5's separate, heavier ask.
+- **The SDK brings a second HTTP client library.** `mcp` 2.2 depends on
+  `httpx2`, a different distribution from the `httpx` this service already uses
+  — not a different version of one. They are not reconciled:
+  `app/connectors/session.py` is the only file that imports it, because
+  `streamable_http_client` takes no headers of its own and the credential can
+  only be set on a client handed to it. Migrating the service to `httpx2` for
+  tidiness, on a path that shares no state with the rest, would be a large
+  change for nothing.
+- **The SDK's API moved between the plan and the build.** `mcp` 2.x renamed
+  `streamablehttp_client` and moved `CallToolResult.structuredContent` to
+  `structured_content`. This is the adapter boundary earning its keep on first
+  contact: one file changed, and the `Session` protocol was reshaped from an
+  invented `send(method, params)` to the SDK's own `call_tool(name, arguments)`
+  — a seam that mirrors the library is a seam a fake cannot drift from.
 - **A second MCP client now exists in the estate.** Claude Code's own MCP configuration is
   unrelated to this one and must not be confused with it in code review: this client runs in
   the API process, holds customer credentials, and is never developer tooling.

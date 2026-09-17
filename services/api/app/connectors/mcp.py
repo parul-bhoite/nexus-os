@@ -13,7 +13,7 @@ and I1 says every number is fetched or computed in code. The rows this returns
 are stored; the figures come from `calculators/` afterwards, exactly as they do
 for a REST response.
 
-## `tools/call`, and never `tools/list`
+## `call_tool`, and never `list_tools`
 
 A client that listed a server's tools and then chose between them would be
 composing its own calls at runtime — the thing `ToolCall`'s docstring rules out.
@@ -21,15 +21,16 @@ The adapter declares the names it uses, the same way it declares its REST
 routes, and a server that stops offering one is a misconfiguration to report
 rather than a menu to re-read.
 
-## Why this is not wired to a real vendor yet
+## The seam is the SDK's own shape
 
-The official `mcp` SDK is **not a dependency of this service**, and hand-rolling
-JSON-RPC session initialisation, protocol-version negotiation, SSE framing and
-OAuth against five vendors is the kind of thing that works in a test and fails
-on the third provider. So the shape is here and honest, `send` is the one seam a
-real client plugs into, and **the SDK is a named blocker** rather than a quiet
-TODO. `test_connector_boundary.py` holds the behaviour that must survive the
-swap.
+`Session` below is `mcp.ClientSession.call_tool` narrowed to what this needs.
+The first draft invented a `send(method, params)` seam and had to be corrected:
+the SDK's method takes a tool name and arguments, so a JSON-RPC-shaped seam
+would have meant this module knowing about the wire format the SDK exists to
+hide. Keeping it a protocol rather than importing `ClientSession` here is what
+lets `test_connector_boundary.py` assert the behaviour — the untrusted handling,
+the error mapping, the absence of any model — without a network or a vendor
+account.
 """
 
 from __future__ import annotations
@@ -44,24 +45,32 @@ from app.connectors.contracts import (
 )
 
 PROTOCOL_VERSION: Final = "2025-06-18"
-"""Pinned rather than negotiated at call time.
+"""The version this client was written against.
 
-A client that accepted whatever a server offered would change behaviour when a
-vendor upgraded, which is a change to what a customer's tile says arriving
-without a deploy.
+Recorded rather than negotiated at call time. A client that accepted whatever a
+server offered would change behaviour when a vendor upgraded, which is a change
+to what a customer's tile says arriving without a deploy.
 """
 
 
-class Session(Protocol):
-    """A live MCP session. One JSON-RPC request, one result.
+class ToolResult(Protocol):
+    """What `call_tool` returns, narrowed to the two fields that decide anything.
 
-    The seam the official SDK plugs into. It is a protocol rather than a
-    concrete client so `test_connector_boundary.py` can assert this transport's
-    behaviour — the untrusted handling, the error mapping, the absence of any
-    model — without a network or a vendor account.
+    Named after the SDK's `CallToolResult` and matching its attribute spelling,
+    so the real object satisfies this without an adapter.
     """
 
-    async def send(self, method: str, params: Mapping[str, Any]) -> Mapping[str, Any]: ...
+    @property
+    def is_error(self) -> bool | None: ...
+
+    @property
+    def structured_content(self) -> dict[str, Any] | None: ...
+
+
+class Session(Protocol):
+    """An initialised MCP session. `mcp.ClientSession` satisfies this as it is."""
+
+    async def call_tool(self, name: str, arguments: dict[str, Any] | None = None) -> Any: ...
 
 
 class McpTransport:
@@ -81,19 +90,18 @@ class McpTransport:
         if tool is None:
             raise ProviderMisconfiguredError(f"{call.name!r} is not a call this connector declares")
 
-        result = await self._session.send(
-            "tools/call", {"name": tool, "arguments": dict(call.arguments)}
-        )
+        result: ToolResult = await self._session.call_tool(tool, dict(call.arguments))
 
-        # **`isError` is a result, not an exception.** MCP reports a tool failure
-        # inside a successful response, so a client that only caught transport
-        # errors would treat "this tool failed" as a successful empty fetch — and
-        # an empty fetch computes a figure of zero, which is the I10 violation
-        # this product exists to prevent, arriving through a protocol detail.
-        if result.get("isError"):
+        # **`is_error` is a result, not an exception.** MCP reports a tool
+        # failure inside a *successful* response, so a client that only caught
+        # transport errors would treat "this tool failed" as a successful empty
+        # fetch — and an empty fetch computes a figure of zero, which is the I10
+        # violation this product exists to prevent, arriving through a protocol
+        # detail.
+        if result.is_error:
             raise ProviderUnavailableError(f"the provider's {call.name} tool reported a failure")
 
-        content = result.get("structuredContent")
+        content = result.structured_content
         if isinstance(content, Mapping):
             return content
 

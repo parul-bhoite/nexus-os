@@ -263,13 +263,11 @@ FUTURE: dict[str, str] = {
     "NEXUS_GOOGLE_CLIENT_ID": "P18 — GA4 and Search Console OAuth (D3)",
     "NEXUS_GOOGLE_CLIENT_SECRET": "P18 — GA4 and Search Console OAuth (D3)",
     "NEXUS_PAGESPEED_API_KEY": "P18 — PageSpeed Insights (D3)",
-    # doc/14 step 9. `NEXUS_CONNECTOR_SECRET_KEY` has left this list: D27 was
-    # answered with option A, so it is a real `Settings` field and deployed
-    # environments refuse to boot without it. What remains is one provider's
-    # OAuth app, which no amount of code can supply.
-    "NEXUS_HUBSPOT_CLIENT_ID": "doc/14 S9 — the first connector, over HubSpot's MCP server",
-    "NEXUS_HUBSPOT_CLIENT_SECRET": "doc/14 S9 — the first connector, over HubSpot's MCP server",
-    "NEXUS_HUBSPOT_REDIRECT_URI": "doc/14 S9 — OAuth callback, must match the app's registration",
+    # doc/14 step 9 has emptied this section. `NEXUS_CONNECTOR_SECRET_KEY` and
+    # the three `NEXUS_HUBSPOT_*` variables are all real `Settings` fields now,
+    # so they are checked by the two tests above rather than excused here. What
+    # is still missing is a registered HubSpot app — a credential, not a
+    # variable, and no list in this repository can supply one.
 }
 
 
