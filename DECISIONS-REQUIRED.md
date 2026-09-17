@@ -390,7 +390,7 @@ rather than to the ops layer, and it should be made as one decision rather than 
 
 ---
 
-### D30 — Does `sales.deals_lite` reuse `crm_deal`? *(blocks `doc/15` S10.6)*
+### D30 — Does `sales.deals_lite` reuse `crm_deal`? ✅ **Decided 17 September 2026** — ADR 0038
 
 It is specified as *"a minimal deal tracker for customers with no CRM"*, and
 `crm_deal` exists with a `provider` column. Writing hand-typed deals as
@@ -398,8 +398,17 @@ It is specified as *"a minimal deal tracker for customers with no CRM"*, and
 code — and puts a typed deal and a synced one in one table, which the
 `self_reported` distinction argues against.
 
-**My recommendation: reuse it, carry the provenance in `provider`.** Worth
-disagreeing with.
+**Decided: reuse it, carry the provenance in `provider`** — and **partition every
+read**, which is the half that makes the reuse safe rather than dangerous.
+`current_deals` previously selected every row and labelled it `provider="crm"`;
+adding typed rows without touching that query would have fed somebody's own
+typing into `sales.pipeline_board` as though a CRM had reported it, silently.
+There is no migration: the column exists, carries no CHECK, and the unique key
+already includes it.
+
+*(This entry stayed open in the register for a day after the work shipped —
+noticed while listing what was pending, which is the only reason it is closed
+now rather than later.)*
 
 ---
 
