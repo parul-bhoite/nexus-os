@@ -488,6 +488,10 @@ _IMPLEMENTED: Final[frozenset[str]] = frozenset(
         # count, because ADR 0034 forbids dividing rather than grouping.
         "operations.milestone_timeline",
         "operations.issue_register",
+        # `doc/15` S10.4 — **the first ops capability that divides.** Two gates
+        # stand in front of the percentage (ADR 0035, ADR 0036) and the counts
+        # beside it are served either way.
+        "operations.on_time_dispatch",
     }
 )
 
@@ -520,6 +524,9 @@ _REACHABLE: Final[frozenset[str]] = _setup_and_watchlist_ids() | frozenset(
         # the figure carries the answer rather than the state (ADR 0035).
         "operations.milestone_timeline",
         "operations.issue_register",
+        # Reachable as soon as an order is recorded. Whether it shows a *rate*
+        # is a further question the figure answers for itself.
+        "operations.on_time_dispatch",
     }
 )
 """**The capabilities a person can actually open.**

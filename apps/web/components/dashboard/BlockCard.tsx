@@ -9,6 +9,7 @@ import {
   type CountFigure,
   type DirectorBlock,
   type Narration,
+  type RateFigure,
   type ScoreFigure,
   type WidgetState,
 } from '@/lib/dashboard-client'
@@ -323,6 +324,83 @@ function CountFigureBody({ figure }: { figure: CountFigure }) {
   )
 }
 
+/**
+ * A share of something — ADR 0036's fourth kind, and the only one that divides.
+ *
+ * **The refusal is the figure's, not this component's.** Both gates are decided
+ * server-side so exactly one place says whether a percentage may be shown; the
+ * job here is to render the reason in words a founder can act on, which is why
+ * each refusal gets its own sentence rather than a shared "unavailable".
+ *
+ * The counts render under every refusal. They are true either way, and a tile
+ * that said nothing at all when it could honestly say "two orders are late"
+ * would be withholding the useful half.
+ */
+function RateFigureBody({ figure }: { figure: RateFigure }) {
+  const REASON: Record<string, string> = {
+    unvouched:
+      'Confirm on Your work that this is all of your orders, and this becomes a percentage.',
+    no_rule:
+      'Set how many days past the promised date an order counts as late, and this becomes a percentage.',
+    nothing_sent: 'Nothing has gone out yet, so there is no on-time figure to work out.',
+  }
+
+  return (
+    <>
+      {figure.refused ? (
+        <p className="max-w-prose text-sm leading-relaxed text-ink-700">
+          {REASON[figure.refused] ?? 'This cannot be worked out yet.'}
+        </p>
+      ) : (
+        <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <span className="font-display text-3xl leading-none text-ink-900">
+            {figure.percentage}%
+          </span>
+          {/* The denominator travels with the number — a rate on its own is a
+              claim the reader cannot check. */}
+          <span className="text-sm text-ink-500">
+            {figure.numerator} of {figure.denominator} orders that went out
+          </span>
+        </p>
+      )}
+
+      <p className="mt-2 max-w-prose text-sm leading-relaxed text-ink-600">
+        <span className="font-medium text-ink-700">{figure.label}.</span> {figure.measures}
+      </p>
+
+      {figure.outstanding > 0 ? (
+        <p className="mt-2 text-sm text-ink-500">
+          {figure.outstanding} {figure.outstanding === 1 ? 'order has' : 'orders have'} not gone
+          out yet
+          {figure.overdue > 0
+            ? /* "1 of those are" read wrong on the first tile that rendered it.
+                 With one outstanding order there is no "those" to speak of, so
+                 the singular case drops the phrase entirely rather than
+                 agreeing its way into saying the same thing twice. */
+              figure.outstanding === 1
+              ? ', and it is past the promise'
+              : `, and ${figure.overdue} of those ${figure.overdue === 1 ? 'is' : 'are'} past the promise`
+            : ''}
+          .
+        </p>
+      ) : null}
+
+      {figure.grace_days !== null ? (
+        /* The rule the figure was computed under. A percentage whose rule is
+           invisible cannot be checked by the person it is about. */
+        <p className="mt-2 text-sm text-ink-400">
+          Late means more than {figure.grace_days}{' '}
+          {figure.grace_days === 1 ? 'day' : 'days'} past the date you promised.
+        </p>
+      ) : null}
+
+      <p className="mt-1 text-sm text-ink-400">
+        Counted from what your workspace recorded, last updated {figure.recorded_at}
+      </p>
+    </>
+  )
+}
+
 /** Whichever kind this tile carries. */
 function Figure({ block }: { block: DirectorBlock }) {
   const figure = block.figure
@@ -334,6 +412,8 @@ function Figure({ block }: { block: DirectorBlock }) {
         <ScoreFigureBody figure={figure} />
       ) : figure.kind === 'amount' ? (
         <AmountFigureBody figure={figure} />
+      ) : figure.kind === 'rate' ? (
+        <RateFigureBody figure={figure} />
       ) : (
         <CountFigureBody figure={figure} />
       )}

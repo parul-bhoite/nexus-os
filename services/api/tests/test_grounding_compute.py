@@ -26,6 +26,7 @@ from app.domain.registry import CAPABILITIES, TILES
 from app.grounding.compute import (
     CRAWL_AUDITS,
     OPS_CENSUSES,
+    OPS_RATIOS,
     PIPELINE_TALLIES,
     compute_from_crawl,
     computes,
@@ -261,10 +262,12 @@ def test_every_dispatched_capability_is_reachable_and_implemented() -> None:
     directions, exactly as `CRAWL_AUDITS` is" — which was false in the only
     direction that catches a dispatch nobody wired up. A new dict added to
     `compute.py` and not to this tuple is the way that comes back, so the
-    companion test below asserts the tuple is complete.
+    companion test below asserts the tuple is complete — and it did its job when
+    `OPS_RATIOS` arrived in S10.4, failing on the fourth dispatch before it had
+    reached this list.
     """
     by_id = {c.id: c for c in CAPABILITIES}
-    for dispatch in (CRAWL_AUDITS, PIPELINE_TALLIES, OPS_CENSUSES):
+    for dispatch in (CRAWL_AUDITS, PIPELINE_TALLIES, OPS_CENSUSES, OPS_RATIOS):
         for capability_id in dispatch:
             capability = by_id.get(capability_id)
             assert capability is not None, f"{capability_id} is not in the registry"
@@ -277,7 +280,7 @@ def test_the_guard_above_covers_every_dispatch() -> None:
     every id it accepts must be an id the guard above checked. A fourth dispatch
     added to `computes()` and forgotten in that tuple would make the guard pass
     by not looking."""
-    guarded = set(CRAWL_AUDITS) | set(PIPELINE_TALLIES) | set(OPS_CENSUSES)
+    guarded = set(CRAWL_AUDITS) | set(PIPELINE_TALLIES) | set(OPS_CENSUSES) | set(OPS_RATIOS)
     for capability in CAPABILITIES:
         if computes(capability.id):
             assert capability.id in guarded, (

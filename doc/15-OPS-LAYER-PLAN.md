@@ -197,9 +197,40 @@ sorting in the browser would put "high" between "low" and "medium".
 
 Asserted by `scripts/ops_walkthrough.py`: 49 checks, green.
 
-### S10.4 — Dispatches
+### S10.4 — Dispatches ✅ *shipped 17 September 2026*
 `operations.on_time_dispatch` — the first ops **rate**, and the first to need onboarding
 answers (`promised_lead_time`, `late_definition`). D29 must be answered before it.
+
+**The onboarding answers turned out to be unusable, and that is D32 (ADR 0036).** Both
+facts are collected as free prose — `late_definition` is typed `SINGLE_CHOICE` with no
+choices defined, and `AnswerShape.DURATION` is only a *cue* that helps the agent phrase
+the question. There is no parser anywhere, and writing one would be inventing a threshold
+from somebody's sentence. So the rule is asked for as a **number**:
+`workspace.dispatch_grace_days`, nullable with **no server default** — a `DEFAULT 0`
+would be a threshold we set for every workspace, silently, producing a confident
+percentage under a rule the customer never agreed to.
+
+**Two gates, refusing for different reasons**, and the tile says which: nobody has vouched
+the record is complete (ADR 0035), or nobody has said what late means (D32). A third state,
+`nothing_sent`, is named separately because the customer has done everything asked and
+there is still nothing to divide. **No percentage is served under any of them, and neither
+is half a fraction** — half a fraction is an invitation to finish it.
+
+**The counts ship under every refusal.** Orders outstanding and past the promise are true
+without either gate, and withholding them along with the rate would tell a founder nothing
+when we can honestly tell them something.
+
+`RateFigureOut` is the union's fourth arm (score, amount, count, rate). The denominator is
+**what actually went out**, never what was recorded: dividing by the latter reports a
+backlog as lateness.
+
+**Still not narratable, and this one is a bounded gap rather than a principle.** A rate has
+exactly `narrate-metric`'s vocabulary. What stops it is `domain.narration.describes`, which
+is typed to `Computation` and compares a `page` a rate has no equivalent of — and that
+comparison is the only thing keeping prose about last week's number beside this week's.
+
+Asserted by `scripts/ops_walkthrough.py`: 67 checks, green, including both gates refusing
+in turn and the figure moving when the founder widens the grace.
 
 ### S10.5 — Stock and suppliers
 `operations.stock_levels`, `operations.supplier_risk`. Each consumes a fact.

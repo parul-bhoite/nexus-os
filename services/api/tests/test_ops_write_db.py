@@ -95,6 +95,7 @@ def two_workspaces(engine: Engine) -> Iterator[tuple[tuple[UUID, UUID], tuple[UU
             )
             for statement in (
                 "DELETE FROM ops_completeness WHERE workspace_id = :w",
+                "DELETE FROM ops_dispatch WHERE workspace_id = :w",
                 "DELETE FROM ops_issue WHERE workspace_id = :w",
                 "DELETE FROM ops_milestone WHERE workspace_id = :w",
                 "DELETE FROM ops_task WHERE workspace_id = :w",
@@ -195,8 +196,18 @@ def test_a_workspace_that_has_recorded_nothing_says_so(
     # come in S10.5. A test that has to be edited every time the payload grows
     # correctly costs more than the stray field it was catching.
     assert body["recorded_at"] == "", "a date on a workspace that recorded nothing"
-    assert body.keys() >= {"projects", "tasks", "milestones", "issues", "completeness"}
-    assert all(value == [] for key, value in body.items() if key != "recorded_at"), body
+    assert body.keys() >= {"projects", "tasks", "milestones", "issues", "dispatches"}
+
+    # Every collection empty. Written as "every list", not "every value except
+    # `recorded_at`", which is what it said until S10.4 added a scalar and broke
+    # it for the third time — the payload keeps growing correctly and the test
+    # has to stop guessing at its shape.
+    assert all(value == [] for value in body.values() if isinstance(value, list)), body
+
+    # And nothing set. `grace_days` is `None` rather than `0` on a fresh
+    # workspace, which is D32's whole point: a default would be a threshold we
+    # chose, and `on_time_dispatch` refuses until somebody sets one (ADR 0036).
+    assert body["grace_days"] is None
 
 
 @requires_db
@@ -624,3 +635,122 @@ def test_completeness_accepts_the_two_new_entities(
 
     for entity in ("milestones", "issues"):
         assert _post(client, "/ops/completeness", {"entity": entity}).status_code == 201, entity
+
+
+# ── Dispatches and the rule — `doc/15` S10.4, ADR 0036 ────────
+
+
+@requires_db
+def test_an_order_is_recorded_and_read_back(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    mine, _ = two_workspaces
+    as_member(client, mine)
+
+    response = _post(client, "/ops/dispatches", {"reference": "SO-1", "promised_on": "2026-09-10"})
+
+    assert response.status_code == 201, response.text
+    assert response.json()["dispatched_on"] is None, "not sent is the ordinary state"
+    assert [d["reference"] for d in client.get("/ops").json()["dispatches"]] == ["SO-1"]
+
+
+@requires_db
+def test_the_grace_starts_unset_and_that_is_the_gate(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """**The whole of D32.** `NULL`, not `0`. A default of zero would be a
+    threshold we set for every workspace, silently, and it would produce a
+    confident percentage under a rule the customer never agreed to."""
+    mine, _ = two_workspaces
+    as_member(client, mine)
+    _post(client, "/ops/dispatches", {"reference": "SO-1", "promised_on": "2026-09-10"})
+
+    assert client.get("/ops").json()["grace_days"] is None
+
+
+@requires_db
+def test_setting_the_rule_replaces_rather_than_appends(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """Unlike a completeness confirmation, which is append-only because *when
+    somebody last vouched* is what a reader of a rate needs. This is a rule with
+    one current value, and a figure computed under it says which rule it used."""
+    mine, _ = two_workspaces
+    as_member(client, mine)
+    _post(client, "/ops/dispatches", {"reference": "SO-1", "promised_on": "2026-09-10"})
+
+    client.put("/ops/dispatch-rule", json={"grace_days": 2}, headers={"X-CSRF-Token": CSRF})
+    client.put("/ops/dispatch-rule", json={"grace_days": 5}, headers={"X-CSRF-Token": CSRF})
+
+    assert client.get("/ops").json()["grace_days"] == 5
+
+
+@requires_db
+def test_a_negative_grace_is_refused(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """It would turn "late" into "early" without anybody noticing. Refused at the
+    edge, and the CHECK constraint says the same thing at the other end."""
+    mine, _ = two_workspaces
+    as_member(client, mine)
+
+    response = client.put(
+        "/ops/dispatch-rule", json={"grace_days": -1}, headers={"X-CSRF-Token": CSRF}
+    )
+
+    assert response.status_code == 422
+
+
+@requires_db
+def test_another_workspaces_rule_is_not_ours(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """A rule crossing a boundary would change what "late" means for somebody
+    else's figure."""
+    mine, theirs = two_workspaces
+    as_member(client, mine)
+    _post(client, "/ops/dispatches", {"reference": "SO-1", "promised_on": "2026-09-10"})
+    client.put("/ops/dispatch-rule", json={"grace_days": 7}, headers={"X-CSRF-Token": CSRF})
+
+    as_member(client, theirs)
+    _post(client, "/ops/dispatches", {"reference": "THEIRS", "promised_on": "2026-09-10"})
+
+    assert client.get("/ops").json()["grace_days"] is None
+
+
+@requires_db
+def test_a_viewer_may_not_set_the_rule(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """Defining what late means is a claim about the company, not a reading."""
+    mine, _ = two_workspaces
+    as_member(client, mine, role=Role.VIEWER)
+
+    response = client.put(
+        "/ops/dispatch-rule", json={"grace_days": 1}, headers={"X-CSRF-Token": CSRF}
+    )
+
+    assert response.status_code == 403
+
+
+@requires_db
+def test_setting_the_rule_needs_csrf(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    mine, _ = two_workspaces
+    as_member(client, mine)
+
+    assert client.put("/ops/dispatch-rule", json={"grace_days": 1}).status_code == 403
+
+
+@requires_db
+def test_dispatches_are_isolated_between_workspaces(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    mine, theirs = two_workspaces
+    as_member(client, mine)
+    _post(client, "/ops/dispatches", {"reference": "SO-1", "promised_on": "2026-09-10"})
+
+    as_member(client, theirs)
+
+    assert client.get("/ops").json()["dispatches"] == []

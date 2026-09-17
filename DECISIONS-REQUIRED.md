@@ -360,6 +360,28 @@ rather than rates, and a count of what was recorded is true either way.
 
 ---
 
+### D32 — How does "late" become a number? ✅ **Decided 17 September 2026** — ADR 0036
+
+`doc/15` S10.4. `operations.on_time_dispatch` is the first ops **rate**, and it declares
+`consumes_facts = ('promised_lead_time', 'late_definition')`. Both arrive as **free prose**
+— `late_definition` is typed `SINGLE_CHOICE` with no choices, and `AnswerShape.DURATION`
+turns out to be only a cue for phrasing the question. There is no parser in the codebase,
+and the question bank's own note reads: *"The definition of 'late'. Every lateness figure
+is meaningless without it."*
+
+**Decided: a promised date on every dispatch, and a grace period the founder sets as a
+number.** `workspace.dispatch_grace_days` is nullable with no server default; until it is
+set the tile shows counts and says what is missing. Parsing the prose was rejected — it is
+us inventing a threshold, and it fails silently on wording it does not recognise, which is
+the worst available failure mode. A strict zero-grace comparison was rejected too: it is a
+threshold nobody set, wearing the disguise of not having one.
+
+**Still open, and now visible:** `late_definition` and `promised_lead_time` are asked but
+not consumed. The honest fix is to change what they collect — a number, or a small set of
+choices — which is a change to onboarding rather than to the ops layer.
+
+---
+
 ### D30 — Does `sales.deals_lite` reuse `crm_deal`? *(blocks `doc/15` S10.6)*
 
 It is specified as *"a minimal deal tracker for customers with no CRM"*, and

@@ -224,12 +224,14 @@ the test that found this. The schema was recorded before the reset in
 13's central table and `question`/`question_choice` are Phase 7's catalogue, so
 read it before designing either.
 
-**Neon is at `0034`, which is head** (17 September 2026). `0025` added
+**Neon is at `0035`, which is head** (17 September 2026). `0025` added
 `app_user.phone`, `membership.designation` and `membership.stated_department`;
 `0030` sealed provider credentials on `workspace_connection`; `0031` added
 `crm_deal`; `0032` added `ops_project` and `ops_task`; `0033` added
 `ops_completeness`; `0034` added `ops_milestone` and `ops_issue` and widened
-`ck_ops_completeness_entity` to four entities. Every one purely additive — no `DROP` in any of them —
+`ck_ops_completeness_entity` to four entities; `0035` added `ops_dispatch` and
+`workspace.dispatch_grace_days` — **nullable with no default on purpose**, because
+a default would be a threshold nobody set. Every one purely additive — no `DROP` in any of them —
 previewed with `--sql` and verified rather than assumed. RLS was checked as
 *enabled and forced* by querying `pg_class` after each of the last three, not
 inferred from the migration having run.

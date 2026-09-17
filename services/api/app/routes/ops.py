@@ -117,6 +117,43 @@ class IssueOut(BaseModel):
     due_on: date | None
 
 
+class DispatchIn(BaseModel):
+    reference: Annotated[str, Field(min_length=1, max_length=200)]
+    promised_on: date
+    """Required. An order with no promised date cannot be on time or late, so
+    there is nothing this tile could do with it."""
+
+    dispatched_on: date | None = None
+    """`None` is the ordinary state of a live order. It is what keeps the rate's
+    denominator honest — the calculator divides by what actually went out."""
+
+    project_id: UUID | None = None
+
+
+class DispatchOut(BaseModel):
+    id: UUID
+    project_id: UUID | None
+    reference: str
+    promised_on: date
+    dispatched_on: date | None
+
+
+class DispatchRuleIn(BaseModel):
+    grace_days: Annotated[int, Field(ge=0, le=365)]
+    """Days past the promised date before an order is late — **D32**.
+
+    `ge=0` because a negative grace turns "late" into "early" without anybody
+    noticing, and the CHECK constraint says the same thing at the other end.
+    `le=365` because a grace of more than a year is a different promise rather
+    than a longer one, and a typo that reads as one should be refused rather
+    than quietly producing 100% on time forever.
+    """
+
+
+class DispatchRuleOut(BaseModel):
+    grace_days: int
+
+
 class ProjectOut(BaseModel):
     id: UUID
     name: str
@@ -153,6 +190,12 @@ class OpsOut(BaseModel):
     tasks: list[TaskOut]
     milestones: list[MilestoneOut]
     issues: list[IssueOut]
+    dispatches: list[DispatchOut]
+    grace_days: int | None
+    """Days past the promise before an order is late, or `None` if nobody has
+    said. `None` is why `on_time_dispatch` refuses, and the reason there is no
+    default is that a number chosen by us would be a rule the customer never
+    agreed to (ADR 0036)."""
     completeness: list[ConfirmationOut]
     """Who has vouched for what — ADR 0035 (D29).
 
@@ -182,7 +225,7 @@ def _may_write(scope: CurrentScope) -> None:
 
 
 ARCHIVABLE: Final[frozenset[str]] = frozenset(
-    {"ops_project", "ops_task", "ops_milestone", "ops_issue"}
+    {"ops_project", "ops_task", "ops_milestone", "ops_issue", "ops_dispatch"}
 )
 """The tables `_archive` may write to.
 
@@ -242,7 +285,14 @@ async def read_ops(scope: CurrentScope) -> OpsOut:
 
     if snapshot is None:
         return OpsOut(
-            projects=[], tasks=[], milestones=[], issues=[], completeness=[], recorded_at=""
+            projects=[],
+            tasks=[],
+            milestones=[],
+            issues=[],
+            dispatches=[],
+            grace_days=None,
+            completeness=[],
+            recorded_at="",
         )
 
     return OpsOut(
@@ -272,6 +322,17 @@ async def read_ops(scope: CurrentScope) -> OpsOut:
             )
             for i in snapshot.issues
         ],
+        dispatches=[
+            DispatchOut(
+                id=d.id,
+                project_id=d.project_id,
+                reference=d.reference,
+                promised_on=d.promised_on,
+                dispatched_on=d.dispatched_on,
+            )
+            for d in snapshot.dispatches
+        ],
+        grace_days=snapshot.grace_days,
         completeness=[
             ConfirmationOut(
                 entity=confirmation.entity,
@@ -614,3 +675,95 @@ async def archive_milestone(milestone_id: UUID, scope: CurrentScope) -> None:
 )
 async def archive_issue(issue_id: UUID, scope: CurrentScope) -> None:
     await _archive(scope, "ops_issue", issue_id)
+
+
+@router.post(
+    "/dispatches",
+    response_model=DispatchOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_csrf)],
+)
+async def create_dispatch(body: DispatchIn, scope: CurrentScope) -> DispatchOut:
+    """Record an order and what it was promised for — `doc/15` S10.4."""
+    _may_write(scope)
+
+    async with scoped_connection(scope) as db:
+        if body.project_id is not None and not await _project_exists(db, scope, body.project_id):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "That project does not exist here.")
+
+        row = (
+            await db.execute(
+                sa.text(
+                    "INSERT INTO ops_dispatch"
+                    " (workspace_id, project_id, reference, promised_on, dispatched_on,"
+                    "  created_by)"
+                    " VALUES (:w, :project, :ref, :promised, :sent, :user)"
+                    " RETURNING id, project_id, reference, promised_on, dispatched_on"
+                ),
+                {
+                    "w": str(scope.workspace_id),
+                    "project": str(body.project_id) if body.project_id else None,
+                    "ref": body.reference.strip(),
+                    "promised": body.promised_on,
+                    "sent": body.dispatched_on,
+                    "user": str(scope.user_id),
+                },
+            )
+        ).one()
+        await db.commit()
+
+    log.info("ops.dispatch_created", dispatched=body.dispatched_on is not None)
+    return DispatchOut(
+        id=row.id,
+        project_id=row.project_id,
+        reference=row.reference,
+        promised_on=row.promised_on,
+        dispatched_on=row.dispatched_on,
+    )
+
+
+@router.delete(
+    "/dispatches/{dispatch_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_csrf)],
+)
+async def archive_dispatch(dispatch_id: UUID, scope: CurrentScope) -> None:
+    await _archive(scope, "ops_dispatch", dispatch_id)
+
+
+@router.put(
+    "/dispatch-rule",
+    response_model=DispatchRuleOut,
+    dependencies=[Depends(require_csrf)],
+)
+async def set_dispatch_rule(body: DispatchRuleIn, scope: CurrentScope) -> DispatchRuleOut:
+    """Say when an order counts as late — **D32, and the gate it opens.**
+
+    **A `PUT`, and the only one in this file.** The module docstring explains why
+    the records have no update endpoint: editing a project means two people
+    changing one thing and last-write-wins discards somebody's work. This is not
+    a record. It is a single workspace-level rule with one current value, and
+    "what is it now" is the only question anybody asks of it — so replacing it is
+    the whole operation rather than a merge with a loser.
+
+    Until this is set, `operations.on_time_dispatch` refuses to show a
+    percentage and says so. That is deliberate: `late_definition` is asked during
+    onboarding as free prose, there is no parser, and a number we chose would be
+    a threshold the customer never agreed to (ADR 0036).
+
+    The previous value is not kept. Unlike a completeness confirmation — which is
+    append-only because *when somebody last vouched* is what a reader of a rate
+    needs — this is a rule rather than a claim about a moment, and a figure
+    computed under it says which rule it used.
+    """
+    _may_write(scope)
+
+    async with scoped_connection(scope) as db:
+        await db.execute(
+            sa.text("UPDATE workspace SET dispatch_grace_days = :g WHERE id = :w"),
+            {"g": body.grace_days, "w": str(scope.workspace_id)},
+        )
+        await db.commit()
+
+    log.info("ops.dispatch_rule_set", grace_days=body.grace_days)
+    return DispatchRuleOut(grace_days=body.grace_days)

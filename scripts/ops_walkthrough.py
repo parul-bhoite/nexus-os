@@ -298,7 +298,63 @@ check("only projects and tasks have no breakdown",
 r = a.post("/ops/completeness", json={"entity": "issues"}, headers=token(a))
 check("completeness can now be confirmed for issues too", r.status_code == 201, r.text[:200])
 
-print("\n\033[1m6. Another workspace sees none of it\033[0m")
+print("\n\033[1m6. On-time dispatch — the first ops rate, S10.4\033[0m")
+SENT_LATE = (date.today() - timedelta(days=3)).isoformat()
+PROMISED = (date.today() - timedelta(days=5)).isoformat()
+
+for ref, sent in (("SO-1", PROMISED), ("SO-2", SENT_LATE), ("SO-3", None)):
+    a.post(
+        "/ops/dispatches",
+        json={"reference": ref, "promised_on": PROMISED, "dispatched_on": sent},
+        headers=token(a),
+    )
+
+tiles = {x["key"]: x for x in a.get("/dashboards/surface").json().get("measured", [])}
+rate = tiles.get("operations.on_time_dispatch", {}).get("figure") or {}
+check("operations.on_time_dispatch carries a figure", bool(rate), str(list(tiles)))
+check("it is a rate", rate.get("kind") == "rate", str(rate)[:200])
+check("and it refuses, because nobody has vouched for the record",
+      rate.get("refused") == "unvouched", str(rate)[:250])
+check("**no percentage is served under a refusal**", rate.get("percentage") is None, str(rate)[:250])
+check("nor half a fraction", (rate.get("numerator"), rate.get("denominator")) == (None, None),
+      str(rate)[:250])
+check("but the counts are, because they are true either way",
+      (rate.get("outstanding"), rate.get("overdue")) == (1, 1), str(rate)[:250])
+
+a.post("/ops/completeness", json={"entity": "dispatches"}, headers=token(a))
+tiles = {x["key"]: x for x in a.get("/dashboards/surface").json().get("measured", [])}
+rate = tiles.get("operations.on_time_dispatch", {}).get("figure") or {}
+check("vouched, it now refuses for the other reason — nobody has set the rule",
+      rate.get("refused") == "no_rule", str(rate)[:250])
+check("and still no percentage", rate.get("percentage") is None, str(rate)[:250])
+
+r = a.put("/ops/dispatch-rule", json={"grace_days": -1}, headers=token(a))
+check("a negative grace is refused", r.status_code == 422, str(r.status_code))
+r = a.put("/ops/dispatch-rule", json={"grace_days": 0}, headers=token(a))
+check("PUT /ops/dispatch-rule -> 200", r.status_code == 200, r.text[:200])
+
+tiles = {x["key"]: x for x in a.get("/dashboards/surface").json().get("measured", [])}
+rate = tiles.get("operations.on_time_dispatch", {}).get("figure") or {}
+check("both gates open, the rate appears", rate.get("refused") == "", str(rate)[:250])
+check("one of the two that went out was on time", rate.get("percentage") == 50.0, str(rate)[:250])
+check("with both halves of the fraction",
+      (rate.get("numerator"), rate.get("denominator")) == (1, 2), str(rate)[:250])
+check("the outstanding order is not in the denominator", rate.get("outstanding") == 1,
+      str(rate)[:250])
+check("and the rule travels with the figure", rate.get("grace_days") == 0, str(rate)[:250])
+
+r = a.put("/ops/dispatch-rule", json={"grace_days": 5}, headers=token(a))
+tiles = {x["key"]: x for x in a.get("/dashboards/surface").json().get("measured", [])}
+rate = tiles.get("operations.on_time_dispatch", {}).get("figure") or {}
+check("widening the grace changes the figure, because the rule is the customer's",
+      rate.get("percentage") == 100.0, str(rate)[:250])
+check("and the overdue count moves with it", rate.get("overdue") == 0, str(rate)[:250])
+
+r = a.post("/dashboards/operations/narrate", json={"key": "operations.on_time_dispatch"},
+           headers=token(a))
+check("a rate is still refused for narration (ADR 0036)", r.status_code == 404, str(r.status_code))
+
+print("\n\033[1m7. Another workspace sees none of it\033[0m")
 b = founder("b")
 r = b.get("/ops")
 check(
@@ -313,7 +369,7 @@ if project_id:
     still = a.get("/ops").json()["projects"]
     check("the project is still there for its owner", len(still) == 1, str(still)[:200])
 
-print("\n\033[1m7. Archive stops it counting without deleting it\033[0m")
+print("\n\033[1m8. Archive stops it counting without deleting it\033[0m")
 if project_id:
     r = a.delete(f"/ops/projects/{project_id}", headers=token(a))
     check("DELETE /ops/projects/{id} -> 204", r.status_code == 204, str(r.status_code))

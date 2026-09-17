@@ -202,8 +202,42 @@ export type CountFigure = {
   method: string
 }
 
+/**
+ * A share of something — ADR 0036's fourth kind, and the only ops figure that
+ * divides.
+ *
+ * Two gates stand in front of it: nobody has vouched the record is all of it, or
+ * nobody has said what late means here. `refused` names which, because they are
+ * different messages — one is unanswerable and one takes ten seconds.
+ */
+export type RateFigure = {
+  kind: 'rate'
+  label: string
+  measures: string
+  /** `null` whenever `refused` is set, and never `0` in its place: zero would
+   *  say every order was late where the truth is that we may not divide (I10).
+   *  Served rather than divided here, so two clients cannot round differently. */
+  percentage: number | null
+  /** Both `null` under a refusal — half a fraction is an invitation to finish it. */
+  numerator: number | null
+  denominator: number | null
+  /** Always served, gates or no gates. They are counts, true either way. */
+  outstanding: number
+  overdue: number
+  /** The customer's own rule. `null` until somebody sets it, which is one of the
+   *  refusals — a percentage whose rule is invisible cannot be checked. */
+  grace_days: number | null
+  /** `''` when the rate is shown; else `unvouched`, `no_rule`, `nothing_sent`. */
+  refused: string
+  self_reported: boolean
+  complete_as_of: string
+  confirmed_on: string
+  recorded_at: string
+  method: string
+}
+
 /** One tile carries one kind. The union cannot express two or none. */
-export type Figure = ScoreFigure | AmountFigure | CountFigure
+export type Figure = ScoreFigure | AmountFigure | CountFigure | RateFigure
 
 /**
  * A stored sentence about a figure, and enough to trace it.

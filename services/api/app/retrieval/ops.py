@@ -85,6 +85,23 @@ _ISSUES: Final = sa.text(
 ordered in code — the column is text, so `ORDER BY severity` would sort "high"
 between "low" and "medium"."""
 
+_DISPATCHES: Final = sa.text(
+    """
+    SELECT id, project_id, reference, promised_on, dispatched_on, updated_at
+      FROM ops_dispatch
+     WHERE workspace_id = :w AND archived_at IS NULL
+     ORDER BY promised_on, reference
+    """
+)
+
+_GRACE: Final = sa.text("SELECT dispatch_grace_days FROM workspace WHERE id = :w")
+"""The rule the on-time rate is computed under — ADR 0036.
+
+`NULL` means nobody has said what late means here, and that is a gate rather
+than a missing default: a number chosen by us would produce a confident
+percentage under a rule the customer never agreed to.
+"""
+
 _COMPLETENESS: Final = sa.text(
     """
     SELECT DISTINCT ON (entity) entity, complete_as_of, confirmed_at
@@ -153,6 +170,31 @@ class Issue:
 
 
 @dataclass(frozen=True, slots=True)
+class DispatchRecord:
+    id: UUID
+    project_id: UUID | None
+    reference: str
+    promised_on: date
+    dispatched_on: date | None
+
+    @property
+    def status(self) -> str:
+        """`Dated`'s vocabulary, so a dispatch can be counted like anything else.
+
+        Dispatched is done. There is no `status` column on `ops_dispatch`
+        because the fact is already recorded — a date means it went out — and a
+        second column saying so would be a second thing to keep in step, free to
+        disagree with the date beside it.
+        """
+        return "done" if self.dispatched_on is not None else "open"
+
+    @property
+    def due_on(self) -> date:
+        """The promise is what it is late against."""
+        return self.promised_on
+
+
+@dataclass(frozen=True, slots=True)
 class OpsSnapshot:
     """What this workspace has recorded, and when it last changed.
 
@@ -166,6 +208,12 @@ class OpsSnapshot:
     tasks: list[Task]
     milestones: list[Milestone] = field(default_factory=list)
     issues: list[Issue] = field(default_factory=list)
+    dispatches: list[DispatchRecord] = field(default_factory=list)
+
+    grace_days: int | None = None
+    """Days past the promised date before an order is late, or `None` if nobody
+    has said — ADR 0036. `None` is what makes `on_time_dispatch` refuse."""
+
     recorded_at: datetime | None = None
 
     confirmations: dict[str, Confirmation] = field(default_factory=dict)
@@ -192,18 +240,20 @@ async def current_ops(db: AsyncSession, scope: ScopedSession) -> OpsSnapshot | N
     task_rows = (await db.execute(_TASKS, workspace)).all()
     milestone_rows = (await db.execute(_MILESTONES, workspace)).all()
     issue_rows = (await db.execute(_ISSUES, workspace)).all()
+    dispatch_rows = (await db.execute(_DISPATCHES, workspace)).all()
 
-    if not project_rows and not task_rows and not milestone_rows and not issue_rows:
+    if not any((project_rows, task_rows, milestone_rows, issue_rows, dispatch_rows)):
         # Read before the confirmations on purpose: a workspace that has
         # recorded nothing cannot have vouched for anything, and a third round
         # trip to `us-east-2` to prove that costs a page load for no answer.
         return None
 
     confirmation_rows = (await db.execute(_COMPLETENESS, workspace)).all()
+    grace = (await db.execute(_GRACE, workspace)).scalar_one_or_none()
 
     stamps = [
         row.updated_at
-        for rows in (project_rows, task_rows, milestone_rows, issue_rows)
+        for rows in (project_rows, task_rows, milestone_rows, issue_rows, dispatch_rows)
         for row in rows
     ]
 
@@ -251,6 +301,17 @@ async def current_ops(db: AsyncSession, scope: ScopedSession) -> OpsSnapshot | N
             )
             for row in issue_rows
         ],
+        dispatches=[
+            DispatchRecord(
+                id=row.id,
+                project_id=row.project_id,
+                reference=row.reference,
+                promised_on=row.promised_on,
+                dispatched_on=row.dispatched_on,
+            )
+            for row in dispatch_rows
+        ],
+        grace_days=grace,
         recorded_at=max(stamps) if stamps else None,
         confirmations={
             row.entity: Confirmation(

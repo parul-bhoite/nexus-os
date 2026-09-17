@@ -53,6 +53,16 @@ export type Issue = {
   due_on: string | null
 }
 
+export type DispatchRecord = {
+  id: string
+  project_id: string | null
+  reference: string
+  promised_on: string
+  /** `null` is the ordinary state of a live order, and it is what keeps the
+   *  rate's denominator honest. */
+  dispatched_on: string | null
+}
+
 /**
  * Somebody saying an entity's list is all of it — ADR 0035 (D29).
  *
@@ -85,6 +95,10 @@ export type Ops = {
   tasks: Task[]
   milestones: Milestone[]
   issues: Issue[]
+  dispatches: DispatchRecord[]
+  /** Days past the promise before an order is late, or `null` if nobody has
+   *  said. `null` is why the on-time figure refuses (ADR 0036). */
+  grace_days: number | null
   completeness: Confirmation[]
   recorded_at: string
 }
@@ -174,6 +188,37 @@ export function createIssue(body: {
     '/ops/issues',
     { method: 'POST', body: JSON.stringify(body) },
     'Could not record that issue.',
+  )
+}
+
+export function createDispatch(body: {
+  reference: string
+  promised_on: string
+  dispatched_on: string | null
+  project_id: string | null
+}): Promise<DispatchRecord> {
+  return send<DispatchRecord>(
+    '/ops/dispatches',
+    { method: 'POST', body: JSON.stringify(body) },
+    'Could not record that order.',
+  )
+}
+
+/** Say when an order counts as late. A `PUT`: one workspace-level rule with one
+ *  current value, unlike the append-only completeness confirmations. */
+export function setDispatchRule(graceDays: number): Promise<{ grace_days: number }> {
+  return send<{ grace_days: number }>(
+    '/ops/dispatch-rule',
+    { method: 'PUT', body: JSON.stringify({ grace_days: graceDays }) },
+    'Could not save that rule.',
+  )
+}
+
+export function archiveDispatch(id: string): Promise<void> {
+  return send<void>(
+    `/ops/dispatches/${encodeURIComponent(id)}`,
+    { method: 'DELETE' },
+    'Could not archive that order.',
   )
 }
 

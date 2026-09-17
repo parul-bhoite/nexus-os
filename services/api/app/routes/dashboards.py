@@ -86,9 +86,11 @@ from app.grounding.compute import (
     AMOUNT_CAPABILITIES,
     COUNT_CAPABILITIES,
     MEASURABLE,
+    RATE_CAPABILITIES,
     compute_from_crawl,
     compute_from_deals,
     compute_from_ops,
+    compute_rate_from_ops,
     computes,
 )
 from app.grounding.context import CompanyContext, assemble
@@ -557,9 +559,65 @@ class CountFigureOut(BaseModel):
     method: str
 
 
-Figure = ScoreFigureOut | AmountFigureOut | CountFigureOut
+class RateFigureOut(BaseModel):
+    """A share of something, with both halves and the rule it was computed under.
+
+    ADR 0036's fourth kind, and **the only ops figure that divides**. Everything
+    before it was a count, because a count states what was recorded and is true
+    whether or not the record is complete.
+
+    Two gates stand in front of it and `refused` names which one is shut:
+    nobody has vouched that the record is all of it (ADR 0035), or nobody has
+    said what late means here (D32). They are different messages — one is
+    unanswerable and one takes a founder ten seconds — so the tile must be able
+    to tell them apart.
+    """
+
+    kind: Literal["rate"] = "rate"
+
+    label: str
+    measures: str
+
+    percentage: float | None
+    """**`null` whenever `refused` is set, and never `0.0` in its place.** Zero
+    would say every order was late, which is a statement about performance where
+    the truth is that we may not divide at all (I10). Served rather than divided
+    in the browser, so two clients cannot round differently from the drawer."""
+
+    numerator: int | None
+    denominator: int | None
+    """Both `null` under a refusal, for `percentage`'s reason: half a fraction is
+    an invitation to finish it. Present together or not at all."""
+
+    outstanding: int
+    """Recorded and not yet sent. **Always served, gates or no gates** — it is a
+    count, true either way, and withholding it would tell a founder nothing when
+    we can honestly tell them something."""
+
+    overdue: int
+    """Of `outstanding`, the ones already past the promise plus grace."""
+
+    grace_days: int | None
+    """The customer's own rule — days past the promised date before an order is
+    late. `null` until somebody sets it, which is one of the two refusals. A
+    percentage whose rule is invisible cannot be checked by the person it is
+    about."""
+
+    refused: str
+    """`""` when the rate is shown; otherwise `unvouched`, `no_rule` or
+    `nothing_sent`. A string rather than a boolean so the tile can say what to
+    do about it."""
+
+    self_reported: bool = True
+    complete_as_of: str = ""
+    confirmed_on: str = ""
+    recorded_at: str = ""
+    method: str = ""
+
+
+Figure = ScoreFigureOut | AmountFigureOut | CountFigureOut | RateFigureOut
 """One tile carries one kind. The union cannot express two or none, which is the
-whole argument for it over sibling fields (ADR 0033, extended by ADR 0034)."""
+whole argument for it over sibling fields (ADR 0033, extended by 0034 and 0036)."""
 
 
 class BlockOut(BaseModel):
@@ -1015,6 +1073,43 @@ def figure_out(capability: Capability, snapshot: CrawlSnapshot | None) -> ScoreF
     )
 
 
+def rate_figure_out(capability: Capability, ops: OpsSnapshot | None) -> RateFigureOut | None:
+    """The rate for one capability, or `None` when nothing rates it.
+
+    **The refusal is the computation's, not this function's.** Both gates are
+    decided in `compute_rate_from_ops` so there is exactly one place that says
+    whether a percentage may be shown; a second copy here would be free to drift,
+    and the drift would surface as a percentage on a screen.
+    """
+    if ops is None:
+        return None
+
+    computation = compute_rate_from_ops(capability.id, ops, today=datetime.now(UTC).date())
+    if computation is None:
+        return None
+
+    shown = computation.refused is None
+    return RateFigureOut(
+        label=computation.label,
+        measures=computation.measures,
+        percentage=computation.rate.percentage if shown else None,
+        numerator=computation.rate.on_time if shown else None,
+        denominator=computation.rate.dispatched if shown else None,
+        outstanding=computation.rate.outstanding,
+        overdue=computation.rate.overdue,
+        grace_days=ops.grace_days,
+        refused=computation.refused.value if computation.refused else "",
+        complete_as_of=(
+            computation.confirmation.complete_as_of.isoformat() if computation.confirmation else ""
+        ),
+        confirmed_on=(
+            computation.confirmation.confirmed_on.isoformat() if computation.confirmation else ""
+        ),
+        recorded_at=computation.recorded_at.date().isoformat(),
+        method=str(computation.trace["method"]),
+    )
+
+
 def count_figure_out(capability: Capability, ops: OpsSnapshot | None) -> CountFigureOut | None:
     """The counted figure for one capability, or `None` when nothing censuses it.
 
@@ -1149,7 +1244,8 @@ def _measured_block(
         needs=[source.value for source in capability.required_sources],
         figure=figure_out(capability, snapshot)
         or amount_figure_out(capability, observed.deals)
-        or count_figure_out(capability, observed.ops),
+        or count_figure_out(capability, observed.ops)
+        or rate_figure_out(capability, observed.ops),
         narration=narration_out(capability, snapshot, observed.narrations),
     )
 
@@ -1688,7 +1784,8 @@ async def director_dashboard(
             needs=[source.value for source in capability.required_sources],
             figure=figure_out(capability, snapshot)
             or amount_figure_out(capability, observed.deals)
-            or count_figure_out(capability, observed.ops),
+            or count_figure_out(capability, observed.ops)
+            or rate_figure_out(capability, observed.ops),
             narration=narration_out(capability, snapshot, observed.narrations),
         )
 
@@ -1796,7 +1893,18 @@ def _narratable(key: str, director: Director) -> Capability:
     # A count is refused for the same reason and by the same rule (ADR 0034):
     # `recorded`, `open` and `overdue` are not a numerator over a denominator,
     # and a count has no percentage for `describes` to compare.
-    if capability.id in AMOUNT_CAPABILITIES or capability.id in COUNT_CAPABILITIES:
+    # A rate has a numerator, a denominator and a percentage, which is exactly
+    # `narrate-metric`'s vocabulary — so unlike an amount or a count, this one is
+    # refused for a **bounded** reason rather than a principled one (ADR 0036).
+    # `domain.narration.describes` is typed to `Computation` and compares a
+    # `page` a rate has no equivalent of, and that comparison is the only thing
+    # keeping prose about last week's number from sitting beside this week's.
+    # Extending it is its own change.
+    if (
+        capability.id in AMOUNT_CAPABILITIES
+        or capability.id in COUNT_CAPABILITIES
+        or capability.id in RATE_CAPABILITIES
+    ):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
 
     # **There is deliberately no check on `consumes_facts` here**, and the

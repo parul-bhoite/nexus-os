@@ -22,10 +22,20 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
+from enum import StrEnum
 from typing import Any, Final, Protocol
 
 from app.calculators.audit import CategoryScore, score_brand, score_technical_seo
-from app.calculators.completeness import ISSUES, MILESTONES, PROJECTS, TASKS, Confirmation
+from app.calculators.completeness import (
+    DISPATCHES,
+    ISSUES,
+    MILESTONES,
+    PROJECTS,
+    TASKS,
+    Confirmation,
+    may_compute_a_rate,
+)
+from app.calculators.dispatch import OnTime, on_time_rate
 from app.calculators.ops import (
     Bucket,
     Dated,
@@ -301,6 +311,160 @@ be grounded in nothing.
 
 
 @dataclass(frozen=True, slots=True)
+class Ratio:
+    """One rate-producing calculator, and what it is honest to call its output.
+
+    `Audit`, `Tally` and `Census`'s fourth sibling (ADR 0036). Same three
+    fields, same reason — plus the entity whose completeness confirmation is one
+    of the two things that let it divide at all.
+    """
+
+    entity: str
+    label: str
+    measures: str
+    method: str
+
+
+OPS_RATIOS: Final[dict[str, Ratio]] = {
+    "operations.on_time_dispatch": Ratio(
+        entity=DISPATCHES,
+        label="Dispatched on time",
+        measures=(
+            "Of the orders that actually went out, the share that left on or before "
+            "the date you promised, allowing the grace you set. Orders still waiting "
+            "are not in this figure at all — they are reported beside it, because "
+            "dividing by work that has not happened would report a backlog as lateness."
+        ),
+        method="calculators.dispatch.on_time_rate",
+    ),
+}
+"""The fourth dispatch, and the first that divides.
+
+Guarded against the registry in both directions by `test_grounding_compute.py`,
+which iterates every dispatch and separately asserts it has not missed one.
+"""
+
+RATE_CAPABILITIES: Final[frozenset[str]] = frozenset(OPS_RATIOS)
+
+
+class RateRefusal(StrEnum):
+    """Why a rate could not be computed. **Never a zero percent.**
+
+    Two gates, and they refuse for different reasons, so a tile can say which
+    one is missing. "We cannot tell you anything" and "answer one question and
+    we can" are different messages, and only the second is actionable.
+    """
+
+    UNVOUCHED = "unvouched"
+    """Nobody has confirmed the record is complete (ADR 0035), so the
+    denominator may be a third of reality."""
+
+    NO_RULE = "no_rule"
+    """Nobody has said what late means here (ADR 0036, D32), so the numerator
+    has no definition."""
+
+    NOTHING_SENT = "nothing_sent"
+    """The record is vouched for and the rule is set, and nothing has been
+    dispatched yet — so the denominator is zero and there is genuinely no rate
+    (I10). Not a refusal so much as an absence, and named separately because the
+    customer has nothing left to do about it."""
+
+
+@dataclass(frozen=True, slots=True)
+class RateComputation:
+    """A rate, the counts behind it, and why it is missing when it is."""
+
+    capability_id: str
+    label: str
+    measures: str
+    rate: OnTime
+    confirmation: Confirmation | None
+    refused: RateRefusal | None
+    """`None` exactly when `rate.percentage` may be shown. The two are decided
+    together, here, so no caller can render one without the other."""
+
+    recorded_at: datetime
+    computed: Computed
+    trace: dict[str, Any]
+
+
+def compute_rate_from_ops(
+    capability_id: str, snapshot: OpsSnapshot, *, today: date
+) -> RateComputation | None:
+    """The on-time rate, or the reason there is not one.
+
+    **Both gates are applied here rather than at the tile**, so there is exactly
+    one place that decides whether a percentage may be shown. A route that
+    checked them itself would be a second copy of the rule, free to drift — and
+    the drift would surface as a percentage on a screen.
+
+    The counts are computed either way. `outstanding` and `overdue` are true
+    without a vouched denominator or a grace rule, and withholding them along
+    with the rate would tell a founder nothing when we can honestly tell them
+    something.
+    """
+    ratio = OPS_RATIOS.get(capability_id)
+    if ratio is None:
+        return None
+
+    confirmation = snapshot.confirmations.get(ratio.entity)
+    # Zero only for the arithmetic that does not depend on it. Every branch
+    # below that could show a percentage is gated before this is used.
+    rate = on_time_rate(snapshot.dispatches, today=today, grace_days=snapshot.grace_days or 0)
+
+    refused: RateRefusal | None = None
+    if not may_compute_a_rate(confirmation):
+        refused = RateRefusal.UNVOUCHED
+    elif snapshot.grace_days is None:
+        refused = RateRefusal.NO_RULE
+    elif rate.percentage is None:
+        refused = RateRefusal.NOTHING_SENT
+
+    values: dict[str, float] = {
+        "outstanding": float(rate.outstanding),
+        "overdue": float(rate.overdue),
+    }
+    if refused is None:
+        # **Only when it may be shown.** `answer._permitted` treats everything
+        # here as a numeral the prose may state, so a numerator published while
+        # the tile refuses would be a figure the model could write about and a
+        # reader could never see.
+        values.update(
+            {
+                "numerator": float(rate.on_time),
+                "denominator": float(rate.dispatched),
+                "percentage": float(rate.percentage or 0.0),
+                "late": float(rate.late),
+            }
+        )
+
+    return RateComputation(
+        capability_id=capability_id,
+        label=ratio.label,
+        measures=ratio.measures,
+        rate=rate,
+        confirmation=confirmation,
+        refused=refused,
+        recorded_at=snapshot.recorded_at or datetime.combine(today, datetime.min.time(), UTC),
+        computed=Computed(values=values),
+        trace={
+            "capability": capability_id,
+            "measures": ratio.measures,
+            "numerator": rate.on_time,
+            "denominator": rate.dispatched,
+            "outstanding": rate.outstanding,
+            "overdue": rate.overdue,
+            "grace_days": snapshot.grace_days,
+            "refused": refused.value if refused else "",
+            "source": "your own records",
+            "window": f"the orders recorded as of {today.isoformat()}",
+            "delta": "no_baseline",
+            "method": ratio.method,
+        },
+    )
+
+
+@dataclass(frozen=True, slots=True)
 class CountComputation:
     """Counts over the customer's own records, and the working behind them.
 
@@ -450,7 +614,10 @@ class Computation:
 
 
 MEASURABLE: Final[frozenset[str]] = (
-    frozenset(CRAWL_AUDITS) | frozenset(PIPELINE_TALLIES) | frozenset(OPS_CENSUSES)
+    frozenset(CRAWL_AUDITS)
+    | frozenset(PIPELINE_TALLIES)
+    | frozenset(OPS_CENSUSES)
+    | frozenset(OPS_RATIOS)
 )
 """Every capability something can put a figure on. `computes()` as a set.
 

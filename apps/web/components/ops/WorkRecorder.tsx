@@ -7,16 +7,19 @@ import {
   PROJECT_STATUSES,
   SEVERITIES,
   TASK_STATUSES,
+  archiveDispatch,
   archiveIssue,
   archiveMilestone,
   archiveProject,
   archiveTask,
   confirmComplete,
+  createDispatch,
   createIssue,
   createMilestone,
   createProject,
   createTask,
   fetchOps,
+  setDispatchRule,
   type Confirmation,
   type Ops,
 } from '@/lib/ops-client'
@@ -136,6 +139,13 @@ export function WorkRecorder() {
   const [milestonePlanned, setMilestonePlanned] = useState('')
   const [savingMilestone, setSavingMilestone] = useState(false)
 
+  const [dispatchRef, setDispatchRef] = useState('')
+  const [dispatchPromised, setDispatchPromised] = useState('')
+  const [dispatchSent, setDispatchSent] = useState('')
+  const [savingDispatch, setSavingDispatch] = useState(false)
+  const [grace, setGrace] = useState('')
+  const [savingRule, setSavingRule] = useState(false)
+
   const [issueTitle, setIssueTitle] = useState('')
   const [issueSeverity, setIssueSeverity] = useState<string>('medium')
   const [issueProject, setIssueProject] = useState('')
@@ -247,11 +257,49 @@ export function WorkRecorder() {
     }
   }
 
+  async function submitDispatch(event: React.FormEvent) {
+    event.preventDefault()
+    setSavingDispatch(true)
+    setFeedback(null)
+    try {
+      await createDispatch({
+        reference: dispatchRef,
+        promised_on: dispatchPromised,
+        dispatched_on: dispatchSent || null,
+        project_id: null,
+      })
+      setDispatchRef('')
+      setDispatchSent('')
+      setFeedback({ kind: 'done', text: 'Order recorded.' })
+      await reload()
+    } catch (error) {
+      setFeedback({ kind: 'error', text: messageOf(error, 'Could not record that order.') })
+    } finally {
+      setSavingDispatch(false)
+    }
+  }
+
+  async function submitRule(event: React.FormEvent) {
+    event.preventDefault()
+    setSavingRule(true)
+    setFeedback(null)
+    try {
+      await setDispatchRule(Number(grace))
+      setFeedback({ kind: 'done', text: 'Saved. The on-time figure can be worked out now.' })
+      await reload()
+    } catch (error) {
+      setFeedback({ kind: 'error', text: messageOf(error, 'Could not save that rule.') })
+    } finally {
+      setSavingRule(false)
+    }
+  }
+
   const ARCHIVERS = {
     project: archiveProject,
     task: archiveTask,
     milestone: archiveMilestone,
     issue: archiveIssue,
+    dispatch: archiveDispatch,
   } as const
 
   async function archive(kind: keyof typeof ARCHIVERS, id: string) {
@@ -287,12 +335,14 @@ export function WorkRecorder() {
   const tasks = ops?.tasks ?? []
   const milestones = ops?.milestones ?? []
   const issues = ops?.issues ?? []
+  const dispatches = ops?.dispatches ?? []
   const nothingYet =
     ops !== null &&
     projects.length === 0 &&
     tasks.length === 0 &&
     milestones.length === 0 &&
-    issues.length === 0
+    issues.length === 0 &&
+    dispatches.length === 0
   const confirmedFor = (entity: string) =>
     (ops?.completeness ?? []).find((entry) => entry.entity === entity) ?? null
 
@@ -756,6 +806,143 @@ export function WorkRecorder() {
                   type="button"
                   disabled={archiving}
                   onClick={() => void archive('issue', issue.id)}
+                  className="text-2xs text-ink-500 underline hover:text-ink-800 disabled:opacity-60"
+                >
+                  Archive
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="font-display text-lg text-ink-900">Orders and dispatch</h2>
+
+        {/* **The rule the on-time figure is computed under — D32.**
+            Asked as a number rather than read from the onboarding answer, which
+            is free prose: parsing "a day or two after we said" into a threshold
+            would be us inventing the rule this figure is judged by. Until it is
+            set, the tile shows counts and says what is missing. */}
+        <form
+          onSubmit={submitRule}
+          className="flex max-w-2xl flex-wrap items-end gap-3 rounded-xl border border-ink-100 bg-bone-50 px-4 py-3"
+        >
+          <div className="grow">
+            <label className={LABEL} htmlFor="dispatch-grace">
+              When is an order late?
+            </label>
+            <p className="mt-1 text-sm text-ink-600">
+              {ops?.grace_days === null || ops?.grace_days === undefined
+                ? 'Until you say, NEXUS counts your orders but will not work out an on-time percentage.'
+                : `Now: more than ${ops.grace_days} ${ops.grace_days === 1 ? 'day' : 'days'} past the promised date.`}
+            </p>
+          </div>
+          <div>
+            <label className={LABEL} htmlFor="dispatch-grace">
+              Days of grace
+            </label>
+            <input
+              id="dispatch-grace"
+              type="number"
+              min={0}
+              max={365}
+              required
+              value={grace}
+              onChange={(event) => setGrace(event.target.value)}
+              className={`mt-1 w-28 ${FIELD}`}
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={savingRule}
+            className="rounded-lg border border-ink-200 px-3 py-2 text-sm font-medium text-ink-700 hover:border-ink-300 hover:text-ink-900 disabled:opacity-60"
+          >
+            {savingRule ? 'Saving…' : 'Save rule'}
+          </button>
+        </form>
+
+        <form onSubmit={submitDispatch} className="grid max-w-2xl gap-3 sm:grid-cols-3">
+          <div>
+            <label className={LABEL} htmlFor="dispatch-ref">
+              Order reference
+            </label>
+            <input
+              id="dispatch-ref"
+              required
+              maxLength={200}
+              value={dispatchRef}
+              onChange={(event) => setDispatchRef(event.target.value)}
+              className={`mt-1 ${FIELD}`}
+            />
+          </div>
+
+          <div>
+            <label className={LABEL} htmlFor="dispatch-promised">
+              Promised for
+            </label>
+            <input
+              id="dispatch-promised"
+              type="date"
+              required
+              value={dispatchPromised}
+              onChange={(event) => setDispatchPromised(event.target.value)}
+              className={`mt-1 ${FIELD}`}
+            />
+          </div>
+
+          <div>
+            <label className={LABEL} htmlFor="dispatch-sent">
+              Sent on <span className="font-normal text-ink-400">(optional)</span>
+            </label>
+            <input
+              id="dispatch-sent"
+              type="date"
+              value={dispatchSent}
+              onChange={(event) => setDispatchSent(event.target.value)}
+              className={`mt-1 ${FIELD}`}
+            />
+            {/* Blank is the ordinary state of a live order, and it is what keeps
+                the rate's denominator honest. */}
+            <p className="mt-1 text-2xs text-ink-400">
+              Leave blank until it goes out. Orders still waiting are not counted in the
+              on-time figure.
+            </p>
+          </div>
+
+          <div className="sm:col-span-3">
+            <button
+              type="submit"
+              disabled={savingDispatch}
+              className="rounded-lg bg-ink-800 px-4 py-2 text-sm font-medium text-bone-50 disabled:opacity-60"
+            >
+              {savingDispatch ? 'Recording…' : 'Record order'}
+            </button>
+          </div>
+        </form>
+
+        {dispatches.length > 0 ? (
+          <Completeness
+            noun="orders"
+            confirmed={confirmedFor('dispatches')}
+            busy={confirming === 'dispatches'}
+            onConfirm={() => void confirm('dispatches')}
+          />
+        ) : null}
+
+        {dispatches.length > 0 ? (
+          <ul className="max-w-2xl divide-y divide-ink-100 rounded-xl border border-ink-100">
+            {dispatches.map((dispatch) => (
+              <li key={dispatch.id} className="flex flex-wrap items-baseline gap-x-3 px-4 py-3">
+                <span className="min-w-0 grow text-sm text-ink-800">{dispatch.reference}</span>
+                <span className="text-2xs text-ink-500">promised {dispatch.promised_on}</span>
+                <span className="text-2xs text-ink-400">
+                  {dispatch.dispatched_on ? `sent ${dispatch.dispatched_on}` : 'not sent'}
+                </span>
+                <button
+                  type="button"
+                  disabled={archiving}
+                  onClick={() => void archive('dispatch', dispatch.id)}
                   className="text-2xs text-ink-500 underline hover:text-ink-800 disabled:opacity-60"
                 >
                   Archive

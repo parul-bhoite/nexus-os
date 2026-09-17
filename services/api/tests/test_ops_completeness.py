@@ -16,6 +16,7 @@ from datetime import date
 import pytest
 
 from app.calculators.completeness import (
+    DISPATCHES,
     ENTITIES,
     ISSUES,
     MILESTONES,
@@ -105,7 +106,7 @@ def test_completeness_is_asked_per_entity() -> None:
     # Two distinct entities, asserted through the set rather than by comparing
     # the two constants — they are `Final` literals, so mypy calls that
     # comparison non-overlapping and is right: it can never be false.
-    assert ENTITIES == {PROJECTS, TASKS, MILESTONES, ISSUES}
+    assert ENTITIES == {PROJECTS, TASKS, MILESTONES, ISSUES, DISPATCHES}
     # Spelled out rather than counted. This set is kept in step with
     # `ck_ops_completeness_entity` by hand, so the test that catches a
     # divergence has to name the members — `len(ENTITIES) == 4` would pass

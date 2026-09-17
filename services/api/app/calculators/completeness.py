@@ -33,14 +33,20 @@ PROJECTS: Final = "projects"
 TASKS: Final = "tasks"
 MILESTONES: Final = "milestones"
 ISSUES: Final = "issues"
+DISPATCHES: Final = "dispatches"
 
-ENTITIES: Final[frozenset[str]] = frozenset({PROJECTS, TASKS, MILESTONES, ISSUES})
+ENTITIES: Final[frozenset[str]] = frozenset({PROJECTS, TASKS, MILESTONES, ISSUES, DISPATCHES})
 """The entity kinds a founder can vouch for, today.
 
 Per entity rather than once for the layer: somebody can plausibly have recorded
 every project and a third of the tasks, and one switch covering both would let
 the honest half vouch for the careless one. `doc/15` S10.3 added milestones and
-issues; S10.5 adds stock and suppliers.
+issues, S10.4 dispatches; S10.5 adds stock and suppliers.
+
+**Dispatches are the first entity where this gate does real work.** For a count,
+an unvouched record still reports something true. For `on_time_dispatch` — the
+first rate — an unvouched denominator is the half-full record D29 exists to
+catch.
 
 Kept in step with `ck_ops_completeness_entity` by hand, and a database test
 asserts the two agree — a value legal here and refused by the constraint is a
