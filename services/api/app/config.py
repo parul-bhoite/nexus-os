@@ -235,6 +235,15 @@ class Settings(BaseSettings):
     storage_signing_secret: SecretStr = Field(default=SecretStr(""))
     signed_url_ttl_seconds: int = 300
 
+    # ── Connector credentials (ADR 0032, D27) ─────────────────
+    #
+    # A Fernet key: 32 bytes, url-safe base64. Generate one with
+    # `Fernet.generate_key()`. It encrypts the refresh tokens in
+    # `workspace_connection.credentials`, and losing it means every workspace
+    # reconnects — recoverable, and visibly so, which is more than can be said
+    # for a key that is present and wrong.
+    connector_secret_key: SecretStr = Field(default=SecretStr(""))
+
     # ── Email (P3) ────────────────────────────────────────────
     # `file` writes RFC-822 `.eml` files to `mail_root`; `smtp` sends. The file
     # backend is not a stub — it is what makes the whole verification and
@@ -360,7 +369,11 @@ class Settings(BaseSettings):
     # `anthropic_api_key` is deliberately absent: an empty key is a supported
     # operating state (ADR 0011), and listing it here would turn "no AI yet"
     # into a refusal to boot.
-    _DEPLOYED_REQUIRES = ("database_url", "storage_signing_secret")
+    # `connector_secret_key` is here and `anthropic_api_key` is not, and the
+    # difference is the point: a deployment with no language model works and
+    # says so, while one with no connector key accepts an OAuth callback it
+    # cannot store. Failing to boot is better than failing on the first sweep.
+    _DEPLOYED_REQUIRES = ("database_url", "storage_signing_secret", "connector_secret_key")
 
     @model_validator(mode="after")
     def _required_in_deployed_envs(self) -> Settings:

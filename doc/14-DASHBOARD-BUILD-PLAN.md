@@ -2,8 +2,8 @@
 
 **Narrows:** `doc/13` (shape) into a sequence.
 **Depends on:** ADR 0029 (the brief), ADR 0030 (coverage), ADR 0031 (MCP as a
-transport), ADR 0032 (provider tokens at rest — *proposed*, and **D27** blocks every
-connector until it is answered).
+transport), ADR 0032 (provider tokens at rest — D27 answered *A with C*, shipped in
+migration 0030).
 **Does not supersede `doc/12`** — that still owns the phase numbering for the product as a
 whole. This is the dashboard's own ordering, and every step below is written to
 `CLAUDE.md`'s rule: one at a time, and a step is done when its acceptance test has run
@@ -281,9 +281,9 @@ short.
 
 | # | Blocker | Who |
 |---|---|---|
-| 1 | **D27 — how a provider token is held at rest.** ADR 0032 argues it and recommends an encrypted column keyed from the environment. Until it is answered there is nowhere to put a token, and `workspace_connection` has no credential column — migration 0026 says so itself | Parul |
-| 2 | **`cryptography`** as a base dependency, following D27's answer | Follows 1 |
-| 3 | **`NEXUS_CONNECTOR_SECRET_KEY`** in `.env`, and in the deployed-required list beside `database_url` | Follows 1 |
+| ~~1~~ | ~~**D27 — how a provider token is held at rest**~~ — **answered: A with C.** Migration 0030 adds `credentials` and `credential_key_id`, applied to Neon; `app/connectors/credentials.py` seals the refresh token only | ✅ done |
+| ~~2~~ | ~~**`cryptography`**~~ — a base dependency, not an optional extra: a connector that cannot decrypt its token is not a supported state | ✅ done |
+| ~~3~~ | ~~**`NEXUS_CONNECTOR_SECRET_KEY`**~~ — a real `Settings` field, in `_DEPLOYED_REQUIRES` and in `doc/DEPLOYMENT-ENV.md`. Generate with `Fernet.generate_key()` | ✅ **set this in `.env` before S9** |
 | 4 | **The official `mcp` SDK.** Not a dependency. `McpTransport.Session` is the one seam it plugs into; hand-rolling JSON-RPC session setup, version negotiation, SSE framing and OAuth against five vendors is the kind of thing that works in a test and fails on the third provider | Parul — a dependency choice |
 | 5 | **A HubSpot developer app**: client id, client secret, redirect URI, and a sandbox portal to read | Parul |
 | 6 | **D7** — whether Finance brings accounting in at all. Not a blocker for S9, which is why S9 is CRM; it blocks the accounting half of S11 | Parul |

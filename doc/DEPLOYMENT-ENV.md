@@ -15,6 +15,7 @@ restart at a time is a deployment being told the truth slowly.
 
 - `NEXUS_DATABASE_URL`
 - `NEXUS_STORAGE_SIGNING_SECRET`
+- `NEXUS_CONNECTOR_SECRET_KEY`
 
 `NEXUS_ENV` has no default and is required everywhere, including locally
 (ADR 0015): a missing value used to mean `local`, which is how a production

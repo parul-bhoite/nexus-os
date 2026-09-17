@@ -16,6 +16,12 @@ dependencies = [
   "argon2-cffi>=23.1",
   "itsdangerous>=2.2",
   "httpx>=0.28",
+  # Encrypts provider credentials at rest (ADR 0032, D27). A **base**
+  # dependency rather than an optional extra: unlike the language model, where
+  # an absent key is a supported operating state (ADR 0011), a connector that
+  # cannot decrypt its token is not a supported state — it is a connection that
+  # silently stops working.
+  "cryptography>=44.0",
   "tenacity>=9.0",
   "structlog>=24.4",
   # Scheduler for expiry sweeps and, later, crawls and score recomputation.

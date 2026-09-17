@@ -23,6 +23,7 @@ import re
 from pathlib import Path
 
 import pytest
+from cryptography.fernet import Fernet
 from fastapi import Response
 from pydantic import SecretStr, ValidationError
 
@@ -36,28 +37,35 @@ UNDEPLOYED = (Env.local, Env.ci)
 
 # What a deployed environment must supply beyond its two secrets, since P3.
 # Kept in one place so a test about cookies does not have to know about SMTP —
-# it only has to be *deployable*, which is now a slightly larger claim.
-DEPLOYABLE_EMAIL: dict[str, object] = {
+# it only has to be *deployable*, which keeps growing. Renamed from
+# `DEPLOYABLE_EMAIL` once it held a database role and an encryption key: a name
+# that describes a third of its contents sends the next person looking for the
+# other two somewhere else.
+DEPLOYABLE: dict[str, object] = {
     "mailer_backend": "smtp",
     "smtp_host": "smtp.example.invalid",
     "public_base_url": "https://app.example.invalid",
     # ADR 0018. "Deployable" grew again: a deployed environment must have the
     # maintenance role, or the expiry sweep matches zero rows and says nothing.
     "jobs_database_url": SecretStr("postgresql+asyncpg://nexus_jobs:p@h:5432/nexus"),
+    # ADR 0032 / D27. Deployable grew again: a deployed environment must be able
+    # to seal a provider's refresh token, or it accepts an OAuth callback it
+    # cannot store and fails on the first sweep instead of at boot.
+    "connector_secret_key": SecretStr(Fernet.generate_key().decode()),
 }
 
 
 def _settings(**overrides: object) -> Settings:
     """Settings built from the overrides alone, with no `.env` underneath.
 
-    A deployed `env` gets `DEPLOYABLE_EMAIL` folded in unless the caller
+    A deployed `env` gets `DEPLOYABLE` folded in unless the caller
     overrides it, because P3 made "deployed" mean "can actually send email" —
     a staging environment left on the file backend writes every verification to
     a directory nobody reads. Tests about cookies and `/docs` should not have to
     restate that, and a test that *is* about it passes its own values.
     """
     if overrides.get("env") in DEPLOYED:
-        overrides = {**DEPLOYABLE_EMAIL, **overrides}
+        overrides = {**DEPLOYABLE, **overrides}
     return Settings(_env_file=None, **overrides)  # type: ignore[arg-type]
 
 
@@ -73,11 +81,20 @@ def test_config_refuses_deployed_env_without_secrets(env: Env) -> None:
     slowly.
     """
     with pytest.raises(ValidationError) as raised:
-        _settings(env=env, database_url=SecretStr(""), storage_signing_secret=SecretStr(""))
+        _settings(
+            env=env,
+            database_url=SecretStr(""),
+            storage_signing_secret=SecretStr(""),
+            connector_secret_key=SecretStr(""),
+        )
 
     message = str(raised.value)
     assert "NEXUS_DATABASE_URL" in message
     assert "NEXUS_STORAGE_SIGNING_SECRET" in message
+    # ADR 0032 joined the list, and the point of naming them together holds: a
+    # deployment fixing three secrets one restart at a time is a deployment
+    # being told the truth slowly.
+    assert "NEXUS_CONNECTOR_SECRET_KEY" in message
     assert env.value in message
 
 
@@ -191,7 +208,8 @@ def test_the_api_docs_are_not_served_outside_local(
     monkeypatch.setenv("NEXUS_DATABASE_URL", "postgresql+asyncpg://u:p@h:5432/nexus")
     monkeypatch.setenv("NEXUS_STORAGE_SIGNING_SECRET", "a-real-secret")
     # This test builds Settings from the environment rather than through
-    # `_settings`, so it has to state the deployable-email requirement itself.
+    # `_settings`, so it has to state every deployable requirement itself.
+    monkeypatch.setenv("NEXUS_CONNECTOR_SECRET_KEY", Fernet.generate_key().decode())
     monkeypatch.setenv("NEXUS_MAILER_BACKEND", "smtp")
     monkeypatch.setenv("NEXUS_SMTP_HOST", "smtp.example.invalid")
     monkeypatch.setenv("NEXUS_PUBLIC_BASE_URL", "https://app.example.invalid")
@@ -245,10 +263,10 @@ FUTURE: dict[str, str] = {
     "NEXUS_GOOGLE_CLIENT_ID": "P18 — GA4 and Search Console OAuth (D3)",
     "NEXUS_GOOGLE_CLIENT_SECRET": "P18 — GA4 and Search Console OAuth (D3)",
     "NEXUS_PAGESPEED_API_KEY": "P18 — PageSpeed Insights (D3)",
-    # doc/14 step 9. The connector spine is built (ADR 0031) and nothing can
-    # connect until these exist: a key to encrypt a token at rest, and one
-    # provider's OAuth app to get a token in the first place.
-    "NEXUS_CONNECTOR_SECRET_KEY": "doc/14 S9 — encrypts provider tokens at rest (D27)",
+    # doc/14 step 9. `NEXUS_CONNECTOR_SECRET_KEY` has left this list: D27 was
+    # answered with option A, so it is a real `Settings` field and deployed
+    # environments refuse to boot without it. What remains is one provider's
+    # OAuth app, which no amount of code can supply.
     "NEXUS_HUBSPOT_CLIENT_ID": "doc/14 S9 — the first connector, over HubSpot's MCP server",
     "NEXUS_HUBSPOT_CLIENT_SECRET": "doc/14 S9 — the first connector, over HubSpot's MCP server",
     "NEXUS_HUBSPOT_REDIRECT_URI": "doc/14 S9 — OAuth callback, must match the app's registration",

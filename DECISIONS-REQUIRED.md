@@ -321,7 +321,7 @@ so it is written and tested rather than remembered later.
 
 ---
 
-### D27 — How is a provider's token held at rest? *(blocks every connector)*
+### ~~D27 — How is a provider's token held at rest?~~ — **answered: A with C**, 17 September 2026
 
 `doc/14`'s connector spine is built (ADR 0031) and there is nowhere to put a
 token. `workspace_connection` holds `provider` and `state`; its own migration
@@ -337,14 +337,16 @@ Three options, argued in full in ADR 0032:
 - **C. Hold only a refresh token**, access tokens in memory per sweep. A
   modifier on A or B rather than an alternative.
 
-**My recommendation: A with C.** B is right at a scale this has not reached, and
-A's column can hold a reference later without another migration. The sequence
-after an answer is short: add the dependency, write an additive migration, and
-step 9 is unblocked.
+**Answered: A**, with C layered on as recommended — an encrypted column keyed
+from `NEXUS_CONNECTOR_SECRET_KEY`, holding only the refresh token, with access
+tokens in memory for the life of a sweep.
 
-**This one is worth your attention rather than a default.** A provider token is
-read-access to the customer's entire pipeline, and how it is held is not an
-implementation detail to settle inside a step.
+**Shipped** in migration 0030 (`workspace_connection.credentials` and
+`credential_key_id`, applied to Neon and verified), `app/connectors/credentials.py`
+and `Settings.connector_secret_key`, which joins `_DEPLOYED_REQUIRES` beside
+`database_url` and `storage_signing_secret`. B stays available without another
+migration: the column can hold a reference rather than a ciphertext the day a
+managed secret store is worth its outage mode. See ADR 0032.
 
 ---
 

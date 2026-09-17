@@ -1,9 +1,14 @@
 # ADR 0032 — How a provider's token is held
 
-**Status** Proposed — needs Parul. Recorded as **D27** in `DECISIONS-REQUIRED.md`.
+**Status** Accepted
 **Date** 17 September 2026
-**Decided by** Nobody yet. Written because `doc/14` step 9 cannot start without it and
-because guessing at a secret-storage design is the wrong thing to do quietly.
+**Decided by** Parul, answering D27 — *"go with A for D27"*. Written before implementation
+because guessing at a secret-storage design is the wrong thing to do quietly, and because
+a provider token is read-access to a customer's entire pipeline.
+
+**Implemented** in migration 0030 (`workspace_connection.credentials` and
+`credential_key_id`), `app/connectors/credentials.py`, and
+`Settings.connector_secret_key` — which joins `_DEPLOYED_REQUIRES`.
 
 ## Context
 
@@ -41,7 +46,7 @@ sweep from a refresh token — which is itself a long-lived secret that has to l
 somewhere, so this reduces exposure rather than removing the question. It is a *modifier*
 on A or B, not an alternative to them.
 
-## Recommendation
+## Decision
 
 **A, with C layered on: an encrypted column keyed from the environment, storing the
 refresh token, with access tokens held only in memory for the life of a sweep.**
