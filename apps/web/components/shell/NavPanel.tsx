@@ -67,7 +67,10 @@ export function groupsFor(all: Dashboards | null): NavGroup[] {
     {
       key: 'data',
       label: 'Your data',
-      items: [{ href: '/onboarding', label: 'Workspace setup' }],
+      items: [
+        { href: '/work', label: 'Your work', hint: 'Projects and tasks' },
+        { href: '/onboarding', label: 'Workspace setup' },
+      ],
     },
     {
       key: 'settings',

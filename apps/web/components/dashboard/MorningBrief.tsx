@@ -140,7 +140,14 @@ export function MorningBrief({ brief }: { brief: Brief }) {
               <h3 className="font-display text-lg text-ink-900">
                 {brief.state === 'all_held'
                   ? `All ${brief.checks_total} checks held`
-                  : 'Nothing measured yet'}
+                  : /* **Not "Nothing measured yet".** The brief ranks audit
+                       findings by the points they cost, so its empty state means
+                       no audit has run — and it now sits above tiles that may be
+                       carrying counts or amounts, which are measured and have no
+                       findings to rank. The message below already says the
+                       specific, true thing about the crawl; this headline was
+                       the part that overclaimed. */
+                    'No audit has run yet'}
               </h3>
               {brief.state === 'all_held' ? (
                 <span className="font-mono text-2xs tracking-[0.05em] text-ink-500">

@@ -6,6 +6,7 @@ import {
   narrateBlock,
   type AmountFigure,
   type BlockKind,
+  type CountFigure,
   type DirectorBlock,
   type Narration,
   type ScoreFigure,
@@ -231,6 +232,58 @@ function AmountFigureBody({ figure }: { figure: AmountFigure }) {
   )
 }
 
+/**
+ * Counts over the customer's own records — ADR 0034's third kind.
+ *
+ * **A different body, not a badge.** `doc/13` §7 requires that a number
+ * somebody typed and a number we measured never look identical, and says a
+ * badge on an otherwise identical tile fails that at a glance and in a
+ * screenshot. So this reads as a tally of a record rather than as a
+ * measurement: the lead figure is the population, the breakdown is counts, and
+ * the provenance line says who wrote them down.
+ *
+ * **Nothing is divided.** There is no ratio on screen and none computed here —
+ * `open / recorded` would be the exact percentage over a partial record the
+ * whole kind exists to refuse, and it would be one line of arithmetic away in
+ * any component that had the two numbers and a habit.
+ */
+function CountFigureBody({ figure }: { figure: CountFigure }) {
+  return (
+    <>
+      <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span className="font-display text-3xl leading-none text-ink-900">{figure.recorded}</span>
+        <span className="text-sm text-ink-500">
+          {figure.noun} recorded, {figure.open_items} still open
+        </span>
+      </p>
+
+      <p className="mt-2 max-w-prose text-sm leading-relaxed text-ink-600">
+        <span className="font-medium text-ink-700">{figure.label}.</span> {figure.measures}
+      </p>
+
+      {figure.overdue > 0 ? (
+        <p className="mt-2 text-sm text-clay-600">
+          {figure.overdue} {figure.overdue === 1 ? 'is' : 'are'} past a date you set.
+        </p>
+      ) : null}
+
+      {figure.undated > 0 ? (
+        /* Said plainly rather than folded into "on track". Nobody named a day,
+           so nothing is late — and a reader weighing the overdue count needs to
+           know how many could never have been counted in it. */
+        <p className="mt-1 text-sm text-ink-500">
+          {figure.undated} {figure.undated === 1 ? 'has' : 'have'} no due date, so{' '}
+          {figure.undated === 1 ? 'it is' : 'they are'} never counted as late.
+        </p>
+      ) : null}
+
+      <p className="mt-2 text-sm text-ink-400">
+        Counted from what your workspace recorded, last updated {figure.recorded_at}
+      </p>
+    </>
+  )
+}
+
 /** Whichever kind this tile carries. */
 function Figure({ block }: { block: DirectorBlock }) {
   const figure = block.figure
@@ -240,8 +293,10 @@ function Figure({ block }: { block: DirectorBlock }) {
     <div className="mt-4">
       {figure.kind === 'score' ? (
         <ScoreFigureBody figure={figure} />
-      ) : (
+      ) : figure.kind === 'amount' ? (
         <AmountFigureBody figure={figure} />
+      ) : (
+        <CountFigureBody figure={figure} />
       )}
     </div>
   )
@@ -295,6 +350,24 @@ function Working({
                     {figure.uncounted > 0
                       ? `${figure.uncounted} ${figure.uncounted_label}, so counted and not added.`
                       : `Every one of them is priced, so all ${figure.count} are in the total.`}
+                  </span>
+                </span>
+              </li>
+            ) : null}
+            {figure.kind === 'count' ? (
+              /* A census has no checks either. Its whole arithmetic is the
+                 partition — done plus open, and open split into late, undated
+                 and still to come — so the drawer shows that it adds up rather
+                 than inventing a checklist to fill the space. */
+              <li className="flex flex-wrap gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
+                <span className="min-w-0 grow">
+                  <span className="text-ink-800">
+                    {figure.recorded} recorded, {figure.recorded - figure.open_items} done,{' '}
+                    {figure.open_items} open
+                  </span>
+                  <span className="mt-0.5 block text-ink-500">
+                    Of the {figure.open_items} open, {figure.overdue} past a date and{' '}
+                    {figure.undated} with no date.
                   </span>
                 </span>
               </li>
@@ -392,6 +465,20 @@ function Explanation({
   const figure = block.figure
   if (!figure) return null
 
+  // **Scores only, stated here rather than trusted from the call site.** The
+  // button is already gated on `kind === 'score'` where this is mounted, and
+  // that gate is invisible from inside — `result.measured_at` below reads a
+  // field only a scored figure has, so adding ADR 0034's count kind broke the
+  // compile here and not at the gate. Narrowing in the component means the
+  // precondition travels with the code that depends on it.
+  if (figure.kind !== 'score') return null
+
+  // Read out here, not inside `explain`. TypeScript does not carry the narrowing
+  // above into a hoisted function declaration — which is what the redundant
+  // `figure &&` in the old comparison was working around — so the closure took
+  // `Figure` and lost the field.
+  const measuredAt = figure.measured_at
+
   async function explain() {
     setBusy(true)
     setMessage('')
@@ -403,7 +490,7 @@ function Explanation({
       // The page was re-crawled between load and click. The sentence is true
       // about a number the reader cannot see, and showing it beside the one
       // they can is the single way this feature can state something false.
-      if (figure && result.measured_at !== figure.measured_at) {
+      if (result.measured_at !== measuredAt) {
         setSuperseded(true)
         return
       }

@@ -80,8 +80,11 @@ export function Coverage({ bands }: { bands: Bands }) {
 
         <ul className="mt-4">
           <Band count={bands.measuring} label="producing a figure" swatch="bg-steel-500">
-            Computed from what we could measure, each with its denominator and its
-            working.
+            {/* Not "each with its denominator": only a scored audit has one.
+                A pipeline (ADR 0033) and a count of your own records (ADR 0034)
+                have no denominator to show, and this band counts all three. */}
+            Computed in code from what we could measure, each showing its working and
+            what it left out.
           </Band>
           <Band count={bands.reading_back} label="reading your answers back" swatch="bg-gold-400">
             Your own words rather than a measurement — which is why they never render as

@@ -161,6 +161,7 @@ def compose(
     *,
     expected: frozenset[str],
     unobserved: int,
+    also_measured: frozenset[str] = frozenset(),
 ) -> Brief:
     """Assemble the brief from what was computed for this reader.
 
@@ -177,8 +178,16 @@ def compose(
     `unobserved` is coverage's `not_built` — the only number the copy borrows
     from outside, and only so the `ALL_HELD` state can state its own limits in
     the same sentence as the good news.
+
+    **`also_measured` is every capability that produced a figure without
+    producing checks.** `computations` are scored audits, and only a scored
+    audit has failures to list — but a figure is a figure, and a capability
+    absent from both sets lands in the `UNMEASURED` band. Without this, a tile
+    carrying an amount (ADR 0033) or a count (ADR 0034) was announced as "this
+    could not be measured" directly above itself showing the number. A caller
+    with one dispatch passes nothing and gets the old behaviour.
     """
-    measured = {computation.capability_id for computation in computations}
+    measured = {computation.capability_id for computation in computations} | also_measured
 
     # Missing measurements first, at any cost, because they qualify everything
     # below them. Sorted by id so the order is stable between requests rather

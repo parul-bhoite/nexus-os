@@ -19,16 +19,18 @@ turning one round trip into one per capability.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Any, Final, Protocol
 
 from app.calculators.audit import CategoryScore, score_brand, score_technical_seo
+from app.calculators.ops import Dated, OpsCounts, count_items
 from app.calculators.pipeline import Deal, Pipeline, compute_pipeline
 from app.domain.page_signals import PageSignals
 from app.grounding.pipeline import Computed
 from app.retrieval.crawl import CrawlSnapshot
+from app.retrieval.ops import OpsSnapshot
 
 Calculator = Callable[[PageSignals], CategoryScore]
 
@@ -147,7 +149,8 @@ PIPELINE_TALLIES: Final[dict[str, Tally]] = {
     ),
 }
 """The second dispatch. Guarded against the registry in both directions by
-`test_grounding_compute.py`, exactly as `CRAWL_AUDITS` is."""
+`test_grounding_compute.py`, which iterates every dispatch rather than naming
+one — this docstring claimed that guard for a slice before it was true."""
 
 AMOUNT_CAPABILITIES: Final[frozenset[str]] = frozenset(PIPELINE_TALLIES)
 """Which capabilities produce an amount rather than a score.
@@ -156,6 +159,155 @@ Read by `routes/dashboards._narratable`, which refuses them: `narrate-metric`
 speaks in numerator and denominator, so a pipeline sentence grounded in those
 keys would be grounded in nothing (ADR 0033).
 """
+
+
+class Records(Protocol):
+    """Picks one of a snapshot's two lists. `PipelineCalculator`'s sibling."""
+
+    def __call__(self, snapshot: OpsSnapshot) -> Sequence[Dated]: ...
+
+
+@dataclass(frozen=True, slots=True)
+class Census:
+    """One records-backed calculator, over rows the customer typed themselves.
+
+    `Audit` and `Tally`'s third sibling (ADR 0034), and the same three fields
+    for the same reason: a calculator, what it counted, and what it did not.
+
+    The difference this kind carries is **whose rows these are**. A crawl reads
+    a page that exists and a CRM is authoritative about its own deals; the ops
+    layer holds what somebody remembered to type. `measures` therefore has one
+    extra job here — saying that the figure counts the record rather than the
+    company — and `doc/15` D29 is the open question of how we would ever know
+    the two are the same.
+    """
+
+    select: Records
+    """Which of the snapshot's lists this capability counts."""
+
+    noun: str
+    """What one row is, in the plural. Rendered, so "projects" and not
+    "ops_project" — and carried rather than derived from the capability id,
+    which reads `task_queue` and would give "queues"."""
+
+    label: str
+    measures: str
+    method: str
+
+
+OPS_CENSUSES: Final[dict[str, Census]] = {
+    "operations.projects_board": Census(
+        select=lambda snapshot: snapshot.projects,
+        noun="projects",
+        label="Projects recorded",
+        measures=(
+            "Every project recorded in NEXUS, counted: how many are still open, how "
+            "many passed a date you set, and how many were never given one. Not a "
+            "completion rate and not an on-time percentage — both divide by a total "
+            "only you can confirm is all of them."
+        ),
+        method="calculators.ops.count_items",
+    ),
+    "operations.task_queue": Census(
+        select=lambda snapshot: snapshot.tasks,
+        noun="tasks",
+        label="Tasks recorded",
+        measures=(
+            "Every task recorded in NEXUS, counted: how many are still open, how many "
+            "are past their due date, and how many have no due date at all. Not a "
+            "throughput figure and not a workload per person — this counts what was "
+            "written down, which is not the same as what is being done."
+        ),
+        method="calculators.ops.count_items",
+    ),
+}
+"""The third dispatch, and the first over rows NEXUS itself stores.
+
+Guarded against the registry in both directions by `test_grounding_compute.py`,
+which iterates every dispatch and separately asserts that it has not missed one.
+"""
+
+COUNT_CAPABILITIES: Final[frozenset[str]] = frozenset(OPS_CENSUSES)
+"""Which capabilities produce a count rather than a score or an amount.
+
+Read by `routes/dashboards._narratable`, which refuses them for
+`AMOUNT_CAPABILITIES`' reason: `narrate-metric` speaks in numerator and
+denominator, and a count has neither — a sentence grounded in those keys would
+be grounded in nothing.
+"""
+
+
+@dataclass(frozen=True, slots=True)
+class CountComputation:
+    """Counts over the customer's own records, and the working behind them.
+
+    `recorded_at`, not `measured_at`. The other two kinds carry the moment we
+    fetched something; nobody fetched this, so the only honest timestamp is the
+    moment somebody typed — `retrieval/ops.py` makes the same point about the
+    field it reads.
+    """
+
+    capability_id: str
+    label: str
+    measures: str
+    noun: str
+    counts: OpsCounts
+    recorded_at: datetime
+    computed: Computed
+    trace: dict[str, Any]
+
+
+def compute_from_ops(
+    capability_id: str, snapshot: OpsSnapshot, *, today: date
+) -> CountComputation | None:
+    """Count a workspace's recorded work, or `None` if nothing counts this.
+
+    `None`, never a zero-valued `CountComputation` — the rule both other
+    dispatches follow. **An empty list is still not `None` here**, and means
+    something slightly different than it does for deals: a workspace that has
+    recorded projects and no tasks has genuinely zero tasks written down. That
+    it may have plenty of real ones is D29's question, and is why the figure
+    says "recorded" in its own label rather than leaving the reader to assume.
+    """
+    census = OPS_CENSUSES.get(capability_id)
+    if census is None:
+        return None
+
+    counts = count_items(census.select(snapshot), today=today)
+
+    # **Every number the prose may state, and only these** — `compute_from_deals`
+    # gives the reasoning. Narration is refused for counts (ADR 0034); filled in
+    # correctly regardless, because a `values` written later under pressure is a
+    # `values` written wrong.
+    values: dict[str, float] = {
+        "recorded": float(counts.recorded),
+        "open": float(counts.open_items),
+        "overdue": float(counts.overdue),
+        "undated": float(counts.undated),
+        "done": float(counts.done),
+    }
+
+    return CountComputation(
+        capability_id=capability_id,
+        label=census.label,
+        measures=census.measures,
+        noun=census.noun,
+        counts=counts,
+        recorded_at=snapshot.recorded_at or datetime.combine(today, datetime.min.time(), UTC),
+        computed=Computed(values=values),
+        trace={
+            "capability": capability_id,
+            "measures": census.measures,
+            "recorded": counts.recorded,
+            "open": counts.open_items,
+            "overdue": counts.overdue,
+            "undated": counts.undated,
+            "source": "your own records",
+            "window": f"the {census.noun} recorded as of {today.isoformat()}",
+            "delta": "no_baseline",
+            "method": census.method,
+        },
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -200,14 +352,31 @@ class Computation:
         return sum(1 for check in self.score.checks if check.passed)
 
 
+MEASURABLE: Final[frozenset[str]] = (
+    frozenset(CRAWL_AUDITS) | frozenset(PIPELINE_TALLIES) | frozenset(OPS_CENSUSES)
+)
+"""Every capability something can put a figure on. `computes()` as a set.
+
+**The set `domain.registry.coverage` is injected with.** That injection exists
+so `domain` need not import `grounding`, and its docstring says it is only
+honest "while the caller passes the real set" — which stopped being true the
+day a second dispatch existed, because both the route and its test still passed
+`CRAWL_AUDITS`. Coverage then reported a department as blocked while a tile in
+it was showing a number.
+
+Defined here, beside the dicts it unions, so a fourth dispatch updates it by
+construction rather than by somebody remembering two call sites.
+"""
+
+
 def computes(capability_id: str) -> bool:
     """Whether anything can put a number on this capability's tile.
 
-    Both dispatches. The two produce different *kinds* of figure (ADR 0033) and
-    the question this answers is the same for either: is there a calculation
-    behind this tile at all.
+    All three dispatches. They produce different *kinds* of figure (ADR 0033,
+    ADR 0034) and the question this answers is the same for each: is there a
+    calculation behind this tile at all.
     """
-    return capability_id in CRAWL_AUDITS or capability_id in PIPELINE_TALLIES
+    return capability_id in MEASURABLE
 
 
 def compute_from_crawl(capability_id: str, snapshot: CrawlSnapshot) -> Computation | None:

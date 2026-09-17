@@ -477,6 +477,12 @@ _IMPLEMENTED: Final[frozenset[str]] = frozenset(
         # connector landed. The first capability outside Marketing to carry a
         # figure, and the first to carry one that is **not a score** — ADR 0033.
         "sales.pipeline_board",
+        # `calculators/ops.py` counts them, from `ops_project` and `ops_task`
+        # rows the customer typed. The first capabilities computed from records
+        # NEXUS itself stores rather than from something we went and read — and
+        # the first to carry a **count** (ADR 0034).
+        "operations.projects_board",
+        "operations.task_queue",
     }
 )
 
@@ -495,6 +501,15 @@ _REACHABLE: Final[frozenset[str]] = _setup_and_watchlist_ids() | frozenset(
         # afterwards — `state_from_sources` decides that from `required_sources`
         # against what is connected, so this set does not have to.
         "sales.pipeline_board",
+        # Locked until this workspace records something, and `live` afterwards —
+        # `OPS_LAYER` is their own records, so there is nothing further to
+        # connect. **The first capabilities that can reach `live` at all**, and
+        # they can because a count of what was recorded is true without a
+        # provider: `doc/15` S10.1 turns on exactly that. What `live` does not
+        # claim is that the record is complete, which is D29 and still open —
+        # the count figure says "recorded" in its own label for that reason.
+        "operations.projects_board",
+        "operations.task_queue",
     }
 )
 """**The capabilities a person can actually open.**

@@ -137,8 +137,44 @@ export type AmountFigure = {
   method: string
 }
 
-/** One tile carries one kind. The union cannot express both or neither. */
-export type Figure = ScoreFigure | AmountFigure
+/**
+ * Counts over records the customer typed into NEXUS themselves — ADR 0034's
+ * third kind, and the first figure computed from rows we store rather than from
+ * something we went and read.
+ *
+ * **Nothing here is a rate, and that is the point.** The ops layer fails on
+ * adoption rather than on an API: somebody who recorded three of twelve projects
+ * gives us a database indistinguishable from one who recorded twelve. A count
+ * states what was recorded and survives that; a percentage divides by a total
+ * only the customer can confirm is all of them.
+ */
+export type CountFigure = {
+  kind: 'count'
+  /** Reads "Projects recorded", never "Projects". The participle is the
+   *  sentence-level half of what the discriminated kind enforces structurally:
+   *  the figure is about the record, not about the company. */
+  label: string
+  measures: string
+  /** What one row is, in the plural — "projects", "tasks". */
+  noun: string
+  /** How many rows exist. The population, and deliberately **not** a
+   *  denominator: dividing by it is the complete-looking percentage over a
+   *  partial record that this kind exists to refuse. */
+  recorded: number
+  open_items: number
+  /** Open, past a date somebody set. No grace period and no "at risk" band. */
+  overdue: number
+  /** Open, with no due date at all. Beside `overdue` rather than dropped: a
+   *  reader deciding whether "1 overdue" is reassuring needs to know how many
+   *  were never given a date to be late against (I10). */
+  undated: number
+  /** When somebody last typed. **Not `measured_at`** — nothing was fetched. */
+  recorded_at: string
+  method: string
+}
+
+/** One tile carries one kind. The union cannot express two or none. */
+export type Figure = ScoreFigure | AmountFigure | CountFigure
 
 /**
  * A stored sentence about a figure, and enough to trace it.

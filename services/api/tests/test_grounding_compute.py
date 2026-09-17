@@ -23,7 +23,13 @@ import pytest
 from app.calculators import audit
 from app.domain.page_signals import PageSignals
 from app.domain.registry import CAPABILITIES, TILES
-from app.grounding.compute import CRAWL_AUDITS, compute_from_crawl, computes
+from app.grounding.compute import (
+    CRAWL_AUDITS,
+    OPS_CENSUSES,
+    PIPELINE_TALLIES,
+    compute_from_crawl,
+    computes,
+)
 from app.retrieval.crawl import CrawlSnapshot
 
 CAPTURED_AT = datetime(2026, 9, 3, 9, 30, tzinfo=UTC)
@@ -244,16 +250,40 @@ def test_the_dispatch_needs_no_session() -> None:
 # ── The dispatch and the registry cannot drift ────────────────
 
 
-def test_every_audited_capability_is_reachable_and_implemented() -> None:
+def test_every_dispatched_capability_is_reachable_and_implemented() -> None:
     """A calculator wired to a capability the route will not serve is dead code
     that looks live; the reverse is a tile that promises a figure and renders a
-    disabled button."""
+    disabled button.
+
+    **All three dispatches, iterated rather than named.** This asserted
+    `CRAWL_AUDITS` alone for two slices, while `PIPELINE_TALLIES` and then
+    `OPS_CENSUSES` carried docstrings claiming they were guarded "in both
+    directions, exactly as `CRAWL_AUDITS` is" — which was false in the only
+    direction that catches a dispatch nobody wired up. A new dict added to
+    `compute.py` and not to this tuple is the way that comes back, so the
+    companion test below asserts the tuple is complete.
+    """
     by_id = {c.id: c for c in CAPABILITIES}
-    for capability_id in CRAWL_AUDITS:
-        capability = by_id.get(capability_id)
-        assert capability is not None, f"{capability_id} is not in the registry"
-        assert capability.implemented, f"{capability_id} is dispatched but not implemented"
-        assert capability.reachable, f"{capability_id} is dispatched but not reachable"
+    for dispatch in (CRAWL_AUDITS, PIPELINE_TALLIES, OPS_CENSUSES):
+        for capability_id in dispatch:
+            capability = by_id.get(capability_id)
+            assert capability is not None, f"{capability_id} is not in the registry"
+            assert capability.implemented, f"{capability_id} is dispatched but not implemented"
+            assert capability.reachable, f"{capability_id} is dispatched but not reachable"
+
+
+def test_the_guard_above_covers_every_dispatch() -> None:
+    """`computes()` is the product's own answer to "is there a calculator", so
+    every id it accepts must be an id the guard above checked. A fourth dispatch
+    added to `computes()` and forgotten in that tuple would make the guard pass
+    by not looking."""
+    guarded = set(CRAWL_AUDITS) | set(PIPELINE_TALLIES) | set(OPS_CENSUSES)
+    for capability in CAPABILITIES:
+        if computes(capability.id):
+            assert capability.id in guarded, (
+                f"{capability.id} computes but no dispatch in the guard above holds it — "
+                f"add the new dict to both."
+            )
 
 
 def test_every_reachable_tile_either_computes_or_has_its_own_endpoint() -> None:

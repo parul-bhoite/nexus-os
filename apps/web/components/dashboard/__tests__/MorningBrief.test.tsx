@@ -93,7 +93,10 @@ describe('the three states all render something', () => {
       />,
     )
 
-    expect(screen.getByText(/Nothing measured yet/)).toBeTruthy()
+    // "No audit has run yet", not "Nothing measured yet": the brief ranks audit
+    // findings, and its empty state now sits above tiles that can carry a count
+    // or an amount — both measured, neither producing a finding.
+    expect(screen.getByText(/No audit has run yet/)).toBeTruthy()
     expect(screen.getByText(message)).toBeTruthy()
     // I10, asserted as an absence of a number rather than as the presence of a
     // word: a zero score here is the exact substitution the invariant forbids.

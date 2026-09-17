@@ -38,10 +38,13 @@ from app.domain.registry import (
     openable_count,
 )
 from app.domain.scopes import Department
-from app.grounding.compute import CRAWL_AUDITS
+from app.grounding.compute import MEASURABLE
 
 EVERY = frozenset(Department)
-MEASURED = frozenset(CRAWL_AUDITS)
+MEASURED = MEASURABLE
+"""The real set, not one dispatch of it. This read `frozenset(CRAWL_AUDITS)`
+while the route passed the same thing, so the agreement this module exists to
+assert held between two identical mistakes."""
 
 
 # ── The denominator, which three functions now share ──────────
@@ -142,8 +145,15 @@ def test_a_department_manager_is_counted_over_their_own_departments() -> None:
 def test_a_department_with_no_calculator_measures_nothing_rather_than_erroring() -> None:
     """Zero is the right answer here and is not an I10 violation: nothing is
     standing in for an absence, because the absence *is* the fact. The tile-level
-    rule still holds — no capability renders a zero-scored figure."""
-    assert coverage(MEASURED, frozenset({Department.SALES})).measuring == 0
+    rule still holds — no capability renders a zero-scored figure.
+
+    **Finance, not Sales.** This asked Sales for two slices after Sales acquired
+    `sales.pipeline_board`, and stayed green only because `MEASURED` was one
+    dispatch rather than the real set — so it was asserting the injection defect
+    instead of this behaviour. Finance has no calculator at all; when it gets
+    one, this test should move again rather than have its expectation widened.
+    """
+    assert coverage(MEASURED, frozenset({Department.FINANCE})).measuring == 0
 
 
 def test_no_department_selected_is_an_empty_count_not_a_crash() -> None:

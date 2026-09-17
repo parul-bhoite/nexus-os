@@ -114,7 +114,13 @@ function forwardCookies(from: Response, to: Headers): void {
 export type ProxyOptions = {
   /** Path on the API, e.g. `/auth/login`. */
   path: string
-  method: 'GET' | 'POST' | 'PUT'
+  /**
+   * `DELETE` joined the union for `doc/15` S10.1 — archiving a project. It is
+   * the first method here that removes anything from a founder's view, and it
+   * carries no body, so `upstreamHeaders` sets no content type for it. The API
+   * means archive rather than delete, which is why widening this was safe.
+   */
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE'
   /** Body to send. Omit for GET. */
   body?: unknown
   /** Shown if the API cannot be reached at all. */

@@ -114,7 +114,7 @@ score the product would draw.
 
 Each delivers a tile a founder can open. None is "build the ops layer".
 
-### S10.1 — Projects and tasks
+### S10.1 — Projects and tasks ✅ *shipped 17 September 2026*
 The two everything else hangs off. `operations.projects_board` and
 `operations.task_queue`, both `ops_layer`-only, both counts rather than rates — so they
 are the one pair that can ship **before D29 is answered**, because a count of what was
@@ -122,6 +122,28 @@ recorded is true whether or not it is complete.
 **Acceptance:** a founder creates a project and a task through the app; both tiles render
 from the database; a second member of the workspace sees them and a member of another
 workspace does not.
+
+**Asserted by `scripts/ops_walkthrough.py`** — the whole sentence in order, over HTTP,
+against Neon: 26 checks, green. Migration `0032` (`ops_project`, `ops_task`, RLS forced);
+`retrieval/ops.py`, `calculators/ops.py`, `routes/ops.py`, `/work` and its five BFF
+routes. ADR 0034 adds the **count** figure kind, because a count is neither a score nor
+an amount and rendering it as either would have put a money shape with no money, or a
+denominator, on a tile that has neither. `OPS_LAYER` joins `connected_sources` when rows
+exist, which makes these the first capabilities in the product that can reach `live`.
+
+Four things this slice found that were not about the ops layer at all:
+
+- **The Morning Brief called a figured tile unmeasured.** Only a scored audit yields a
+  `Computation`, so `sales.pipeline_board` had been announced as *"This could not be
+  measured"* above the tile showing its number since ADR 0033. `compose` now takes
+  `also_measured`.
+- **`coverage` was injected with one dispatch.** The route and its test both passed
+  `CRAWL_AUDITS`, so they agreed with each other and not with the product;
+  `grounding.compute.MEASURABLE` is now the single set both use.
+- **Three standfirsts promised a denominator** the amount and count kinds do not have.
+- **The BFF had no `/api/ops` route**, so the page said "Could not read what you have
+  recorded" while the whole layer worked end to end. Neither suite can see this — vitest
+  mocks `fetch` and pytest calls the API directly. The browser found it.
 
 ### S10.2 — Completeness, per D29
 The answer, applied to the two tiles that already exist. Nothing else should be built until

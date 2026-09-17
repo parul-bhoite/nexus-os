@@ -63,7 +63,10 @@ describe('what the panel lists', () => {
     // doc/14 sketched a four-entry "Your data" group. Three of those pages were
     // never built, and a nav entry pointing at a route nobody built is a 404
     // with a friendly name.
-    const built = new Set(['/dashboard', '/onboarding', '/settings', '/account'])
+    // '/work' joined the list when doc/15 S10.1 built it — app/work/page.tsx.
+    // This set is maintained by hand, so adding to it is a claim, not a fix:
+    // check the page actually renders before widening it.
+    const built = new Set(['/dashboard', '/work', '/onboarding', '/settings', '/account'])
     const hrefs = groupsFor(dashboards([]))
       .flatMap((group) => group.items)
       .map((item) => item.href)

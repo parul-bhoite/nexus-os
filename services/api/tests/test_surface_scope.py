@@ -34,6 +34,7 @@ from fastapi.testclient import TestClient
 
 from app.domain.scopes import Department, Role
 from app.domain.session import ScopedSession
+from app.grounding.compute import MEASURABLE
 from app.main import create_app
 
 
@@ -244,4 +245,9 @@ def test_coverage_does_not_depend_on_whether_anything_was_crawled(
     body = surface(client)
 
     assert body["brief"]["state"] == "not_measured"
-    assert body["coverage"]["measuring"] == 2
+    # `len(MEASURABLE)`, not a literal. This read `2` — the size of `CRAWL_AUDITS`
+    # — through two slices that added dispatches, and stayed green because the
+    # route injected the same single dispatch into `coverage`. The constant was
+    # restating the defect. This caller holds every department, so every
+    # capability with a calculator is one it can see.
+    assert body["coverage"]["measuring"] == len(MEASURABLE)

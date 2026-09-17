@@ -95,7 +95,12 @@ export function DashboardLanding() {
           is another request for a word. */}
       <header>
         <h1 className="font-display text-title font-medium text-ink-900">Today</h1>
-        <p className="mt-1 text-sm text-ink-500">What needs you, and what it was read from.</p>
+        <p className="mt-1 text-sm text-ink-500">
+          {/* "where each number came from", not "what it was read from": not every
+              figure here was read from anywhere. A count comes from rows this
+              workspace typed (ADR 0034). */}
+          What needs you, and where each number came from.
+        </p>
       </header>
 
       <MorningBrief brief={state.surface.brief} />
@@ -134,7 +139,13 @@ function Measured({ blocks }: { blocks: DirectorBlock[] }) {
         Measured today
       </h2>
       <p className="mt-1 max-w-prose text-sm text-ink-500">
-        Each with its denominator, the page it was read from, and its working.
+        {/* **Was "Each with its denominator, the page it was read from."** True of a
+            scored audit and of nothing else: a pipeline has no denominator (ADR
+            0033) and a count of your own records has neither a denominator nor a
+            page anybody fetched (ADR 0034). A standfirst promising provenance the
+            tiles beneath it do not carry is the exact failure the tiles are
+            careful about, arriving one line above them. */}
+        Each says what it counted, what it left out, and where the number came from.
       </p>
       <ul className="mt-4 grid gap-4 lg:grid-cols-2">
         {blocks.map((block) => (

@@ -249,3 +249,58 @@ def test_the_totals_are_the_calculators_and_not_recounted() -> None:
     assert brief.points_total == sum(c.score.max_score for c in computations)
     assert brief.points_held == sum(c.score.score for c in computations)
     assert brief.points_lost == sum(i.cost for i in brief.items)
+
+
+# ── A figure that produced no checks is still a figure ────────
+#
+# Every test here passes a non-empty `computations`. `compose` short-circuits to
+# NOT_MEASURED with no items at all when nothing computed, so a version of these
+# built on `compose(())` would assert "not reported unmeasured" against a brief
+# that reports nothing whatsoever — green, and proving none of this.
+
+
+def test_a_capability_measured_by_another_dispatch_is_not_called_unmeasured() -> None:
+    """**The defect `also_measured` exists for.**
+
+    Only a scored audit yields a `Computation`, because only a scored audit has
+    checks. An amount (ADR 0033) and a count (ADR 0034) produce a figure and no
+    checks at all — so for two slices the brief announced *"This could not be
+    measured"* for `sales.pipeline_board` directly above the tile showing its
+    number. It was reading the absence of checks as the absence of a figure.
+    """
+    elsewhere = frozenset({"sales.pipeline_board"})
+
+    brief = compose(
+        _computations(POOR, ids=("marketing.seo_gaps",)),
+        expected=frozenset({"marketing.seo_gaps"}) | elsewhere,
+        unobserved=0,
+        also_measured=elsewhere,
+    )
+
+    unmeasured = {item.capability_id for item in brief.items if item.kind is ItemKind.UNMEASURED}
+    assert unmeasured == set()
+
+
+def test_everything_still_expected_and_unmeasured_is_reported() -> None:
+    """The converse, so the fix above cannot become a way to silence the band.
+    A capability that should have computed and did not is the one thing the
+    brief must never swallow."""
+    brief = compose(
+        _computations(POOR, ids=("marketing.seo_gaps",)),
+        expected=frozenset({"marketing.seo_gaps", "sales.pipeline_board"}),
+        unobserved=0,
+        also_measured=frozenset(),
+    )
+
+    unmeasured = {item.capability_id for item in brief.items if item.kind is ItemKind.UNMEASURED}
+    assert unmeasured == {"sales.pipeline_board"}
+
+
+def test_the_parameter_defaults_to_nothing() -> None:
+    """A caller with one dispatch gets the behaviour it had before, so adding
+    the parameter changed no existing path."""
+    computations = _computations(POOR, ids=("marketing.seo_gaps",))
+
+    assert compose(computations, expected=EXPECTED, unobserved=0) == compose(
+        computations, expected=EXPECTED, unobserved=0, also_measured=frozenset()
+    )

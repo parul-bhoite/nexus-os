@@ -84,9 +84,11 @@ from app.domain.sections import (
 from app.grounding.answer import NARRATOR, narrate
 from app.grounding.compute import (
     AMOUNT_CAPABILITIES,
-    CRAWL_AUDITS,
+    COUNT_CAPABILITIES,
+    MEASURABLE,
     compute_from_crawl,
     compute_from_deals,
+    compute_from_ops,
     computes,
 )
 from app.grounding.context import CompanyContext, assemble
@@ -95,6 +97,7 @@ from app.logging import get_logger
 from app.retrieval.crawl import CrawlSnapshot, current_page_signals
 from app.retrieval.deals import DealSnapshot, current_deals
 from app.retrieval.narration import current_narrations
+from app.retrieval.ops import OpsSnapshot, current_ops
 from app.retrieval.scoped import apply_workspace_scope, scoped_connection
 
 log = get_logger(__name__)
@@ -137,6 +140,18 @@ class Observed:
     which is a real pipeline of zero (I10).
     """
 
+    ops: OpsSnapshot | None = None
+    """What this workspace has recorded into NEXUS itself, or `None` if nothing.
+
+    Defaulted for the hermetic permission tests, exactly as `deals` is.
+
+    **`None` is not an empty snapshot**, and the distinction carries more weight
+    here than anywhere else on this page. No rows means the ops layer has never
+    been used and the tiles are `locked`; a snapshot holding an empty task list
+    means somebody has used it and has no tasks written down, which is a real
+    zero. `retrieval/ops.py` is where that is enforced.
+    """
+
     narrations: dict[str, StoredNarration] = field(default_factory=dict)
     """Every capability's most recent stored sentence, keyed by capability id.
 
@@ -159,12 +174,22 @@ class Observed:
 def connected_sources(observed: Observed) -> frozenset[Source]:
     """The sources this workspace actually has wired up.
 
-    **Only `CRAWL`, and only because something asked.** The four other
-    OURS-origin sources — `ONBOARDING`, `ROSTER`, `OPS_LAYER` and the TIME
-    origin `HISTORY` — are deliberately absent: no reachable capability needs
-    any of them, so claiming them would change the state of tiles nobody has
-    verified. That is the same failure the empty set existed to avoid, arrived
-    at from the other direction.
+    **`CRAWL` and `OPS_LAYER`, each only because something asked.** The three
+    other OURS-origin sources — `ONBOARDING`, `ROSTER` and the TIME origin
+    `HISTORY` — are deliberately absent: no reachable capability needs any of
+    them, so claiming them would change the state of tiles nobody has verified.
+    That is the same failure the empty set existed to avoid, arrived at from the
+    other direction.
+
+    **`OPS_LAYER` is the odd one, and the test for it is adoption.** Every other
+    source is present when we successfully read somebody else's system; this one
+    is present when the customer has typed something into ours. So the honest
+    check is `observed.ops is not None` — rows exist — and never "the `/ops`
+    route is mounted", which is the `DOCUMENTS` mistake this docstring already
+    refuses. It is also why these are the first capabilities that can reach
+    `live`: there is no further thing to connect. `live` still does not claim
+    the record is *complete* — that is `doc/15` D29, and the count figure says
+    "recorded" in its own label until D29 has an answer.
 
     `DOCUMENTS` and `LANGUAGE_MODEL` are absent too, and both are decisions.
     The honest test for documents is `retrieval.chunks.count(db, scope) > 0`,
@@ -184,7 +209,10 @@ def connected_sources(observed: Observed) -> frozenset[Source]:
     it reads `connected` at all, so a new source can only affect capabilities
     somebody deliberately put in `_REACHABLE`.
     """
-    return frozenset({Source.CRAWL}) if observed.crawled else frozenset()
+    connected = {Source.CRAWL} if observed.crawled else set()
+    if observed.ops is not None:
+        connected.add(Source.OPS_LAYER)
+    return frozenset(connected)
 
 
 async def observed_sources(scope: CurrentScope) -> Observed:
@@ -205,12 +233,13 @@ async def observed_sources(scope: CurrentScope) -> Observed:
     this way since step C.
     """
     async with scoped_connection(scope) as db:
-        # Two reads, one connection, once per request. Both feed every tile on
-        # the page, so a per-tile read would be the same round trip to
+        # Four reads, one connection, once per request. Each feeds every tile
+        # on the page, so a per-tile read would be the same round trip to
         # `us-east-2` repeated for one answer.
         return Observed(
             crawl=await current_page_signals(db, scope),
             deals=await current_deals(db, scope),
+            ops=await current_ops(db, scope),
             narrations=await current_narrations(db, scope),
         )
 
@@ -420,9 +449,69 @@ class AmountFigureOut(BaseModel):
     method: str
 
 
-Figure = ScoreFigureOut | AmountFigureOut
-"""One tile carries one kind. The union cannot express both or neither, which is
-the whole argument for it over two sibling fields (ADR 0033)."""
+class CountFigureOut(BaseModel):
+    """Counts over records the customer typed into NEXUS themselves.
+
+    ADR 0034's third kind, and the first figure on this page computed from rows
+    **we** store rather than from something we went and read.
+
+    **Nothing here is a rate, and that is the point.** The ops layer fails on
+    adoption rather than on an API: a founder who recorded three of twelve
+    projects gives us a database indistinguishable from one who recorded twelve.
+    A count survives that, because it states what was recorded. A percentage
+    does not — it would divide by a total only the customer can confirm is all
+    of them, which is `doc/15` D29 and still open.
+
+    **It is a different shape, not a badge.** `doc/13` §7 requires that a number
+    somebody typed and a number we measured never look identical, and says a
+    badge on an otherwise identical tile fails that at a glance and in a
+    screenshot. The discriminated kind is what makes the difference structural:
+    a client narrows on it and renders a different body, so there is no
+    rendering in which this passes for a measured figure.
+    """
+
+    kind: Literal["count"] = "count"
+
+    label: str
+    """Reads "Projects recorded", never "Projects" — the participle is load
+    bearing. It is the sentence-level half of the same rule the shape enforces:
+    the figure is about the record, and the label should not be readable as a
+    claim about the company."""
+
+    measures: str
+    """What was counted **and what was not** — the same field, for the same
+    reason, as the other two kinds."""
+
+    noun: str
+    """What one row is, in the plural. "projects", "tasks"."""
+
+    recorded: int
+    """How many rows exist. The population, and deliberately **not** a
+    denominator: dividing anything by it would produce exactly the
+    complete-looking percentage over a partial record that this kind exists to
+    refuse."""
+
+    open_items: int
+    overdue: int
+    """Open, with a due date that has passed. No grace period and no "at risk"
+    band — both would be a threshold nobody set."""
+
+    undated: int
+    """Open, with no due date at all. Served beside `overdue` rather than
+    dropped: a reader deciding whether "1 overdue" is reassuring needs to know
+    how many were never given a date to be late against (I10)."""
+
+    recorded_at: str
+    """When somebody last typed. **Not `measured_at`** — nothing was fetched,
+    so there is no moment of measurement to report, and borrowing the word
+    would be the tile claiming a provenance it does not have."""
+
+    method: str
+
+
+Figure = ScoreFigureOut | AmountFigureOut | CountFigureOut
+"""One tile carries one kind. The union cannot express two or none, which is the
+whole argument for it over sibling fields (ADR 0033, extended by ADR 0034)."""
 
 
 class BlockOut(BaseModel):
@@ -878,6 +967,35 @@ def figure_out(capability: Capability, snapshot: CrawlSnapshot | None) -> ScoreF
     )
 
 
+def count_figure_out(capability: Capability, ops: OpsSnapshot | None) -> CountFigureOut | None:
+    """The counted figure for one capability, or `None` when nothing censuses it.
+
+    Module level and shared, exactly as its two siblings are.
+
+    `ops is None` returns `None` and the tile stays `locked` — the workspace has
+    never recorded anything. A snapshot holding an empty list does **not** take
+    this path: that is a real zero and renders as one.
+    """
+    if ops is None:
+        return None
+
+    computation = compute_from_ops(capability.id, ops, today=datetime.now(UTC).date())
+    if computation is None:
+        return None
+
+    return CountFigureOut(
+        label=computation.label,
+        measures=computation.measures,
+        noun=computation.noun,
+        recorded=computation.counts.recorded,
+        open_items=computation.counts.open_items,
+        overdue=computation.counts.overdue,
+        undated=computation.counts.undated,
+        recorded_at=computation.recorded_at.date().isoformat(),
+        method=str(computation.trace["method"]),
+    )
+
+
 def amount_figure_out(capability: Capability, deals: DealSnapshot | None) -> AmountFigureOut | None:
     """The counted figure for one capability, or `None` when nothing tallies it.
 
@@ -972,7 +1090,9 @@ def _measured_block(
         ).value,
         unlock=unlock_for_sources(capability.required_sources, connected=connected),
         needs=[source.value for source in capability.required_sources],
-        figure=figure_out(capability, snapshot) or amount_figure_out(capability, observed.deals),
+        figure=figure_out(capability, snapshot)
+        or amount_figure_out(capability, observed.deals)
+        or count_figure_out(capability, observed.ops),
         narration=narration_out(capability, snapshot, observed.narrations),
     )
 
@@ -1025,8 +1145,29 @@ async def command_surface(
         )
     )
 
-    bands = coverage(frozenset(CRAWL_AUDITS), departments)
-    brief = compose(computations, expected=mine, unobserved=bands.not_built)
+    # Built before the brief, because the brief needs to know which of them
+    # produced a figure. A capability that computed an amount or a count has no
+    # checks and so appears in no `Computation` — reported unmeasured, it would
+    # contradict the tile immediately below it.
+    blocks = [
+        block
+        for block in (
+            _measured_block(BY_ID[capability_id], snapshot, observed)
+            for capability_id in sorted(mine)
+        )
+        # A capability that should compute and did not is already reported by
+        # the brief as `unmeasured`. An empty tile here would say the same
+        # absence a second time, in a shape that looks like a figure.
+        if block.figure is not None
+    ]
+
+    bands = coverage(MEASURABLE, departments)
+    brief = compose(
+        computations,
+        expected=mine,
+        unobserved=bands.not_built,
+        also_measured=frozenset(block.key for block in blocks),
+    )
     # `mine` rather than every capability with a calculator: a question is only
     # in the first tier if its consumer produces a figure **this reader can
     # see**, which is the same scoping the brief and the nav apply.
@@ -1047,17 +1188,7 @@ async def command_surface(
     }
 
     return SurfaceOut(
-        measured=[
-            block
-            for block in (
-                _measured_block(BY_ID[capability_id], snapshot, observed)
-                for capability_id in sorted(mine)
-            )
-            # A capability that should compute and did not is already reported
-            # by the brief as `unmeasured`. An empty tile here would say the
-            # same absence a second time, in a shape that looks like a figure.
-            if block.figure is not None
-        ],
+        measured=blocks,
         directors=[
             DirectorRowOut(
                 department=row.department.value,
@@ -1499,7 +1630,8 @@ async def director_dashboard(
             unlock=unlock_for_sources(capability.required_sources, connected=connected),
             needs=[source.value for source in capability.required_sources],
             figure=figure_out(capability, snapshot)
-            or amount_figure_out(capability, observed.deals),
+            or amount_figure_out(capability, observed.deals)
+            or count_figure_out(capability, observed.ops),
             narration=narration_out(capability, snapshot, observed.narrations),
         )
 
@@ -1604,7 +1736,10 @@ def _narratable(key: str, director: Director) -> Capability:
     # A 404 rather than a silent skip: the button is served by the same payload
     # that says a tile has a figure, so a capability the client can see and
     # cannot narrate is a state the API should name.
-    if capability.id in AMOUNT_CAPABILITIES:
+    # A count is refused for the same reason and by the same rule (ADR 0034):
+    # `recorded`, `open` and `overdue` are not a numerator over a denominator,
+    # and a count has no percentage for `describes` to compare.
+    if capability.id in AMOUNT_CAPABILITIES or capability.id in COUNT_CAPABILITIES:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
 
     # **There is deliberately no check on `consumes_facts` here**, and the
