@@ -38,7 +38,13 @@ from typing import Final, Protocol
 
 
 class Dated(Protocol):
-    """A project or a task, narrowed to what counting needs."""
+    """Any ops record, narrowed to what counting needs.
+
+    A project, a task, a milestone or an issue. `due_on` is whichever date that
+    record type is late against — a milestone's `planned_on` is passed in as
+    this, because "the date somebody said it would happen" is one idea under two
+    column names.
+    """
 
     @property
     def status(self) -> str: ...
@@ -47,13 +53,25 @@ class Dated(Protocol):
     def due_on(self) -> date | None: ...
 
 
-DONE: Final = "done"
-"""The one status both vocabularies share.
+class Graded(Protocol):
+    """An ops record that also carries a severity."""
 
-`ops_project` has `planned|active|blocked|done` and `ops_task` has
-`todo|doing|done`, and only the terminal one means the same thing in both — which
-is why this counts what is *not* done rather than enumerating what is open. A
-list of open statuses would have to be kept in step with two CHECK constraints.
+    @property
+    def status(self) -> str: ...
+
+    @property
+    def severity(self) -> str: ...
+
+
+DONE: Final = "done"
+"""The one status every vocabulary shares.
+
+`ops_project` has `planned|active|blocked|done`, `ops_task` has `todo|doing|done`,
+`ops_milestone` has `planned|done` and `ops_issue` has `open|done`. Only the
+terminal word means the same thing in all four — which is why this counts what is
+*not* done rather than enumerating what is open. A list of open statuses would
+have to be kept in step with four CHECK constraints, and `doc/15` has three more
+record types to come.
 """
 
 
@@ -94,3 +112,42 @@ def count_items(items: Sequence[Dated], *, today: date) -> OpsCounts:
         overdue=sum(1 for item in open_items if item.due_on is not None and item.due_on < today),
         undated=sum(1 for item in open_items if item.due_on is None),
     )
+
+
+@dataclass(frozen=True, slots=True)
+class Bucket:
+    """One severity band and how many open items are in it."""
+
+    label: str
+    count: int
+
+
+def count_open_by_severity(items: Sequence[Graded], *, order: Sequence[str]) -> tuple[Bucket, ...]:
+    """Open items per severity band, in the order a reader should see them.
+
+    `doc/05` 6.9 is *"open issues by severity and owner"*, and a severity split
+    is still a **count** — ADR 0034's rule is that nothing divides, not that
+    nothing is grouped. Three counts side by side say which to look at first
+    without implying a proportion of anything.
+
+    **Closed items are excluded.** A register is a queue: an issue somebody
+    resolved last month is not something to look at first, and counting it would
+    make a tidy workspace look like a busy one.
+
+    **`order` is passed in, and every band appears even at zero.** Alphabetical
+    would put "high" between "low" and "medium", which is worse than useless on
+    a figure read for triage. A band at zero is reported rather than dropped,
+    because "no high-severity issues" is the reassuring thing a reader came for
+    and an absent row makes them count the list to be sure.
+
+    A severity outside `order` is counted under its own name at the end rather
+    than silently discarded — the CHECK constraint should make that impossible,
+    and a figure that quietly loses rows when it is not would be worse than one
+    that shows an unexpected label.
+    """
+    open_items = [item for item in items if item.status != DONE]
+    tally: dict[str, int] = {label: 0 for label in order}
+    for item in open_items:
+        tally[item.severity] = tally.get(item.severity, 0) + 1
+
+    return tuple(Bucket(label=label, count=count) for label, count in tally.items())

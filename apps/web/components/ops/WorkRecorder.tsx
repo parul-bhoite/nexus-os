@@ -2,11 +2,18 @@
 
 import { useEffect, useState } from 'react'
 import {
+  ISSUE_STATUSES,
+  MILESTONE_STATUSES,
   PROJECT_STATUSES,
+  SEVERITIES,
   TASK_STATUSES,
+  archiveIssue,
+  archiveMilestone,
   archiveProject,
   archiveTask,
   confirmComplete,
+  createIssue,
+  createMilestone,
   createProject,
   createTask,
   fetchOps,
@@ -124,6 +131,17 @@ export function WorkRecorder() {
   const [taskProject, setTaskProject] = useState('')
   const [taskDue, setTaskDue] = useState('')
 
+  const [milestoneTitle, setMilestoneTitle] = useState('')
+  const [milestoneProject, setMilestoneProject] = useState('')
+  const [milestonePlanned, setMilestonePlanned] = useState('')
+  const [savingMilestone, setSavingMilestone] = useState(false)
+
+  const [issueTitle, setIssueTitle] = useState('')
+  const [issueSeverity, setIssueSeverity] = useState<string>('medium')
+  const [issueProject, setIssueProject] = useState('')
+  const [issueDue, setIssueDue] = useState('')
+  const [savingIssue, setSavingIssue] = useState(false)
+
   async function reload() {
     try {
       setOps(await fetchOps())
@@ -184,11 +202,63 @@ export function WorkRecorder() {
     }
   }
 
-  async function archive(kind: 'project' | 'task', id: string) {
+  async function submitMilestone(event: React.FormEvent) {
+    event.preventDefault()
+    setSavingMilestone(true)
+    setFeedback(null)
+    try {
+      await createMilestone({
+        title: milestoneTitle,
+        project_id: milestoneProject,
+        planned_on: milestonePlanned,
+        status: 'planned',
+      })
+      setMilestoneTitle('')
+      setMilestonePlanned('')
+      setFeedback({ kind: 'done', text: 'Milestone recorded.' })
+      await reload()
+    } catch (error) {
+      setFeedback({ kind: 'error', text: messageOf(error, 'Could not record that milestone.') })
+    } finally {
+      setSavingMilestone(false)
+    }
+  }
+
+  async function submitIssue(event: React.FormEvent) {
+    event.preventDefault()
+    setSavingIssue(true)
+    setFeedback(null)
+    try {
+      await createIssue({
+        title: issueTitle,
+        status: 'open',
+        severity: issueSeverity,
+        project_id: issueProject || null,
+        due_on: issueDue || null,
+      })
+      setIssueTitle('')
+      setIssueDue('')
+      setFeedback({ kind: 'done', text: 'Issue recorded.' })
+      await reload()
+    } catch (error) {
+      setFeedback({ kind: 'error', text: messageOf(error, 'Could not record that issue.') })
+    } finally {
+      setSavingIssue(false)
+    }
+  }
+
+  const ARCHIVERS = {
+    project: archiveProject,
+    task: archiveTask,
+    milestone: archiveMilestone,
+    issue: archiveIssue,
+  } as const
+
+  async function archive(kind: keyof typeof ARCHIVERS, id: string) {
     setArchiving(true)
     setFeedback(null)
     try {
-      await (kind === 'project' ? archiveProject(id) : archiveTask(id))
+      await ARCHIVERS[kind](id)
       await reload()
     } catch (error) {
       setFeedback({ kind: 'error', text: messageOf(error, 'Could not archive that.') })
@@ -215,7 +285,14 @@ export function WorkRecorder() {
 
   const projects = ops?.projects ?? []
   const tasks = ops?.tasks ?? []
-  const nothingYet = ops !== null && projects.length === 0 && tasks.length === 0
+  const milestones = ops?.milestones ?? []
+  const issues = ops?.issues ?? []
+  const nothingYet =
+    ops !== null &&
+    projects.length === 0 &&
+    tasks.length === 0 &&
+    milestones.length === 0 &&
+    issues.length === 0
   const confirmedFor = (entity: string) =>
     (ops?.completeness ?? []).find((entry) => entry.entity === entity) ?? null
 
@@ -458,6 +535,227 @@ export function WorkRecorder() {
                   type="button"
                   disabled={archiving}
                   onClick={() => void archive('task', task.id)}
+                  className="text-2xs text-ink-500 underline hover:text-ink-800 disabled:opacity-60"
+                >
+                  Archive
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="font-display text-lg text-ink-900">Milestones</h2>
+
+        {projects.length === 0 ? (
+          /* A milestone belongs to a project — it is a point in that project's
+             plan. Saying so beats a form whose only option is "no project". */
+          <p className="max-w-prose text-sm text-ink-500">
+            Record a project first. A milestone is a point in a project&rsquo;s plan, so it
+            needs one to belong to.
+          </p>
+        ) : (
+          <form onSubmit={submitMilestone} className="grid max-w-2xl gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className={LABEL} htmlFor="milestone-title">
+                Title
+              </label>
+              <input
+                id="milestone-title"
+                required
+                maxLength={300}
+                value={milestoneTitle}
+                onChange={(event) => setMilestoneTitle(event.target.value)}
+                className={`mt-1 ${FIELD}`}
+              />
+            </div>
+
+            <div>
+              <label className={LABEL} htmlFor="milestone-project">
+                Project
+              </label>
+              <select
+                id="milestone-project"
+                required
+                value={milestoneProject}
+                onChange={(event) => setMilestoneProject(event.target.value)}
+                className={`mt-1 ${FIELD}`}
+              >
+                <option value="">Choose a project</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className={LABEL} htmlFor="milestone-planned">
+                Planned date
+              </label>
+              <input
+                id="milestone-planned"
+                type="date"
+                required
+                value={milestonePlanned}
+                onChange={(event) => setMilestonePlanned(event.target.value)}
+                className={`mt-1 ${FIELD}`}
+              />
+              {/* Required, unlike every other date on this page. */}
+              <p className="mt-1 text-2xs text-ink-400">
+                A timeline cannot draw a milestone with no date.
+              </p>
+            </div>
+
+            <div className="sm:col-span-2">
+              <button
+                type="submit"
+                disabled={savingMilestone}
+                className="rounded-lg bg-ink-800 px-4 py-2 text-sm font-medium text-bone-50 disabled:opacity-60"
+              >
+                {savingMilestone ? 'Recording…' : 'Record milestone'}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {milestones.length > 0 ? (
+          <Completeness
+            noun="milestones"
+            confirmed={confirmedFor('milestones')}
+            busy={confirming === 'milestones'}
+            onConfirm={() => void confirm('milestones')}
+          />
+        ) : null}
+
+        {milestones.length > 0 ? (
+          <ul className="max-w-2xl divide-y divide-ink-100 rounded-xl border border-ink-100">
+            {milestones.map((milestone) => (
+              <li key={milestone.id} className="flex flex-wrap items-baseline gap-x-3 px-4 py-3">
+                <span className="min-w-0 grow text-sm text-ink-800">{milestone.title}</span>
+                <span className="font-mono text-2xs uppercase tracking-[0.08em] text-ink-500">
+                  {milestone.status}
+                </span>
+                <span className="text-2xs text-ink-400">{milestone.planned_on}</span>
+                <button
+                  type="button"
+                  disabled={archiving}
+                  onClick={() => void archive('milestone', milestone.id)}
+                  className="text-2xs text-ink-500 underline hover:text-ink-800 disabled:opacity-60"
+                >
+                  Archive
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="font-display text-lg text-ink-900">Issues and snags</h2>
+
+        <form onSubmit={submitIssue} className="grid max-w-2xl gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className={LABEL} htmlFor="issue-title">
+              What is the issue?
+            </label>
+            <input
+              id="issue-title"
+              required
+              maxLength={300}
+              value={issueTitle}
+              onChange={(event) => setIssueTitle(event.target.value)}
+              className={`mt-1 ${FIELD}`}
+            />
+          </div>
+
+          <div>
+            <label className={LABEL} htmlFor="issue-severity">
+              Severity
+            </label>
+            <select
+              id="issue-severity"
+              value={issueSeverity}
+              onChange={(event) => setIssueSeverity(event.target.value)}
+              className={`mt-1 ${FIELD}`}
+            >
+              {SEVERITIES.map((severity) => (
+                <option key={severity} value={severity}>
+                  {severity}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className={LABEL} htmlFor="issue-project">
+              Project <span className="font-normal text-ink-400">(optional)</span>
+            </label>
+            <select
+              id="issue-project"
+              value={issueProject}
+              onChange={(event) => setIssueProject(event.target.value)}
+              className={`mt-1 ${FIELD}`}
+            >
+              <option value="">No project</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className={LABEL} htmlFor="issue-due">
+              Due <span className="font-normal text-ink-400">(optional)</span>
+            </label>
+            <input
+              id="issue-due"
+              type="date"
+              value={issueDue}
+              onChange={(event) => setIssueDue(event.target.value)}
+              className={`mt-1 ${FIELD}`}
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <button
+              type="submit"
+              disabled={savingIssue}
+              className="rounded-lg bg-ink-800 px-4 py-2 text-sm font-medium text-bone-50 disabled:opacity-60"
+            >
+              {savingIssue ? 'Recording…' : 'Record issue'}
+            </button>
+          </div>
+        </form>
+
+        {issues.length > 0 ? (
+          <Completeness
+            noun="issues"
+            confirmed={confirmedFor('issues')}
+            busy={confirming === 'issues'}
+            onConfirm={() => void confirm('issues')}
+          />
+        ) : null}
+
+        {issues.length > 0 ? (
+          <ul className="max-w-2xl divide-y divide-ink-100 rounded-xl border border-ink-100">
+            {issues.map((issue) => (
+              <li key={issue.id} className="flex flex-wrap items-baseline gap-x-3 px-4 py-3">
+                <span className="min-w-0 grow text-sm text-ink-800">{issue.title}</span>
+                <span className="font-mono text-2xs uppercase tracking-[0.08em] text-ink-500">
+                  {issue.severity}
+                </span>
+                <span className="font-mono text-2xs uppercase tracking-[0.08em] text-ink-400">
+                  {issue.status}
+                </span>
+                <button
+                  type="button"
+                  disabled={archiving}
+                  onClick={() => void archive('issue', issue.id)}
                   className="text-2xs text-ink-500 underline hover:text-ink-800 disabled:opacity-60"
                 >
                   Archive

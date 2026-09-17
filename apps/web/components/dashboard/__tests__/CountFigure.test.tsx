@@ -38,6 +38,7 @@ function count(overrides: Partial<CountFigure> = {}): CountFigure {
     self_reported: true,
     complete_as_of: '',
     confirmed_on: '',
+    breakdown: [],
     method: 'calculators.ops.count_items',
     ...overrides,
   }
@@ -155,6 +156,52 @@ describe('whether anybody has vouched for the list — D29, ADR 0035', () => {
 
     expect(container.textContent).not.toMatch(/%/)
     expect(container.textContent).not.toMatch(/\bout of\b/)
+  })
+})
+
+describe('the severity breakdown — the issue register', () => {
+  const graded = () =>
+    count({
+      noun: 'issues',
+      label: 'Issues recorded',
+      breakdown: [
+        { label: 'high', count: 0 },
+        { label: 'medium', count: 2 },
+        { label: 'low', count: 5 },
+      ],
+    })
+
+  it('shows every band, in the order the server sent', () => {
+    /** Never re-sorted here: alphabetically "high" falls between "low" and
+     *  "medium", which on a figure read for triage is worse than no order. */
+    const { container } = render(<BlockCard block={block(graded())} department="operations" />)
+    const labels = Array.from(container.querySelectorAll('dt'), (node) => node.textContent)
+
+    expect(labels).toEqual(['high', 'medium', 'low'])
+  })
+
+  it('shows a band at zero rather than dropping it', () => {
+    /** "No high-severity issues" is the reassuring thing somebody came for, and
+     *  an absent row makes them count the list to be sure. */
+    const { container } = render(<BlockCard block={block(graded())} department="operations" />)
+    const counts = Array.from(container.querySelectorAll('dd'), (node) => node.textContent)
+
+    expect(counts).toEqual(['0', '2', '5'])
+  })
+
+  it('draws no share, proportion or bar', () => {
+    /** Three counts side by side. A stacked bar reads as a share of a whole,
+     *  and ADR 0034's rule is that nothing here divides. */
+    const { container } = render(<BlockCard block={block(graded())} department="operations" />)
+
+    expect(container.textContent).not.toMatch(/%/)
+    expect(container.querySelector('progress')).toBeNull()
+  })
+
+  it('renders no breakdown for a record type that has none', () => {
+    const { container } = render(<BlockCard block={block()} department="operations" />)
+
+    expect(container.querySelector('dl')).toBeNull()
   })
 })
 

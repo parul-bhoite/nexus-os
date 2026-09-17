@@ -58,6 +58,33 @@ _TASKS: Final = sa.text(
 )
 
 
+_MILESTONES: Final = sa.text(
+    """
+    SELECT id, project_id, title, status, planned_on, updated_at
+      FROM ops_milestone
+     WHERE workspace_id = :w AND archived_at IS NULL
+     ORDER BY planned_on, title
+    """
+)
+"""Live milestones, soonest first.
+
+No `NULLS LAST` here and no need for one: `planned_on` is `NOT NULL`, because
+doc/05 6.3 is "milestones with planned dates" and a milestone with no date is
+the one thing a timeline cannot draw.
+"""
+
+_ISSUES: Final = sa.text(
+    """
+    SELECT id, project_id, title, status, severity, owner_id, due_on, updated_at
+      FROM ops_issue
+     WHERE workspace_id = :w AND archived_at IS NULL
+     ORDER BY due_on NULLS LAST, title
+    """
+)
+"""Live issues. Ordered by date rather than by severity, because severity is
+ordered in code — the column is text, so `ORDER BY severity` would sort "high"
+between "low" and "medium"."""
+
 _COMPLETENESS: Final = sa.text(
     """
     SELECT DISTINCT ON (entity) entity, complete_as_of, confirmed_at
@@ -96,6 +123,36 @@ class Task:
 
 
 @dataclass(frozen=True, slots=True)
+class Milestone:
+    id: UUID
+    project_id: UUID
+    title: str
+    status: str
+    planned_on: date
+
+    @property
+    def due_on(self) -> date:
+        """`Dated`'s name for it, so `count_items` needs no second shape.
+
+        A milestone's planned date *is* the date it is late against. Two column
+        names for one idea would mean two ways to be overdue, and only one of
+        them would be the one the tile reads.
+        """
+        return self.planned_on
+
+
+@dataclass(frozen=True, slots=True)
+class Issue:
+    id: UUID
+    project_id: UUID | None
+    title: str
+    status: str
+    severity: str
+    owner_id: UUID | None
+    due_on: date | None
+
+
+@dataclass(frozen=True, slots=True)
 class OpsSnapshot:
     """What this workspace has recorded, and when it last changed.
 
@@ -107,7 +164,9 @@ class OpsSnapshot:
 
     projects: list[Project]
     tasks: list[Task]
-    recorded_at: datetime | None
+    milestones: list[Milestone] = field(default_factory=list)
+    issues: list[Issue] = field(default_factory=list)
+    recorded_at: datetime | None = None
 
     confirmations: dict[str, Confirmation] = field(default_factory=dict)
     """The newest completeness confirmation per entity, keyed by entity.
@@ -128,18 +187,25 @@ async def current_ops(db: AsyncSession, scope: ScopedSession) -> OpsSnapshot | N
     empty *list* inside a snapshot would mean somebody has used it and currently
     has nothing open, which is a real and different state.
     """
-    project_rows = (await db.execute(_PROJECTS, {"w": str(scope.workspace_id)})).all()
-    task_rows = (await db.execute(_TASKS, {"w": str(scope.workspace_id)})).all()
+    workspace = {"w": str(scope.workspace_id)}
+    project_rows = (await db.execute(_PROJECTS, workspace)).all()
+    task_rows = (await db.execute(_TASKS, workspace)).all()
+    milestone_rows = (await db.execute(_MILESTONES, workspace)).all()
+    issue_rows = (await db.execute(_ISSUES, workspace)).all()
 
-    if not project_rows and not task_rows:
+    if not project_rows and not task_rows and not milestone_rows and not issue_rows:
         # Read before the confirmations on purpose: a workspace that has
         # recorded nothing cannot have vouched for anything, and a third round
         # trip to `us-east-2` to prove that costs a page load for no answer.
         return None
 
-    confirmation_rows = (await db.execute(_COMPLETENESS, {"w": str(scope.workspace_id)})).all()
+    confirmation_rows = (await db.execute(_COMPLETENESS, workspace)).all()
 
-    stamps = [row.updated_at for row in project_rows] + [row.updated_at for row in task_rows]
+    stamps = [
+        row.updated_at
+        for rows in (project_rows, task_rows, milestone_rows, issue_rows)
+        for row in rows
+    ]
 
     return OpsSnapshot(
         projects=[
@@ -162,6 +228,28 @@ async def current_ops(db: AsyncSession, scope: ScopedSession) -> OpsSnapshot | N
                 due_on=row.due_on,
             )
             for row in task_rows
+        ],
+        milestones=[
+            Milestone(
+                id=row.id,
+                project_id=row.project_id,
+                title=row.title,
+                status=row.status,
+                planned_on=row.planned_on,
+            )
+            for row in milestone_rows
+        ],
+        issues=[
+            Issue(
+                id=row.id,
+                project_id=row.project_id,
+                title=row.title,
+                status=row.status,
+                severity=row.severity,
+                owner_id=row.owner_id,
+                due_on=row.due_on,
+            )
+            for row in issue_rows
         ],
         recorded_at=max(stamps) if stamps else None,
         confirmations={

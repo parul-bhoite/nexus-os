@@ -17,7 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
-from app.calculators.ops import OpsCounts, count_items
+from app.calculators.ops import OpsCounts, count_items, count_open_by_severity
 
 TODAY = date(2026, 9, 17)
 
@@ -148,3 +148,77 @@ def test_the_counts_add_up() -> None:
 
     assert result.done + result.open_items == result.recorded
     assert result.overdue + result.undated <= result.open_items
+
+
+# ── Severity, for the issue register ──────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class Snag:
+    status: str
+    severity: str
+
+
+ORDER = ("high", "medium", "low")
+
+
+def test_it_counts_open_items_in_each_severity_band() -> None:
+    result = count_open_by_severity(
+        [Snag("open", "high"), Snag("open", "low"), Snag("open", "low")], order=ORDER
+    )
+
+    assert {bucket.label: bucket.count for bucket in result} == {"high": 1, "medium": 0, "low": 2}
+
+
+def test_a_band_with_nothing_in_it_is_reported_rather_than_dropped() -> None:
+    """ "No high-severity issues" is the reassuring thing a reader came for. An
+    absent row makes them count the list to be sure."""
+    result = count_open_by_severity([Snag("open", "low")], order=ORDER)
+
+    assert [bucket.label for bucket in result] == ["high", "medium", "low"]
+    assert result[0].count == 0
+
+
+def test_closed_items_are_not_in_the_register() -> None:
+    """A register is a queue. An issue somebody resolved last month is not
+    something to look at first, and counting it makes a tidy workspace look
+    busy."""
+    result = count_open_by_severity([Snag("done", "high"), Snag("open", "high")], order=ORDER)
+
+    assert result[0].count == 1
+
+
+def test_the_order_is_the_one_passed_in_and_not_alphabetical() -> None:
+    """**The reason `order` is an argument.** `severity` is a text column, so
+    sorting it puts "high" between "low" and "medium" — worse than no order at
+    all on a figure read for triage."""
+    labels = [bucket.label for bucket in count_open_by_severity([], order=ORDER)]
+
+    assert labels == ["high", "medium", "low"]
+    assert labels != sorted(labels)
+
+
+def test_an_unexpected_severity_is_counted_rather_than_discarded() -> None:
+    """The CHECK constraint should make this impossible. A figure that quietly
+    loses rows when it is not would be worse than one showing a label nobody
+    expected."""
+    result = count_open_by_severity([Snag("open", "catastrophic")], order=ORDER)
+
+    assert {bucket.label: bucket.count for bucket in result}["catastrophic"] == 1
+
+
+def test_the_bands_add_up_to_what_is_open() -> None:
+    items = [Snag("open", "high"), Snag("open", "low"), Snag("done", "high")]
+
+    banded = sum(bucket.count for bucket in count_open_by_severity(items, order=ORDER))
+
+    assert banded == 2
+
+
+def test_nothing_in_a_band_is_a_share_of_anything() -> None:
+    """ADR 0034 forbids dividing, not grouping. A band is a count beside other
+    counts, never a slice of a pie that implies a proportion."""
+    result = count_open_by_severity([Snag("open", "high"), Snag("open", "low")], order=ORDER)
+
+    assert all(isinstance(bucket.count, int) for bucket in result)
+    assert not any(hasattr(bucket, "share") or hasattr(bucket, "percentage") for bucket in result)

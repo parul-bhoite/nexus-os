@@ -30,6 +30,9 @@ import re
 import sys
 import time
 
+from datetime import date, timedelta
+from uuid import uuid4
+
 import httpx
 
 API = "http://127.0.0.1:8001"
@@ -231,7 +234,71 @@ check(
     str(board)[:200],
 )
 
-print("\n\033[1m5. Another workspace sees none of it\033[0m")
+print("\n\033[1m5. Milestones and issues — S10.3\033[0m")
+# Relative to today, never hardcoded. A literal date passes until the day it
+# stops being in the future, and then reads as a defect in the calculator.
+AHEAD = (date.today() + timedelta(days=60)).isoformat()
+PASSED = (date.today() - timedelta(days=30)).isoformat()
+
+r = a.post(
+    "/ops/milestones",
+    json={"title": "Glazing signed off", "project_id": project_id, "planned_on": AHEAD},
+    headers=token(a),
+)
+check("POST /ops/milestones -> 201", r.status_code == 201, r.text[:300])
+
+r = a.post(
+    "/ops/milestones",
+    json={"title": "Slab poured", "project_id": project_id, "planned_on": PASSED},
+    headers=token(a),
+)
+check("a second milestone, dated in the past", r.status_code == 201, r.text[:300])
+
+r = a.post(
+    "/ops/milestones",
+    json={"title": "Orphan", "project_id": str(uuid4()), "planned_on": "2026-02-01"},
+    headers=token(a),
+)
+check("a milestone on a project that is not ours is a 404", r.status_code == 404, str(r.status_code))
+
+for severity in ("high", "low", "low"):
+    a.post(
+        "/ops/issues",
+        json={"title": f"Snag {severity}", "severity": severity, "project_id": project_id},
+        headers=token(a),
+    )
+r = a.post("/ops/issues", json={"title": "Bad", "severity": "catastrophic"}, headers=token(a))
+check("an unknown severity is a 422 naming the field", r.status_code == 422 and "severity" in r.text,
+      f"{r.status_code} {r.text[:150]}")
+
+tiles = {x["key"]: x for x in a.get("/dashboards/surface").json().get("measured", [])}
+milestones = tiles.get("operations.milestone_timeline", {}).get("figure") or {}
+register = tiles.get("operations.issue_register", {}).get("figure") or {}
+
+check("operations.milestone_timeline carries a figure", bool(milestones), str(list(tiles)))
+check("two milestones recorded, one of them past its planned date",
+      (milestones.get("recorded"), milestones.get("overdue")) == (2, 1), str(milestones)[:200])
+check("a milestone always has a date, so none is undated", milestones.get("undated") == 0,
+      str(milestones)[:200])
+
+check("operations.issue_register carries a figure", bool(register), str(list(tiles)))
+check("three issues recorded", register.get("recorded") == 3, str(register)[:200])
+bands = {b["label"]: b["count"] for b in register.get("breakdown", [])}
+check("split by severity, worst first, every band present",
+      [b["label"] for b in register.get("breakdown", [])] == ["high", "medium", "low"], str(bands))
+check("and the counts are right", bands == {"high": 1, "medium": 0, "low": 2}, str(bands))
+check("the bands are counts and add up to what is open",
+      sum(bands.values()) == register.get("open_items"), f"{bands} vs {register.get('open_items')}")
+check("still no percentage anywhere", "%" not in str(register), str(register)[:200])
+
+check("only projects and tasks have no breakdown",
+      (tiles.get("operations.projects_board", {}).get("figure") or {}).get("breakdown") == [],
+      str(tiles.get("operations.projects_board"))[:150])
+
+r = a.post("/ops/completeness", json={"entity": "issues"}, headers=token(a))
+check("completeness can now be confirmed for issues too", r.status_code == 201, r.text[:200])
+
+print("\n\033[1m6. Another workspace sees none of it\033[0m")
 b = founder("b")
 r = b.get("/ops")
 check(
@@ -246,7 +313,7 @@ if project_id:
     still = a.get("/ops").json()["projects"]
     check("the project is still there for its owner", len(still) == 1, str(still)[:200])
 
-print("\n\033[1m6. Archive stops it counting without deleting it\033[0m")
+print("\n\033[1m7. Archive stops it counting without deleting it\033[0m")
 if project_id:
     r = a.delete(f"/ops/projects/{project_id}", headers=token(a))
     check("DELETE /ops/projects/{id} -> 204", r.status_code == 204, str(r.status_code))

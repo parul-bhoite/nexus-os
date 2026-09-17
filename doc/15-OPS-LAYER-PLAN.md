@@ -168,8 +168,34 @@ would have blanked the counts S10.1 shipped — and it needs to keep its meaning
 Asserted by `scripts/ops_walkthrough.py`: 34 checks, green, including that confirming
 projects does not vouch for tasks and that a confirmation adds no rate to the figure.
 
-### S10.3 — Milestones and issues
+### S10.3 — Milestones and issues ✅ *shipped 17 September 2026*
 `operations.milestone_timeline`, `operations.issue_register`. Both hang off a project.
+
+Migration `0034` adds `ops_milestone` and `ops_issue` (RLS forced on both) and widens
+`ck_ops_completeness_entity` to four entities, so D29's question is now asked of these two
+as well.
+
+**`project_id` differs between them, and that is not an oversight.** A milestone's is
+`NOT NULL` — a milestone is a point in a project's plan, and one without a project is not
+a milestone, it is a date. An issue's is nullable, for `ops_task`'s reason: requiring one
+would make somebody invent a project to record a snag, and an invented project then counts
+on `projects_board`.
+
+**`planned_on` is `NOT NULL`**, the only required date in the layer. doc/05 6.3 is
+*"milestones with planned dates"*, and a milestone with no date is the one thing a
+timeline cannot draw — it would silently join the `undated` count on a tile whose whole
+subject is when things happen. There is deliberately **no `missed` status**: a missed
+milestone is a planned date in the past that nobody marked done, which the calculator
+already works out, and storing it too would let the two disagree.
+
+**The issue register is the first figure with a breakdown** — open issues per severity,
+worst first. Still a count: ADR 0034 forbids dividing, not grouping, and three counts side
+by side say what to look at first without implying a proportion. Every band is rendered
+even at zero, because *"no high-severity issues"* is the reassuring thing a reader came
+for and an absent row makes them count the list to be sure. The order is the server's;
+sorting in the browser would put "high" between "low" and "medium".
+
+Asserted by `scripts/ops_walkthrough.py`: 49 checks, green.
 
 ### S10.4 — Dispatches
 `operations.on_time_dispatch` — the first ops **rate**, and the first to need onboarding

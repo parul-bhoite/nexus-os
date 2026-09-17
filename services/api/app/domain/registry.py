@@ -483,6 +483,11 @@ _IMPLEMENTED: Final[frozenset[str]] = frozenset(
         # the first to carry a **count** (ADR 0034).
         "operations.projects_board",
         "operations.task_queue",
+        # `doc/15` S10.3. Both hang off a project, both are counts, and the
+        # issue register is the first figure to carry a **breakdown** — still a
+        # count, because ADR 0034 forbids dividing rather than grouping.
+        "operations.milestone_timeline",
+        "operations.issue_register",
     }
 )
 
@@ -510,6 +515,11 @@ _REACHABLE: Final[frozenset[str]] = _setup_and_watchlist_ids() | frozenset(
         # the count figure says "recorded" in its own label for that reason.
         "operations.projects_board",
         "operations.task_queue",
+        # Same shape: `locked` until this workspace records something, `live`
+        # afterwards. Whether the record is *complete* is D29's question, and
+        # the figure carries the answer rather than the state (ADR 0035).
+        "operations.milestone_timeline",
+        "operations.issue_register",
     }
 )
 """**The capabilities a person can actually open.**

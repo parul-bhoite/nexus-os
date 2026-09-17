@@ -32,12 +32,13 @@ on it, so an archived row stops counting immediately without stopping existing.
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
-from typing import Annotated
+from typing import Annotated, Final
 from uuid import UUID
 
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.csrf import require_csrf
 from app.calculators.completeness import ENTITIES
@@ -52,6 +53,9 @@ log = get_logger(__name__)
 
 PROJECT_STATUSES = frozenset({"planned", "active", "blocked", "done"})
 TASK_STATUSES = frozenset({"todo", "doing", "done"})
+MILESTONE_STATUSES = frozenset({"planned", "done"})
+ISSUE_STATUSES = frozenset({"open", "done"})
+SEVERITIES = frozenset({"low", "medium", "high"})
 
 
 class ProjectIn(BaseModel):
@@ -67,6 +71,50 @@ class TaskIn(BaseModel):
     project_id: UUID | None = None
     assignee_id: UUID | None = None
     due_on: date | None = None
+
+
+class MilestoneIn(BaseModel):
+    title: Annotated[str, Field(min_length=1, max_length=300)]
+    project_id: UUID
+    """Required, unlike a task's. A milestone is a point in a project's plan;
+    one without a project is not a milestone, it is a date."""
+
+    planned_on: date
+    """Required too — `doc/05` 6.3 is "milestones with planned dates", and a
+    milestone with no date is the one thing a timeline cannot draw."""
+
+    status: str = "planned"
+
+
+class IssueIn(BaseModel):
+    title: Annotated[str, Field(min_length=1, max_length=300)]
+    status: str = "open"
+    severity: str = "medium"
+    project_id: UUID | None = None
+    """Nullable, unlike a milestone's and for `ops_task`'s reason: requiring one
+    would make somebody invent a project to record a snag, and an invented
+    project then counts on `projects_board`."""
+
+    owner_id: UUID | None = None
+    due_on: date | None = None
+
+
+class MilestoneOut(BaseModel):
+    id: UUID
+    project_id: UUID
+    title: str
+    status: str
+    planned_on: date
+
+
+class IssueOut(BaseModel):
+    id: UUID
+    project_id: UUID | None
+    title: str
+    status: str
+    severity: str
+    owner_id: UUID | None
+    due_on: date | None
 
 
 class ProjectOut(BaseModel):
@@ -103,6 +151,8 @@ class ConfirmationOut(BaseModel):
 class OpsOut(BaseModel):
     projects: list[ProjectOut]
     tasks: list[TaskOut]
+    milestones: list[MilestoneOut]
+    issues: list[IssueOut]
     completeness: list[ConfirmationOut]
     """Who has vouched for what — ADR 0035 (D29).
 
@@ -131,6 +181,40 @@ def _may_write(scope: CurrentScope) -> None:
         )
 
 
+ARCHIVABLE: Final[frozenset[str]] = frozenset(
+    {"ops_project", "ops_task", "ops_milestone", "ops_issue"}
+)
+"""The tables `_archive` may write to.
+
+The table name is interpolated into SQL, so it is checked against a closed set
+rather than trusted. Every caller passes a literal today and none of them is
+reachable from a request body — this is the guard that keeps that true when a
+fifth record type arrives and somebody is tempted to take the name from a path.
+"""
+
+
+async def _archive(scope: CurrentScope, table: str, row_id: UUID) -> None:
+    """Archive, not delete. Idempotent — archiving twice is the same intent.
+
+    One implementation for four record types. It was two hand-written copies
+    until S10.3 would have made it four, and four copies of "archive means set
+    this column" is four places for one of them to start meaning `DELETE`.
+    """
+    _may_write(scope)
+    if table not in ARCHIVABLE:  # pragma: no cover - a guard against a future caller
+        raise ValueError(f"{table} is not an archivable ops table")
+
+    async with scoped_connection(scope) as db:
+        await db.execute(
+            sa.text(
+                f"UPDATE {table} SET archived_at = :now, updated_at = :now"  # noqa: S608
+                " WHERE id = :id AND workspace_id = :w AND archived_at IS NULL"
+            ),
+            {"id": str(row_id), "w": str(scope.workspace_id), "now": datetime.now(UTC)},
+        )
+        await db.commit()
+
+
 def _validate(value: str, allowed: frozenset[str], field: str) -> str:
     """Refuse an unknown status here rather than at the CHECK constraint.
 
@@ -157,12 +241,36 @@ async def read_ops(scope: CurrentScope) -> OpsOut:
         snapshot = await current_ops(db, scope)
 
     if snapshot is None:
-        return OpsOut(projects=[], tasks=[], completeness=[], recorded_at="")
+        return OpsOut(
+            projects=[], tasks=[], milestones=[], issues=[], completeness=[], recorded_at=""
+        )
 
     return OpsOut(
         projects=[
             ProjectOut(id=p.id, name=p.name, status=p.status, client=p.client, due_on=p.due_on)
             for p in snapshot.projects
+        ],
+        milestones=[
+            MilestoneOut(
+                id=m.id,
+                project_id=m.project_id,
+                title=m.title,
+                status=m.status,
+                planned_on=m.planned_on,
+            )
+            for m in snapshot.milestones
+        ],
+        issues=[
+            IssueOut(
+                id=i.id,
+                project_id=i.project_id,
+                title=i.title,
+                status=i.status,
+                severity=i.severity,
+                owner_id=i.owner_id,
+                due_on=i.due_on,
+            )
+            for i in snapshot.issues
         ],
         completeness=[
             ConfirmationOut(
@@ -294,17 +402,7 @@ async def create_task(body: TaskIn, scope: CurrentScope) -> TaskOut:
 )
 async def archive_project(project_id: UUID, scope: CurrentScope) -> None:
     """Archive, not delete. Idempotent — archiving twice is the same intent."""
-    _may_write(scope)
-
-    async with scoped_connection(scope) as db:
-        await db.execute(
-            sa.text(
-                "UPDATE ops_project SET archived_at = :now, updated_at = :now"
-                " WHERE id = :p AND workspace_id = :w AND archived_at IS NULL"
-            ),
-            {"p": str(project_id), "w": str(scope.workspace_id), "now": datetime.now(UTC)},
-        )
-        await db.commit()
+    await _archive(scope, "ops_project", project_id)
 
 
 @router.delete(
@@ -313,17 +411,7 @@ async def archive_project(project_id: UUID, scope: CurrentScope) -> None:
     dependencies=[Depends(require_csrf)],
 )
 async def archive_task(task_id: UUID, scope: CurrentScope) -> None:
-    _may_write(scope)
-
-    async with scoped_connection(scope) as db:
-        await db.execute(
-            sa.text(
-                "UPDATE ops_task SET archived_at = :now, updated_at = :now"
-                " WHERE id = :t AND workspace_id = :w AND archived_at IS NULL"
-            ),
-            {"t": str(task_id), "w": str(scope.workspace_id), "now": datetime.now(UTC)},
-        )
-        await db.commit()
+    await _archive(scope, "ops_task", task_id)
 
 
 @router.post(
@@ -385,3 +473,144 @@ async def confirm_completeness(body: ConfirmationIn, scope: CurrentScope) -> Con
         complete_as_of=row.complete_as_of,
         confirmed_on=row.confirmed_at.date(),
     )
+
+
+async def _project_exists(db: AsyncSession, scope: CurrentScope, project_id: UUID) -> bool:
+    """Whether this workspace has a live project with that id.
+
+    Extracted when milestones and issues needed the same check `create_task`
+    already made. **RLS is what makes the write safe**; this exists so a
+    mismatched id is a 404 naming the project rather than a foreign-key error
+    naming a constraint, since the policy hides the row the FK points at.
+    """
+    found = (
+        await db.execute(
+            sa.text(
+                "SELECT 1 FROM ops_project"
+                " WHERE id = :p AND workspace_id = :w AND archived_at IS NULL"
+            ),
+            {"p": str(project_id), "w": str(scope.workspace_id)},
+        )
+    ).one_or_none()
+    return found is not None
+
+
+@router.post(
+    "/milestones",
+    response_model=MilestoneOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_csrf)],
+)
+async def create_milestone(body: MilestoneIn, scope: CurrentScope) -> MilestoneOut:
+    """Record a milestone — `doc/15` S10.3.
+
+    **There is no `missed` status to set.** A missed milestone is a planned date
+    in the past that nobody marked done, which `calculators/ops.count_items`
+    already works out. Storing it as well would let the stored value and the
+    computed one disagree, and whichever the tile happened to read would be the
+    one on the screen.
+    """
+    _may_write(scope)
+    _validate(body.status, MILESTONE_STATUSES, "status")
+
+    async with scoped_connection(scope) as db:
+        if not await _project_exists(db, scope, body.project_id):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "That project does not exist here.")
+
+        row = (
+            await db.execute(
+                sa.text(
+                    "INSERT INTO ops_milestone"
+                    " (workspace_id, project_id, title, status, planned_on, created_by)"
+                    " VALUES (:w, :project, :title, :status, :planned, :user)"
+                    " RETURNING id, project_id, title, status, planned_on"
+                ),
+                {
+                    "w": str(scope.workspace_id),
+                    "project": str(body.project_id),
+                    "title": body.title.strip(),
+                    "status": body.status,
+                    "planned": body.planned_on,
+                    "user": str(scope.user_id),
+                },
+            )
+        ).one()
+        await db.commit()
+
+    log.info("ops.milestone_created", status=body.status)
+    return MilestoneOut(
+        id=row.id,
+        project_id=row.project_id,
+        title=row.title,
+        status=row.status,
+        planned_on=row.planned_on,
+    )
+
+
+@router.post(
+    "/issues",
+    response_model=IssueOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_csrf)],
+)
+async def create_issue(body: IssueIn, scope: CurrentScope) -> IssueOut:
+    """Record an issue or snag — `doc/15` S10.3."""
+    _may_write(scope)
+    _validate(body.status, ISSUE_STATUSES, "status")
+    _validate(body.severity, SEVERITIES, "severity")
+
+    async with scoped_connection(scope) as db:
+        if body.project_id is not None and not await _project_exists(db, scope, body.project_id):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "That project does not exist here.")
+
+        row = (
+            await db.execute(
+                sa.text(
+                    "INSERT INTO ops_issue"
+                    " (workspace_id, project_id, title, status, severity, owner_id,"
+                    "  due_on, created_by)"
+                    " VALUES (:w, :project, :title, :status, :severity, :owner, :due, :user)"
+                    " RETURNING id, project_id, title, status, severity, owner_id, due_on"
+                ),
+                {
+                    "w": str(scope.workspace_id),
+                    "project": str(body.project_id) if body.project_id else None,
+                    "title": body.title.strip(),
+                    "status": body.status,
+                    "severity": body.severity,
+                    "owner": str(body.owner_id) if body.owner_id else None,
+                    "due": body.due_on,
+                    "user": str(scope.user_id),
+                },
+            )
+        ).one()
+        await db.commit()
+
+    log.info("ops.issue_created", severity=body.severity)
+    return IssueOut(
+        id=row.id,
+        project_id=row.project_id,
+        title=row.title,
+        status=row.status,
+        severity=row.severity,
+        owner_id=row.owner_id,
+        due_on=row.due_on,
+    )
+
+
+@router.delete(
+    "/milestones/{milestone_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_csrf)],
+)
+async def archive_milestone(milestone_id: UUID, scope: CurrentScope) -> None:
+    await _archive(scope, "ops_milestone", milestone_id)
+
+
+@router.delete(
+    "/issues/{issue_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_csrf)],
+)
+async def archive_issue(issue_id: UUID, scope: CurrentScope) -> None:
+    await _archive(scope, "ops_issue", issue_id)

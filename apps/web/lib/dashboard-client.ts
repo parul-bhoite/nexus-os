@@ -188,6 +188,17 @@ export type CountFigure = {
   complete_as_of: string
   /** When they said it. Separate from `complete_as_of`. */
   confirmed_on: string
+  /**
+   * Open items per severity band, worst first — empty for a record type with no
+   * severity.
+   *
+   * Still a count: ADR 0034 forbids dividing, not grouping. Every band is
+   * present even at zero, because "no high-severity issues" is the reassuring
+   * thing a reader came for and an absent row makes them count to be sure. The
+   * order is the server's — sorting here would put "high" between "low" and
+   * "medium".
+   */
+  breakdown: { label: string; count: number }[]
   method: string
 }
 

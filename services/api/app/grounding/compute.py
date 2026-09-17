@@ -25,8 +25,15 @@ from datetime import UTC, date, datetime
 from typing import Any, Final, Protocol
 
 from app.calculators.audit import CategoryScore, score_brand, score_technical_seo
-from app.calculators.completeness import PROJECTS, TASKS, Confirmation
-from app.calculators.ops import Dated, OpsCounts, count_items
+from app.calculators.completeness import ISSUES, MILESTONES, PROJECTS, TASKS, Confirmation
+from app.calculators.ops import (
+    Bucket,
+    Dated,
+    Graded,
+    OpsCounts,
+    count_items,
+    count_open_by_severity,
+)
 from app.calculators.pipeline import Deal, Pipeline, compute_pipeline
 from app.domain.page_signals import PageSignals
 from app.grounding.pipeline import Computed
@@ -163,9 +170,23 @@ keys would be grounded in nothing (ADR 0033).
 
 
 class Records(Protocol):
-    """Picks one of a snapshot's two lists. `PipelineCalculator`'s sibling."""
+    """Picks one of a snapshot's lists. `PipelineCalculator`'s sibling."""
 
     def __call__(self, snapshot: OpsSnapshot) -> Sequence[Dated]: ...
+
+
+class GradedRecords(Protocol):
+    """Picks a list whose items carry a severity."""
+
+    def __call__(self, snapshot: OpsSnapshot) -> Sequence[Graded]: ...
+
+
+SEVERITY_ORDER: Final[tuple[str, ...]] = ("high", "medium", "low")
+"""Worst first, ordered here rather than by the column.
+
+`severity` is text, so `ORDER BY severity` sorts "high" between "low" and
+"medium" — which on a figure read for triage is worse than no order at all.
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,6 +222,12 @@ class Census:
     measures: str
     method: str
 
+    graded: GradedRecords | None = None
+    """Where the severity breakdown comes from, for the capabilities that have
+    one. `None` for most: a project is not more or less severe than another
+    project, and inventing a band for every record type would be a dimension
+    nobody recorded."""
+
 
 OPS_CENSUSES: Final[dict[str, Census]] = {
     "operations.projects_board": Census(
@@ -228,6 +255,33 @@ OPS_CENSUSES: Final[dict[str, Census]] = {
             "written down, which is not the same as what is being done."
         ),
         method="calculators.ops.count_items",
+    ),
+    "operations.milestone_timeline": Census(
+        select=lambda snapshot: snapshot.milestones,
+        entity=MILESTONES,
+        noun="milestones",
+        label="Milestones recorded",
+        measures=(
+            "Every milestone recorded against a project, counted: how many are still "
+            "ahead and how many passed their planned date without being marked done. "
+            "Not a schedule forecast and not a slip in days — both would need a "
+            "baseline nobody set when the date was first written down."
+        ),
+        method="calculators.ops.count_items",
+    ),
+    "operations.issue_register": Census(
+        select=lambda snapshot: snapshot.issues,
+        entity=ISSUES,
+        noun="issues",
+        label="Issues recorded",
+        measures=(
+            "Every issue recorded and not yet closed, counted and split by the "
+            "severity somebody gave it. Not a resolution time and not a rate of any "
+            "kind — this says what is open, which is not the same as how quickly "
+            "anything gets fixed."
+        ),
+        method="calculators.ops.count_items",
+        graded=lambda snapshot: snapshot.issues,
     ),
 }
 """The third dispatch, and the first over rows NEXUS itself stores.
@@ -261,6 +315,13 @@ class CountComputation:
     measures: str
     noun: str
     counts: OpsCounts
+    breakdown: tuple[Bucket, ...]
+    """Open items per severity band, or empty for a record type that has none.
+
+    Still a count — ADR 0034 forbids dividing, not grouping. Three counts side
+    by side say which to look at first without implying a proportion.
+    """
+
     recorded_at: datetime
 
     confirmation: Confirmation | None
@@ -294,6 +355,11 @@ def compute_from_ops(
 
     counts = count_items(census.select(snapshot), today=today)
     confirmation = snapshot.confirmations.get(census.entity)
+    breakdown = (
+        count_open_by_severity(census.graded(snapshot), order=SEVERITY_ORDER)
+        if census.graded is not None
+        else ()
+    )
 
     # **Every number the prose may state, and only these** — `compute_from_deals`
     # gives the reasoning. Narration is refused for counts (ADR 0034); filled in
@@ -306,6 +372,10 @@ def compute_from_ops(
         "undated": float(counts.undated),
         "done": float(counts.done),
     }
+    # Each band is a figure the prose may state, so each is declared. Prefixed
+    # rather than bare — a key called "high" beside "open" and "overdue" reads
+    # as a fourth kind of count rather than a slice of one of them.
+    values.update({f"severity_{bucket.label}": float(bucket.count) for bucket in breakdown})
 
     return CountComputation(
         capability_id=capability_id,
@@ -313,6 +383,7 @@ def compute_from_ops(
         measures=census.measures,
         noun=census.noun,
         counts=counts,
+        breakdown=breakdown,
         confirmation=confirmation,
         recorded_at=snapshot.recorded_at or datetime.combine(today, datetime.min.time(), UTC),
         computed=Computed(values=values),

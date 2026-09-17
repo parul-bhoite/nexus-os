@@ -33,6 +33,26 @@ export type Task = {
   due_on: string | null
 }
 
+export type Milestone = {
+  id: string
+  project_id: string
+  title: string
+  status: string
+  /** Required, unlike every other date here. A milestone with no planned date
+   *  is the one thing a timeline cannot draw. */
+  planned_on: string
+}
+
+export type Issue = {
+  id: string
+  project_id: string | null
+  title: string
+  status: string
+  severity: string
+  owner_id: string | null
+  due_on: string | null
+}
+
 /**
  * Somebody saying an entity's list is all of it — ADR 0035 (D29).
  *
@@ -63,12 +83,19 @@ export type Confirmation = {
 export type Ops = {
   projects: Project[]
   tasks: Task[]
+  milestones: Milestone[]
+  issues: Issue[]
   completeness: Confirmation[]
   recorded_at: string
 }
 
 export const PROJECT_STATUSES = ['planned', 'active', 'blocked', 'done'] as const
 export const TASK_STATUSES = ['todo', 'doing', 'done'] as const
+export const MILESTONE_STATUSES = ['planned', 'done'] as const
+export const ISSUE_STATUSES = ['open', 'done'] as const
+/** Worst first — the order a register is read in. Never sorted in the browser:
+ *  alphabetically "high" falls between "low" and "medium". */
+export const SEVERITIES = ['high', 'medium', 'low'] as const
 
 async function send<T>(path: string, init: RequestInit, fallback: string): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -120,6 +147,49 @@ export function createTask(body: {
     '/ops/tasks',
     { method: 'POST', body: JSON.stringify(body) },
     'Could not record that task.',
+  )
+}
+
+export function createMilestone(body: {
+  title: string
+  project_id: string
+  planned_on: string
+  status: string
+}): Promise<Milestone> {
+  return send<Milestone>(
+    '/ops/milestones',
+    { method: 'POST', body: JSON.stringify(body) },
+    'Could not record that milestone.',
+  )
+}
+
+export function createIssue(body: {
+  title: string
+  status: string
+  severity: string
+  project_id: string | null
+  due_on: string | null
+}): Promise<Issue> {
+  return send<Issue>(
+    '/ops/issues',
+    { method: 'POST', body: JSON.stringify(body) },
+    'Could not record that issue.',
+  )
+}
+
+export function archiveMilestone(id: string): Promise<void> {
+  return send<void>(
+    `/ops/milestones/${encodeURIComponent(id)}`,
+    { method: 'DELETE' },
+    'Could not archive that milestone.',
+  )
+}
+
+export function archiveIssue(id: string): Promise<void> {
+  return send<void>(
+    `/ops/issues/${encodeURIComponent(id)}`,
+    { method: 'DELETE' },
+    'Could not archive that issue.',
   )
 }
 

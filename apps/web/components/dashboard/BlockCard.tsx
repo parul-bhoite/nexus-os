@@ -261,6 +261,29 @@ function CountFigureBody({ figure }: { figure: CountFigure }) {
         <span className="font-medium text-ink-700">{figure.label}.</span> {figure.measures}
       </p>
 
+      {figure.breakdown.length > 0 ? (
+        /* **Counts side by side, never a bar.** A stacked bar of three numbers
+           reads as a share of a whole, and ADR 0034's rule is that nothing here
+           divides. Every band is shown even at zero — "0 high" is the reassuring
+           thing somebody came to the register for. */
+        <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-2">
+          {figure.breakdown.map((bucket) => (
+            <div key={bucket.label}>
+              <dt className="font-mono text-2xs uppercase tracking-[0.08em] text-ink-500">
+                {bucket.label}
+              </dt>
+              <dd
+                className={`font-display text-lg leading-none ${
+                  bucket.count > 0 ? 'text-ink-900' : 'text-ink-400'
+                }`}
+              >
+                {bucket.count}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+
       {figure.overdue > 0 ? (
         <p className="mt-2 text-sm text-clay-600">
           {figure.overdue} {figure.overdue === 1 ? 'is' : 'are'} past a date you set.

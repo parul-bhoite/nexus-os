@@ -17,7 +17,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.calculators.completeness import PROJECTS, TASKS, Confirmation
+from app.calculators.completeness import PROJECTS, Confirmation
 from app.grounding.compute import OPS_CENSUSES, compute_from_ops, computes
 from app.retrieval.ops import OpsSnapshot, Project, Task
 
@@ -153,7 +153,14 @@ def test_no_value_the_prose_may_state_is_a_rate(capability_id: str) -> None:
     )
 
     assert result is not None
-    assert set(result.computed.values) == {"recorded", "open", "overdue", "undated", "done"}
+    counts = {"recorded", "open", "overdue", "undated", "done"}
+    extra = set(result.computed.values) - counts
+
+    assert counts <= set(result.computed.values)
+    # The only thing a census may add is a severity band, which is itself a
+    # count. Anything else appearing here would be a figure the model may state
+    # that nobody decided to let it state.
+    assert all(key.startswith("severity_") for key in extra), extra
     assert all(float(v).is_integer() for v in result.computed.values.values())
     assert all(v <= result.computed.values["recorded"] for v in result.computed.values.values())
 
@@ -227,7 +234,11 @@ def test_a_figure_carries_no_confirmation_by_default(capability_id: str) -> None
 
 
 def test_a_figure_carries_the_confirmation_for_its_own_entity(capability_id: str) -> None:
-    entity = PROJECTS if capability_id == "operations.projects_board" else TASKS
+    # Derived from the dispatch, not from a hand-written mapping. The mapping
+    # here read `PROJECTS if ... else TASKS`, which was right for two
+    # capabilities and silently wrong for the two S10.3 added — and it made the
+    # sibling test below pass by finding no confirmation at all.
+    entity = OPS_CENSUSES[capability_id].entity
     result = compute_from_ops(
         capability_id, _snapshot(confirmations={entity: _confirmed(entity)}), today=TODAY
     )
@@ -255,7 +266,7 @@ def test_confirming_one_entity_does_not_vouch_for_the_other() -> None:
 def test_a_confirmation_does_not_add_a_rate_to_the_values(capability_id: str) -> None:
     """Confirming completeness unlocks S10.4's rate; it does not retroactively
     turn a count into one. The keys the model may state are unchanged."""
-    entity = PROJECTS if capability_id == "operations.projects_board" else TASKS
+    entity = OPS_CENSUSES[capability_id].entity
     confirmed = compute_from_ops(
         capability_id, _snapshot(confirmations={entity: _confirmed(entity)}), today=TODAY
     )

@@ -95,6 +95,8 @@ def two_workspaces(engine: Engine) -> Iterator[tuple[tuple[UUID, UUID], tuple[UU
             )
             for statement in (
                 "DELETE FROM ops_completeness WHERE workspace_id = :w",
+                "DELETE FROM ops_issue WHERE workspace_id = :w",
+                "DELETE FROM ops_milestone WHERE workspace_id = :w",
                 "DELETE FROM ops_task WHERE workspace_id = :w",
                 "DELETE FROM ops_project WHERE workspace_id = :w",
                 "DELETE FROM membership WHERE workspace_id = :w",
@@ -187,10 +189,14 @@ def test_a_workspace_that_has_recorded_nothing_says_so(
 
     body = client.get("/ops").json()
 
-    # Exact equality on purpose — a stray field is a thing this should catch.
-    # `completeness` is empty for the same reason the two lists are: nobody can
-    # have vouched for a record nobody has written (ADR 0035).
-    assert body == {"projects": [], "tasks": [], "completeness": [], "recorded_at": ""}
+    # Asserted as a property, not as a literal dict. It was the literal, and it
+    # broke twice for entirely correct changes — S10.2 adding `completeness` and
+    # S10.3 adding `milestones` and `issues` — with three more record types to
+    # come in S10.5. A test that has to be edited every time the payload grows
+    # correctly costs more than the stray field it was catching.
+    assert body["recorded_at"] == "", "a date on a workspace that recorded nothing"
+    assert body.keys() >= {"projects", "tasks", "milestones", "issues", "completeness"}
+    assert all(value == [] for key, value in body.items() if key != "recorded_at"), body
 
 
 @requires_db
@@ -471,3 +477,150 @@ def test_confirming_needs_csrf(
     as_member(client, mine)
 
     assert client.post("/ops/completeness", json={"entity": "projects"}).status_code == 403
+
+
+# ── Milestones and issues — `doc/15` S10.3 ────────────────────
+
+
+@requires_db
+def test_a_milestone_needs_a_project_in_this_workspace(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """A milestone is a point in a project's plan. **RLS is what makes the write
+    safe**; this check is what makes a mismatched id a 404 naming the project
+    rather than a foreign-key error naming a constraint, since the policy hides
+    the row the FK points at."""
+    mine, _ = two_workspaces
+    as_member(client, mine)
+
+    response = _post(
+        client,
+        "/ops/milestones",
+        {"title": "Orphan", "project_id": str(uuid4()), "planned_on": "2026-12-01"},
+    )
+
+    assert response.status_code == 404
+
+
+@requires_db
+def test_a_milestone_cannot_hang_off_another_workspaces_project(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """The isolation that matters most for a child record: it would put a row in
+    somebody else's project, and it would appear on their timeline."""
+    mine, theirs = two_workspaces
+    as_member(client, theirs)
+    theirs_project = _post(client, "/ops/projects", {"name": "Theirs"}).json()["id"]
+
+    as_member(client, mine)
+    response = _post(
+        client,
+        "/ops/milestones",
+        {"title": "Sneak", "project_id": theirs_project, "planned_on": "2026-12-01"},
+    )
+
+    assert response.status_code == 404
+
+
+@requires_db
+def test_an_issue_needs_no_project(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """`ops_task`'s reason: requiring one would make somebody invent a project to
+    record a snag, and an invented project then counts on `projects_board`."""
+    mine, _ = two_workspaces
+    as_member(client, mine)
+
+    response = _post(client, "/ops/issues", {"title": "Leak in the store room"})
+
+    assert response.status_code == 201, response.text
+    assert response.json()["project_id"] is None
+
+
+@requires_db
+def test_an_unknown_severity_is_refused_at_the_edge(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    mine, _ = two_workspaces
+    as_member(client, mine)
+
+    response = _post(client, "/ops/issues", {"title": "Bad", "severity": "catastrophic"})
+
+    assert response.status_code == 422
+    assert "severity" in response.text
+
+
+@requires_db
+def test_milestones_and_issues_are_read_back_and_isolated(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    mine, theirs = two_workspaces
+    as_member(client, mine)
+    project = _post(client, "/ops/projects", {"name": "Mine"}).json()["id"]
+    _post(
+        client,
+        "/ops/milestones",
+        {"title": "Handover", "project_id": project, "planned_on": "2026-12-01"},
+    )
+    _post(client, "/ops/issues", {"title": "Snag", "severity": "high", "project_id": project})
+
+    body = client.get("/ops").json()
+    assert [m["title"] for m in body["milestones"]] == ["Handover"]
+    assert [i["severity"] for i in body["issues"]] == ["high"]
+
+    as_member(client, theirs)
+    other = client.get("/ops").json()
+    assert other["milestones"] == []
+    assert other["issues"] == []
+
+
+@requires_db
+def test_archiving_a_project_takes_its_milestones_with_it(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """**Archiving a project does not cascade**, unlike deleting one — the row is
+    still there and so are its children. This asserts what actually happens
+    rather than what the FK would do, because the two differ and the tile reads
+    the archived flag on each table separately."""
+    mine, _ = two_workspaces
+    as_member(client, mine)
+    project = _post(client, "/ops/projects", {"name": "Mine"}).json()["id"]
+    _post(
+        client,
+        "/ops/milestones",
+        {"title": "Handover", "project_id": project, "planned_on": "2026-12-01"},
+    )
+
+    client.delete(f"/ops/projects/{project}", headers={"X-CSRF-Token": CSRF})
+    body = client.get("/ops").json()
+
+    assert body["projects"] == []
+    assert len(body["milestones"]) == 1, (
+        "archiving a project leaves its milestones; only a DELETE would cascade"
+    )
+
+
+@requires_db
+def test_an_archived_issue_stops_counting_without_being_deleted(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    mine, _ = two_workspaces
+    as_member(client, mine)
+    issue = _post(client, "/ops/issues", {"title": "Snag", "severity": "low"}).json()["id"]
+
+    assert client.delete(f"/ops/issues/{issue}", headers={"X-CSRF-Token": CSRF}).status_code == 204
+    assert client.get("/ops").json()["issues"] == []
+
+
+@requires_db
+def test_completeness_accepts_the_two_new_entities(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """`ENTITIES` and `ck_ops_completeness_entity` are kept in step by hand. A
+    value legal in Python and refused by the constraint is a 500 on a write
+    somebody was told was fine."""
+    mine, _ = two_workspaces
+    as_member(client, mine)
+
+    for entity in ("milestones", "issues"):
+        assert _post(client, "/ops/completeness", {"entity": entity}).status_code == 201, entity

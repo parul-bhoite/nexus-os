@@ -449,6 +449,18 @@ class AmountFigureOut(BaseModel):
     method: str
 
 
+class BucketOut(BaseModel):
+    """One severity band and how many open items are in it.
+
+    A count, not a share. Nothing here is divided by `recorded` — ADR 0034
+    forbids dividing, not grouping, and the bands exist so a reader can see what
+    to look at first.
+    """
+
+    label: str
+    count: int
+
+
 class CountFigureOut(BaseModel):
     """Counts over records the customer typed into NEXUS themselves.
 
@@ -500,6 +512,16 @@ class CountFigureOut(BaseModel):
     """Open, with no due date at all. Served beside `overdue` rather than
     dropped: a reader deciding whether "1 overdue" is reassuring needs to know
     how many were never given a date to be late against (I10)."""
+
+    breakdown: list[BucketOut] = []
+    """Open items per severity band, worst first — empty for a record type with
+    no severity.
+
+    Every band is present even at zero: "no high-severity issues" is the
+    reassuring thing a reader came for, and an absent row makes them count the
+    list to be sure. Ordered by the server so two clients cannot sort "high"
+    between "low" and "medium", which is what the text column would do.
+    """
 
     recorded_at: str
     """When somebody last typed. **Not `measured_at`** — nothing was fetched,
@@ -1017,6 +1039,9 @@ def count_figure_out(capability: Capability, ops: OpsSnapshot | None) -> CountFi
         open_items=computation.counts.open_items,
         overdue=computation.counts.overdue,
         undated=computation.counts.undated,
+        breakdown=[
+            BucketOut(label=bucket.label, count=bucket.count) for bucket in computation.breakdown
+        ],
         recorded_at=computation.recorded_at.date().isoformat(),
         complete_as_of=(
             computation.confirmation.complete_as_of.isoformat() if computation.confirmation else ""
