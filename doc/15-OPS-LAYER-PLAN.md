@@ -300,9 +300,38 @@ database sits. **Fixed immediately after, in ADR 0039**: `current_ops` is now on
 `/ops` to 7–9 s — under the timeout, and still not fast. Five round trips remain on the
 surface and the same argument applies to them.
 
-### S10.7 — The composites, per D31
+### S10.7 — The composites, per D31 ✅ *shipped 17 September 2026*
 `operations.score_drivers` and `executive.todays_priorities`. Last, because a ranking
 across departments is only honest once the things it ranks exist.
+
+**D31 decided: drivers, no score (ADR 0040).** The argument that refused a company
+composite was *thin coverage*, and that no longer applies — Operations is the best-covered
+department in the product. A different and stronger one does: **all seven inputs are the
+customer's own records**, so one number over them measures how diligently somebody types.
+A founder who records everything and runs a shaky business scores well; one who runs a
+tight business and records a third of it is told their operations are the problem.
+
+So the tile names the seven figures, says in words why it does not average them, and
+leaves each to speak on its own — the shape `on_time_dispatch` already uses when it shows
+its counts and withholds its percentage. The offering's `shows` changed from *"Score,
+delta"* to match, because the old wording rendered directly above the sentence denying it.
+
+**`todays_priorities` is a composition, not a composite**, which ADR 0029 already
+distinguished: every row points at one record a founder can open, and nothing is totalled.
+It ranks by **days past a date somebody set** — one unit across tasks, milestones, orders
+and dated issues, so the ordering compares like with like. A severe issue with no date and
+a stock line under its minimum are returned **beside** the ranking, each ordered by its own
+measure, because folding them in would need a rule turning severity into days that nobody
+has set.
+
+Two new arms on the figure union (`drivers`, `priorities`) — both carrying no number of
+their own, and both refused for narration for that reason.
+
+Asserted by `scripts/ops_walkthrough.py`: 103 checks, green. The walkthrough caught the
+drivers tile rendering for a workspace that had recorded nothing, which every sibling tile
+leaves `locked`; it is now gated on the snapshot like the rest.
+
+**`doc/15` is complete.** All seven slices shipped, and D29, D30, D31 and D32 are answered.
 
 ---
 

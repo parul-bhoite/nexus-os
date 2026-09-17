@@ -438,7 +438,42 @@ check("**it declares itself self-reported**", lite.get("self_reported") is True,
 check("and the CRM pipeline tile does not see them at all",
       "sales.pipeline_board" not in tiles, str(list(tiles)))
 
-print("\n\033[1m9. Another workspace sees none of it\033[0m")
+print("\n\033[1m9. The compositions — S10.7, ADR 0040 (D31)\033[0m")
+tiles = {x["key"]: x for x in a.get("/dashboards/surface").json().get("measured", [])}
+drivers = tiles.get("operations.score_drivers", {}).get("figure") or {}
+todo = tiles.get("executive.todays_priorities", {}).get("figure") or {}
+
+check("operations.score_drivers carries a figure", bool(drivers), str(list(tiles)))
+check("it is a drivers composition", drivers.get("kind") == "drivers", str(drivers)[:200])
+check("**and it carries no score and no delta**",
+      "percentage" not in drivers and "score" not in drivers and "delta" not in drivers,
+      str(drivers)[:250])
+check("it names the figures a score would have averaged",
+      len(drivers.get("inputs", [])) == 7, str(drivers.get("inputs"))[:200])
+check("and says why there is not one", "deliberate" in drivers.get("reason", ""),
+      str(drivers.get("reason"))[:200])
+
+r = a.post("/dashboards/operations/narrate", json={"key": "operations.score_drivers"},
+           headers=token(a))
+check("a composition cannot be narrated — it has no number to explain",
+      r.status_code == 404, str(r.status_code))
+
+check("executive.todays_priorities carries a figure", bool(todo), str(list(tiles)))
+check("it is a priorities composition", todo.get("kind") == "priorities", str(todo)[:200])
+check("the ranked list holds only things past a date",
+      all("past" in i["detail"] for i in todo.get("overdue", [])), str(todo.get("overdue"))[:250])
+check("ranked worst first",
+      [i["detail"] for i in todo.get("overdue", [])]
+      == sorted((i["detail"] for i in todo.get("overdue", [])),
+                key=lambda d: -int(d.split()[0])),
+      str(todo.get("overdue"))[:250])
+check("what is not measured in days sits beside it, never in it",
+      all("past" not in i["detail"] for i in todo.get("beside", [])),
+      str(todo.get("beside"))[:250])
+check("and nothing is totalled",
+      "total" not in todo and "score" not in todo, str(todo)[:200])
+
+print("\n\033[1m10. Another workspace sees none of it\033[0m")
 b = founder("b")
 r = b.get("/ops")
 check(
@@ -453,7 +488,7 @@ if project_id:
     still = a.get("/ops").json()["projects"]
     check("the project is still there for its owner", len(still) == 1, str(still)[:200])
 
-print("\n\033[1m10. Archive stops it counting without deleting it\033[0m")
+print("\n\033[1m11. Archive stops it counting without deleting it\033[0m")
 if project_id:
     r = a.delete(f"/ops/projects/{project_id}", headers=token(a))
     check("DELETE /ops/projects/{id} -> 204", r.status_code == 204, str(r.status_code))

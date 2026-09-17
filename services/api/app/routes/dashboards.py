@@ -84,12 +84,15 @@ from app.domain.sections import (
 from app.grounding.answer import NARRATOR, narrate
 from app.grounding.compute import (
     AMOUNT_CAPABILITIES,
+    COMPOSITIONS,
     COUNT_CAPABILITIES,
     MEASURABLE,
     RATE_CAPABILITIES,
+    compute_drivers,
     compute_from_crawl,
     compute_from_deals,
     compute_from_ops,
+    compute_priorities,
     compute_rate_from_ops,
     computes,
 )
@@ -661,7 +664,83 @@ class RateFigureOut(BaseModel):
     method: str = ""
 
 
-Figure = ScoreFigureOut | AmountFigureOut | CountFigureOut | RateFigureOut
+class DriverOut(BaseModel):
+    """One capability a composite would have drawn on."""
+
+    key: str
+    name: str
+
+
+class DriversFigureOut(BaseModel):
+    """The figures a department score would have been built from, uncombined.
+
+    **ADR 0040's fifth kind, and the only one that carries no number.** A single
+    Operations score would average seven figures that all come from the
+    customer's own records, which measures how diligently somebody types rather
+    than how the work is going. So the tile names its inputs, says why there is
+    no score, and leaves every figure to speak on its own.
+
+    Which of `inputs` is currently producing is **not** served here: the surface
+    already carries those blocks, and computing them again would be a second
+    rendering of one number.
+    """
+
+    kind: Literal["drivers"] = "drivers"
+
+    label: str
+    measures: str
+    inputs: list[DriverOut]
+    reason: str
+    """Why there is no score, in the tile's own words. An empty metric slot with
+    no sentence is the failure `doc/13` §7 spends its whole table avoiding."""
+
+    method: str = ""
+
+
+class PriorityOut(BaseModel):
+    kind_of: str
+    """`task`, `milestone`, `order`, `issue`, `stock` — what this row is, so a
+    reader can tell why two rows sit together."""
+
+    title: str
+    detail: str
+    """The measure in words — "9 days past", "8 short". A number whose unit is
+    implied is a number a reader can misread."""
+
+
+class PrioritiesFigureOut(BaseModel):
+    """Ranked actions across the ops layer — `doc/15` S10.7.
+
+    **A composition over records that exist**, which ADR 0029 distinguished from
+    a score over records that might not: every row points at one thing a founder
+    can open, and nothing is totalled.
+
+    Two lists, deliberately. `overdue` is ranked, because everything in it is
+    late in the same unit — days past a date somebody set. `beside` is not, and
+    holds what is worth attention without being measured in days: a severe issue
+    with no date, a stock line under its minimum. One ordering over both would
+    need a rule turning severity into days that nobody has set.
+    """
+
+    kind: Literal["priorities"] = "priorities"
+
+    label: str
+    measures: str
+    overdue: list[PriorityOut]
+    beside: list[PriorityOut]
+    recorded_at: str = ""
+    self_reported: bool = True
+    method: str = ""
+
+
+Figure = (
+    ScoreFigureOut
+    | AmountFigureOut
+    | CountFigureOut
+    | RateFigureOut
+    | DriversFigureOut
+    | PrioritiesFigureOut
+)
 """One tile carries one kind. The union cannot express two or none, which is the
 whole argument for it over sibling fields (ADR 0033, extended by 0034 and 0036)."""
 
@@ -1119,6 +1198,60 @@ def figure_out(capability: Capability, snapshot: CrawlSnapshot | None) -> ScoreF
     )
 
 
+def drivers_figure_out(capability: Capability, ops: OpsSnapshot | None) -> DriversFigureOut | None:
+    """The composition tile for Operations, or `None` for everything else.
+
+    **Gated on the ops layer holding something**, like every sibling. The tile
+    exists to explain why seven figures are not averaged; with nothing recorded
+    there are no seven figures for it to be about, and `state_from_sources` marks
+    the capability `locked` anyway — so a figure served here would be payload the
+    client never renders. The walkthrough caught it doing exactly that.
+    """
+    if ops is None:
+        return None
+
+    computation = compute_drivers(capability.id)
+    if computation is None:
+        return None
+
+    return DriversFigureOut(
+        label=computation.label,
+        measures=computation.measures,
+        inputs=[
+            DriverOut(key=key, name=BY_ID[key].name) for key in computation.inputs if key in BY_ID
+        ],
+        reason=computation.reason,
+        method=str(computation.trace["method"]),
+    )
+
+
+def priorities_figure_out(
+    capability: Capability, ops: OpsSnapshot | None
+) -> PrioritiesFigureOut | None:
+    """What is waiting on the reader, or `None` when nothing has been recorded."""
+    if ops is None:
+        return None
+
+    computation = compute_priorities(capability.id, ops, today=datetime.now(UTC).date())
+    if computation is None:
+        return None
+
+    return PrioritiesFigureOut(
+        label=computation.label,
+        measures=computation.measures,
+        overdue=[
+            PriorityOut(kind_of=item.kind, title=item.title, detail=item.detail)
+            for item in computation.priorities.overdue
+        ],
+        beside=[
+            PriorityOut(kind_of=item.kind, title=item.title, detail=item.detail)
+            for item in computation.priorities.unranked
+        ],
+        recorded_at=computation.recorded_at.date().isoformat(),
+        method=str(computation.trace["method"]),
+    )
+
+
 def rate_figure_out(capability: Capability, ops: OpsSnapshot | None) -> RateFigureOut | None:
     """The rate for one capability, or `None` when nothing rates it.
 
@@ -1309,7 +1442,9 @@ def _measured_block(
         figure=figure_out(capability, snapshot)
         or amount_figure_out(capability, observed.deals, observed.typed_deals)
         or count_figure_out(capability, observed.ops)
-        or rate_figure_out(capability, observed.ops),
+        or rate_figure_out(capability, observed.ops)
+        or drivers_figure_out(capability, observed.ops)
+        or priorities_figure_out(capability, observed.ops),
         narration=narration_out(capability, snapshot, observed.narrations),
     )
 
@@ -1964,10 +2099,13 @@ def _narratable(key: str, director: Director) -> Capability:
     # `page` a rate has no equivalent of, and that comparison is the only thing
     # keeping prose about last week's number from sitting beside this week's.
     # Extending it is its own change.
+    # A composition has no numerator and no denominator of its own — it has no
+    # number at all — so `narrate-metric` would be grounded in nothing.
     if (
         capability.id in AMOUNT_CAPABILITIES
         or capability.id in COUNT_CAPABILITIES
         or capability.id in RATE_CAPABILITIES
+        or capability.id in COMPOSITIONS
     ):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
 

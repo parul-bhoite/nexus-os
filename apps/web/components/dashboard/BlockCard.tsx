@@ -8,7 +8,9 @@ import {
   type BlockKind,
   type CountFigure,
   type DirectorBlock,
+  type DriversFigure,
   type Narration,
+  type PrioritiesFigure,
   type RateFigure,
   type ScoreFigure,
   type WidgetState,
@@ -430,6 +432,84 @@ function RateFigureBody({ figure }: { figure: RateFigure }) {
   )
 }
 
+/**
+ * The figures a score would have averaged, uncombined — ADR 0040.
+ *
+ * **The absent number gets a sentence.** `doc/13` §7 spends its whole table on
+ * the principle that a tile with no value must say what to do or why; an empty
+ * metric slot is the one thing it never permits.
+ */
+function DriversFigureBody({ figure }: { figure: DriversFigure }) {
+  return (
+    <>
+      <p className="max-w-prose text-sm leading-relaxed text-ink-700">{figure.reason}</p>
+
+      <p className="mt-2 max-w-prose text-sm leading-relaxed text-ink-600">
+        <span className="font-medium text-ink-700">{figure.label}.</span> {figure.measures}
+      </p>
+
+      <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+        {figure.inputs.map((input) => (
+          <li key={input.key} className="text-sm text-ink-500">
+            {input.name}
+          </li>
+        ))}
+      </ul>
+    </>
+  )
+}
+
+/**
+ * What is waiting on the reader.
+ *
+ * **Two lists, never merged.** The ranked one is ranked because every row is
+ * late in days; the other holds what matters without being measured in days.
+ * Interleaving them would need a weighting nobody set.
+ */
+function PrioritiesFigureBody({ figure }: { figure: PrioritiesFigure }) {
+  const row = (item: { kind_of: string; title: string; detail: string }, key: string) => (
+    <li key={key} className="flex flex-wrap items-baseline gap-x-3 py-1.5">
+      <span className="font-mono text-2xs uppercase tracking-[0.08em] text-ink-400">
+        {item.kind_of}
+      </span>
+      <span className="min-w-0 grow text-sm text-ink-800">{item.title}</span>
+      <span className="text-2xs text-clay-600">{item.detail}</span>
+    </li>
+  )
+
+  return (
+    <>
+      {figure.overdue.length === 0 && figure.beside.length === 0 ? (
+        <p className="text-sm text-ink-600">
+          Nothing you have recorded is past its date. That is about what you have written
+          down, not about everything you have on.
+        </p>
+      ) : null}
+
+      {figure.overdue.length > 0 ? (
+        <ul className="divide-y divide-ink-100">
+          {figure.overdue.map((item, index) => row(item, `overdue-${index}`))}
+        </ul>
+      ) : null}
+
+      {figure.beside.length > 0 ? (
+        <>
+          <p className="mt-3 font-mono text-2xs uppercase tracking-[0.1em] text-ink-400">
+            Not measured in days
+          </p>
+          <ul className="divide-y divide-ink-100">
+            {figure.beside.map((item, index) => row(item, `beside-${index}`))}
+          </ul>
+        </>
+      ) : null}
+
+      <p className="mt-3 max-w-prose text-sm leading-relaxed text-ink-600">
+        <span className="font-medium text-ink-700">{figure.label}.</span> {figure.measures}
+      </p>
+    </>
+  )
+}
+
 /** Whichever kind this tile carries. */
 function Figure({ block }: { block: DirectorBlock }) {
   const figure = block.figure
@@ -443,6 +523,10 @@ function Figure({ block }: { block: DirectorBlock }) {
         <AmountFigureBody figure={figure} />
       ) : figure.kind === 'rate' ? (
         <RateFigureBody figure={figure} />
+      ) : figure.kind === 'drivers' ? (
+        <DriversFigureBody figure={figure} />
+      ) : figure.kind === 'priorities' ? (
+        <PrioritiesFigureBody figure={figure} />
       ) : (
         <CountFigureBody figure={figure} />
       )}

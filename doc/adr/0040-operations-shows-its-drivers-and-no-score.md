@@ -47,11 +47,16 @@ its percentage when a gate is shut (ADR 0036); the issue register shows severity
 bands and never a share (ADR 0034). A tile that gives the honest half and
 declines the rest is the established answer here, not a new compromise.
 
-**The capability's `shows` is narrowed, deliberately and in the open.** It reads
-*"Score, delta"* and the tile delivers neither. That is a promise the registry
-makes and this decision breaks, so it is written down rather than left for a
-reader to notice: `doc/05`'s wording anticipated a department score, and the
-product has since learned what its inputs are made of.
+**The capability's `shows` is narrowed, deliberately and in the open.** It read
+*"Score, delta"* and the tile delivers neither. `shows` is rendered directly
+above the tile's own body, so leaving it produced *"Score, delta"* sitting on top
+of a sentence saying there is no score — a contradiction visible on screen, found
+in the browser rather than by any test. `doc/05`'s wording anticipated a
+department score; the product has since learned what its inputs are made of, so
+the offering now reads *"The figures Operations is described by, each on its
+own"*. Changing the catalogue's claim is the honest half of this decision — an
+ADR recording a narrowing while the screen keeps promising the old thing would be
+the narrowing hidden rather than made.
 
 **Nothing computes a delta either.** A delta needs a baseline, and the earliest
 honest baseline here is the first day somebody recorded anything — which would

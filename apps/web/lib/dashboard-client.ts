@@ -261,8 +261,55 @@ export type RateFigure = {
   method: string
 }
 
+/**
+ * The figures a department score would have averaged — ADR 0040, and the only
+ * kind carrying no number.
+ *
+ * All seven inputs are counted from the customer's own records, so one number
+ * over them would measure how diligently somebody types rather than how the work
+ * is going. The tile names them, says why there is no score, and leaves each
+ * figure to speak for itself. Which inputs are producing is not served: the
+ * surface already carries those blocks.
+ */
+export type DriversFigure = {
+  kind: 'drivers'
+  label: string
+  measures: string
+  inputs: { key: string; name: string }[]
+  /** Why there is no score, in words. An empty metric slot with no sentence is
+   *  the failure `doc/13` §7 exists to avoid. */
+  reason: string
+  method: string
+}
+
+/**
+ * Ranked actions across the ops layer — a composition over records that exist,
+ * not a score over records that might not (ADR 0029).
+ *
+ * Two lists on purpose. `overdue` is ranked because everything in it is late in
+ * the same unit — days past a date somebody set. `beside` is not, and holds what
+ * deserves attention without being measured in days. One ordering over both
+ * would need a rule turning severity into days that nobody has set.
+ */
+export type PrioritiesFigure = {
+  kind: 'priorities'
+  label: string
+  measures: string
+  overdue: { kind_of: string; title: string; detail: string }[]
+  beside: { kind_of: string; title: string; detail: string }[]
+  recorded_at: string
+  self_reported: boolean
+  method: string
+}
+
 /** One tile carries one kind. The union cannot express two or none. */
-export type Figure = ScoreFigure | AmountFigure | CountFigure | RateFigure
+export type Figure =
+  | ScoreFigure
+  | AmountFigure
+  | CountFigure
+  | RateFigure
+  | DriversFigure
+  | PrioritiesFigure
 
 /**
  * A stored sentence about a figure, and enough to trace it.

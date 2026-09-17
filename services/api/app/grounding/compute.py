@@ -47,6 +47,8 @@ from app.calculators.ops import (
     count_open_by_severity,
 )
 from app.calculators.pipeline import Deal, Pipeline, compute_pipeline
+from app.calculators.priorities import Priorities
+from app.calculators.priorities import compose as compose_priorities
 from app.calculators.stock import count_stock
 from app.calculators.supplier import concentration
 from app.domain.page_signals import PageSignals
@@ -626,6 +628,144 @@ def compute_rate_from_ops(
     )
 
 
+DRIVER_INPUTS: Final[tuple[str, ...]] = (
+    "operations.projects_board",
+    "operations.task_queue",
+    "operations.milestone_timeline",
+    "operations.issue_register",
+    "operations.on_time_dispatch",
+    "operations.stock_levels",
+    "operations.supplier_risk",
+)
+"""The figures a department score would have been built from — ADR 0040.
+
+Listed rather than combined. Every one of them is computed from the customer's
+own records, so a single number over them would measure how diligently somebody
+types rather than how well operations run.
+"""
+
+NO_SCORE: Final = (
+    "There is no single Operations score, and that is deliberate. Every figure "
+    "below is counted from records you keep yourself, so averaging them would "
+    "measure how much you have written down rather than how the work is going."
+)
+
+
+@dataclass(frozen=True, slots=True)
+class DriversComputation:
+    """The figures a score would have drawn on, and why there is not one."""
+
+    capability_id: str
+    label: str
+    measures: str
+    inputs: tuple[str, ...]
+    reason: str
+    computed: Computed
+    trace: dict[str, Any]
+
+
+def compute_drivers(capability_id: str) -> DriversComputation | None:
+    """What Operations is described by — ADR 0040 (D31).
+
+    **Takes no snapshot, and computes no number.** It names the capabilities the
+    tile points at; which of them are producing a figure for this workspace is
+    already in the same payload, so recomputing them here would be a second
+    rendering of one number — the disagreement the grounding layer exists to
+    prevent.
+    """
+    if capability_id != "operations.score_drivers":
+        return None
+
+    return DriversComputation(
+        capability_id=capability_id,
+        label="What Operations is described by",
+        measures=(
+            "The seven figures below, each counted from your own records and each "
+            "shown on its own. Not a score and not a delta — a score would average "
+            "figures that all come from the same place, and a delta would need a "
+            "baseline from before you started recording."
+        ),
+        inputs=DRIVER_INPUTS,
+        reason=NO_SCORE,
+        # **Empty, and that is the point.** `answer._permitted` treats every key
+        # here as a numeral the prose may state; this tile has no number of its
+        # own to state.
+        computed=Computed(values={}),
+        trace={
+            "capability": capability_id,
+            "measures": NO_SCORE,
+            "inputs": list(DRIVER_INPUTS),
+            "source": "your own records",
+            "delta": "no_baseline",
+            "method": "none — this tile composes nothing",
+        },
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class PrioritiesComputation:
+    """What is late, and what is worth attention without being late."""
+
+    capability_id: str
+    label: str
+    measures: str
+    priorities: Priorities
+    recorded_at: datetime
+    computed: Computed
+    trace: dict[str, Any]
+
+
+def compute_priorities(
+    capability_id: str, snapshot: OpsSnapshot, *, today: date
+) -> PrioritiesComputation | None:
+    """Ranked actions across the ops layer — `doc/15` S10.7.
+
+    A **composition over records that exist**, which ADR 0029 already
+    distinguished from a score over records that might not: every row points at
+    one thing a founder can open, and nothing is totalled.
+    """
+    if capability_id != "executive.todays_priorities":
+        return None
+
+    priorities = compose_priorities(
+        tasks=snapshot.tasks,
+        milestones=snapshot.milestones,
+        orders=snapshot.dispatches,
+        issues=snapshot.issues,
+        stock=snapshot.stock,
+        today=today,
+    )
+
+    return PrioritiesComputation(
+        capability_id=capability_id,
+        label="What is waiting on you",
+        measures=(
+            "Everything past a date you set, worst first. Severe issues with no date "
+            "and stock under its minimum are listed separately, because ranking them "
+            "against overdue work would need a rule turning severity into days that "
+            "nobody has set."
+        ),
+        priorities=priorities,
+        recorded_at=snapshot.recorded_at or datetime.combine(today, datetime.min.time(), UTC),
+        computed=Computed(
+            values={
+                "overdue": float(len(priorities.overdue)),
+                "beside": float(len(priorities.unranked)),
+            }
+        ),
+        trace={
+            "capability": capability_id,
+            "measures": "days past a date somebody set",
+            "overdue": len(priorities.overdue),
+            "beside": len(priorities.unranked),
+            "source": "your own records",
+            "window": f"as recorded on {today.isoformat()}",
+            "delta": "no_baseline",
+            "method": "calculators.priorities.compose",
+        },
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class CountComputation:
     """Counts over the customer's own records, and the working behind them.
@@ -796,11 +936,20 @@ class Computation:
         return sum(1 for check in self.score.checks if check.passed)
 
 
+COMPOSITIONS: Final[frozenset[str]] = frozenset(
+    {"operations.score_drivers", "executive.todays_priorities"}
+)
+"""Tiles that compose over other figures rather than computing one of their own
+(ADR 0040). They belong in `MEASURABLE` because something does put content on
+them — `computes()` answers "is there a calculation behind this tile", and for
+these the answer is a composition rather than a calculator."""
+
 MEASURABLE: Final[frozenset[str]] = (
     frozenset(CRAWL_AUDITS)
     | frozenset(PIPELINE_TALLIES)
     | frozenset(OPS_CENSUSES)
     | frozenset(OPS_RATIOS)
+    | COMPOSITIONS
 )
 """Every capability something can put a figure on. `computes()` as a set.
 

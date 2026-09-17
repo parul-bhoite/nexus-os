@@ -176,6 +176,7 @@ STALE_AFTER_DAYS: Final = 7
 period a founder plans in — a figure from last week is context, and a figure
 from last month presented as current is a decision made on the wrong data."""
 
+
 @dataclass(frozen=True, slots=True)
 class Director:
     department: Department
@@ -545,7 +546,19 @@ OPERATIONS = Director(
     scoreable=True,
     executive_only=False,
     offerings=(
-        Offering("6.1", "Operations score and drivers", "Score, delta", (Source.OPS_LAYER,)),
+        # **"Score, delta" until ADR 0040 (D31).** The catalogue promised a
+        # department score and the tile deliberately draws none: all seven of its
+        # inputs are the customer's own records, so averaging them would measure
+        # how diligently somebody types. `shows` is what the tile renders above
+        # its own body, so leaving the old wording put "Score, delta" directly
+        # above a sentence saying there is no score — visible on screen, and the
+        # reason this line changed rather than the ADR alone recording it.
+        Offering(
+            "6.1",
+            "Operations score and drivers",
+            "The figures Operations is described by, each on its own",
+            (Source.OPS_LAYER,),
+        ),
         Offering(
             "6.2",
             "Active projects board",

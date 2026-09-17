@@ -500,6 +500,12 @@ _IMPLEMENTED: Final[frozenset[str]] = frozenset(
         # `doc/15` S10.6. Same calculator as `sales.pipeline_board` over a
         # different population — `crm_deal` partitioned by `provider` (ADR 0038).
         "sales.deals_lite",
+        # `doc/15` S10.7, ADR 0040 (D31). **Compositions, not calculators.**
+        # `score_drivers` names the figures a department score would have
+        # averaged and deliberately does not average them; `todays_priorities`
+        # ranks records that exist and totals nothing.
+        "operations.score_drivers",
+        "executive.todays_priorities",
     }
 )
 
@@ -538,6 +544,8 @@ _REACHABLE: Final[frozenset[str]] = _setup_and_watchlist_ids() | frozenset(
         "operations.stock_levels",
         "operations.supplier_risk",
         "sales.deals_lite",
+        "operations.score_drivers",
+        "executive.todays_priorities",
     }
 )
 """**The capabilities a person can actually open.**

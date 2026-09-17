@@ -403,11 +403,21 @@ disagreeing with.
 
 ---
 
-### D31 — Is `operations.score_drivers` a composite, and is one allowed? *(blocks `doc/15` S10.7)*
+### D31 — Is `operations.score_drivers` a composite, and is one allowed? ✅ **Decided 17 September 2026** — ADR 0040
 
-It shows *"Score, delta"* for a department. ADR 0029 and ADR 0030 both refuse a
-composite over thin coverage at company level; the same argument applies one
-level down, and this would be the first department score the product draws.
+It showed *"Score, delta"* for a department. ADR 0029 and ADR 0030 both refused a
+composite over thin coverage at company level.
+
+**Decided: drivers, no score.** Thin coverage is no longer the objection —
+Operations is the best-covered department in the product. A stronger one replaced
+it: all seven inputs are the customer's own records, so a single number over them
+measures how diligently somebody types rather than how the work is going. The
+tile names its inputs, says why it does not average them, and the offering's
+`shows` was changed to stop promising a score it will never draw.
+
+The condition for revisiting is not more ops capabilities but **a measured
+input** — a connector reporting something nobody typed. Marketing reaches that
+first.
 
 ---
 
