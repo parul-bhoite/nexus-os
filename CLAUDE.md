@@ -136,6 +136,7 @@ Windows machine again. Do not apply these on macOS.
 | `doc/12-IMPLEMENTATION-PLAN.md` | **The executable plan.** Twenty-two phases, each with an acceptance test. Supersedes `VISION-AND-PLAN.md` §6 |
 | `doc/13-DASHBOARD-DESIGN.md` | **The dashboard, settings and agents.** Sections, blocks, states, the day-one surface per department, the settings portal, the tool ledger, and every director as a skill. Shape only — `doc/12` still owns sequence |
 | `doc/14-DASHBOARD-BUILD-PLAN.md` | **The dashboard's own sequence.** The common surface, the left panel, the source map, and eleven steps each with an acceptance test. Narrows `doc/13`; `doc/12` still owns product-wide phase numbering |
+| `doc/15-OPS-LAYER-PLAN.md` | **The ops layer.** `doc/14` step 10, which blocks 23 capabilities. Seven record types, not one, and the first source that fails on adoption rather than on an API |
 | `ARCHITECTURE-HLD.md` | System shape, trust model, untrusted boundary, execution modes, deployment |
 | `ARCHITECTURE-LLD.md` | Modules, schema, RLS, endpoint contracts, sequences, failure paths |
 | `BUILD-STATUS.md` | Where the code actually stands, with the prioritised work list. Regenerated per phase |

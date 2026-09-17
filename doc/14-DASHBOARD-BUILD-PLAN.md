@@ -274,7 +274,7 @@ would manufacture a figure the customer never gave us. So the calculator returns
 shape and no tile can render it yet. Extending the figure model to carry a second kind is
 **D28**, argued in ADR 0033 — four options, with a discriminated union recommended.
 
-### S10 — `ops_layer` ⛔ needs its own plan
+### S10 — `ops_layer` 📋 planned in `doc/15`
 The largest blocker, and a product to build rather than a connector to write: projects and
 tasks inside NEXUS, feeding 23 capabilities. **This needs its own plan** — it is named here
 so the sequence is honest about where the weight actually is.

@@ -321,6 +321,53 @@ so it is written and tested rather than remembered later.
 
 ---
 
+### D29 — How does the ops layer know it holds everything? *(blocks every ops figure)*
+
+`doc/15`. The ops layer is the first source that **fails on adoption rather than
+on an API** — `domain/sources.py` already says so in its own `cannot_answer`.
+Every other source is authoritative about itself: a crawl reads the page that
+exists, a CRM knows its own deals. This one holds whatever somebody typed.
+
+The failure is not an empty screen, it is a half-full one. A founder records
+three of twelve projects, and `on_time_dispatch` computes *"67% on time"* over a
+third of reality — a **wrong number with a plausible denominator**, arriving from
+our own feature rather than from a model.
+
+Options: ask per entity and store the answer with a date; infer from staleness;
+compute counts only and never rates until confirmed; or mark every ops figure
+`self_reported`, which `doc/05` §0 already defines so that a number somebody
+typed never looks like one we measured.
+
+**My recommendation: `self_reported` *and* an explicit completeness question.**
+They answer different halves — the state says where a number came from, the
+question says whether it covers everything.
+
+**S10.1 can ship before this is answered**, because projects and tasks are counts
+rather than rates, and a count of what was recorded is true either way.
+
+---
+
+### D30 — Does `sales.deals_lite` reuse `crm_deal`? *(blocks `doc/15` S10.6)*
+
+It is specified as *"a minimal deal tracker for customers with no CRM"*, and
+`crm_deal` exists with a `provider` column. Writing hand-typed deals as
+`provider = 'nexus'` makes `calculators/pipeline.py` work for both with no new
+code — and puts a typed deal and a synced one in one table, which the
+`self_reported` distinction argues against.
+
+**My recommendation: reuse it, carry the provenance in `provider`.** Worth
+disagreeing with.
+
+---
+
+### D31 — Is `operations.score_drivers` a composite, and is one allowed? *(blocks `doc/15` S10.7)*
+
+It shows *"Score, delta"* for a department. ADR 0029 and ADR 0030 both refuse a
+composite over thin coverage at company level; the same argument applies one
+level down, and this would be the first department score the product draws.
+
+---
+
 ### ~~D28 — How does the dashboard carry a figure that is not a score?~~ — **answered: C, a discriminated union**, 17 September 2026
 
 `calculators/pipeline.py` is written and tested and **cannot be rendered**.
