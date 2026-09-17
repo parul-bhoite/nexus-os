@@ -321,6 +321,34 @@ so it is written and tested rather than remembered later.
 
 ---
 
+### D28 — How does the dashboard carry a figure that is not a score? *(blocks `sales.pipeline_board`)*
+
+`calculators/pipeline.py` is written and tested and **cannot be rendered**.
+`FigureOut` is an audit's shape — `score`, `max_score`, `percentage`, weighted
+`checks` — and a pipeline is a count and a sum of money with **no denominator**.
+Inventing a target to divide by would manufacture a figure the customer never
+gave us, so the calculator ships and no tile shows it.
+
+Four options, argued in full in ADR 0033:
+
+- **A. One type, optional fields.** Simplest, and it makes `max_score` optional —
+  so a scored audit could ship without the denominator `FigureOut` exists to
+  guarantee.
+- **B. A sibling field** beside `figure`. Lets a block hold both, or neither.
+- **C. A discriminated union**, tagged `kind: "score" | "amount"`.
+- **D. Generalise to "a value with provenance."** One shape for everything.
+
+**My recommendation: C.** It cannot express the illegal state, TypeScript
+narrows on the tag exhaustively so a third kind fails to compile rather than
+falling through a branch, and it forces `describes()` (ADR 0028's narration
+staleness rule) to be written per kind — which A and B would let run its
+five-field comparison against an amount figure and quietly never fire.
+
+**Not urgent, and not trivial.** Nothing regresses while it is open; the cost of
+answering is that every consumer of `figure` branches once.
+
+---
+
 ### ~~D27 — How is a provider's token held at rest?~~ — **answered: A with C**, 17 September 2026
 
 `doc/14`'s connector spine is built (ADR 0031) and there is nowhere to put a

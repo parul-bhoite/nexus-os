@@ -272,7 +272,7 @@ zero. Needs the developer app in §5.
 count and a sum of money, and **it has no denominator**: inventing a target to divide by
 would manufacture a figure the customer never gave us. So the calculator returns its own
 shape and no tile can render it yet. Extending the figure model to carry a second kind is
-a design decision with an ADR in it, not a widening to do quietly.
+**D28**, argued in ADR 0033 — four options, with a discriminated union recommended.
 
 ### S10 — `ops_layer` ⛔ needs its own plan
 The largest blocker, and a product to build rather than a connector to write: projects and
