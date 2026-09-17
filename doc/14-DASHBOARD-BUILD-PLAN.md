@@ -254,14 +254,25 @@ today — this step changes location, not content.
 identical rows through `retrieval/`; a test asserts no adapter output can reach a model
 without passing through a calculator; credentials are never logged.
 
-### S9 — The first real connector, paired with a calculator ⛔ blocked
+### S9 — The first real connector, paired with a calculator 🟡 code complete
 **CRM via HubSpot's official MCP server**, plus one calculator so something appears.
 Chosen over accounting because **D7 is open** — whether Finance brings accounting in at all
 is undecided, and building its connector first would be building on a decision nobody has
 made.
-**Acceptance:** a real HubSpot sandbox connects, rows land scoped, one tile moves from
-`locked` to a figure with its denominator, and disconnecting returns it to `locked` rather
-than to a zero.
+**Built:** the OAuth round trip (`routes/connections.py`, with `state` bound to workspace,
+person and provider), sealed credential storage (`retrieval/connections.py`), migration
+0031's `crm_deal` with RLS forced, and `calculators/pipeline.py`.
+
+**Acceptance, outstanding:** a real HubSpot sandbox connects, rows land scoped, one tile
+moves from `locked` to a figure, and disconnecting returns it to `locked` rather than to a
+zero. Needs the developer app in §5.
+
+**And one design question the calculator surfaced.** `FigureOut` carries `score`,
+`max_score`, `percentage` and weighted `checks` — the shape of an audit. A pipeline is a
+count and a sum of money, and **it has no denominator**: inventing a target to divide by
+would manufacture a figure the customer never gave us. So the calculator returns its own
+shape and no tile can render it yet. Extending the figure model to carry a second kind is
+a design decision with an ADR in it, not a widening to do quietly.
 
 ### S10 — `ops_layer` ⛔ needs its own plan
 The largest blocker, and a product to build rather than a connector to write: projects and
@@ -283,9 +294,9 @@ short.
 |---|---|---|
 | ~~1~~ | ~~**D27 — how a provider token is held at rest**~~ — **answered: A with C.** Migration 0030 adds `credentials` and `credential_key_id`, applied to Neon; `app/connectors/credentials.py` seals the refresh token only | ✅ done |
 | ~~2~~ | ~~**`cryptography`**~~ — a base dependency, not an optional extra: a connector that cannot decrypt its token is not a supported state | ✅ done |
-| ~~3~~ | ~~**`NEXUS_CONNECTOR_SECRET_KEY`**~~ — a real `Settings` field, in `_DEPLOYED_REQUIRES` and in `doc/DEPLOYMENT-ENV.md`. Generate with `Fernet.generate_key()` | ✅ **set this in `.env` before S9** |
-| 4 | **The official `mcp` SDK.** Not a dependency. `McpTransport.Session` is the one seam it plugs into; hand-rolling JSON-RPC session setup, version negotiation, SSE framing and OAuth against five vendors is the kind of thing that works in a test and fails on the third provider | Parul — a dependency choice |
-| 5 | **A HubSpot developer app**: client id, client secret, redirect URI, and a sandbox portal to read | Parul |
+| ~~3~~ | ~~**`NEXUS_CONNECTOR_SECRET_KEY`**~~ — a real `Settings` field, in `_DEPLOYED_REQUIRES` and in `doc/DEPLOYMENT-ENV.md`. Generate with `Fernet.generate_key()` | ✅ **set this in `.env`** |
+| ~~4~~ | ~~**The official `mcp` SDK**~~ — `mcp>=2.2`, a base dependency. It brings `httpx2`, a second HTTP client library, confined to `connectors/session.py` (ADR 0031) | ✅ done |
+| 5 | **A HubSpot developer app**: client id, client secret, redirect URI, and a sandbox portal to read. **The only thing still blocking S9** — the code is written and tested against a fake session | Parul |
 | 6 | **D7** — whether Finance brings accounting in at all. Not a blocker for S9, which is why S9 is CRM; it blocks the accounting half of S11 | Parul |
 
 Every one of these is in `.env.example` with the reason, and in `FUTURE` in

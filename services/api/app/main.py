@@ -19,6 +19,7 @@ from app.logging import configure_logging, get_logger, request_id_var
 from app.routes.audit import router as audit_router
 from app.routes.auth import router as auth_router
 from app.routes.companies import router as companies_router
+from app.routes.connections import router as connections_router
 from app.routes.dashboards import router as dashboards_router
 from app.routes.documents import router as documents_router
 from app.routes.files import router as files_router
@@ -223,6 +224,7 @@ def create_app() -> FastAPI:
     app.include_router(setup_router)
     app.include_router(spine_router)
     app.include_router(dashboards_router)
+    app.include_router(connections_router)
     return app
 
 
