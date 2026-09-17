@@ -312,7 +312,17 @@ def test_pre_ping_can_be_turned_off_but_defaults_on(monkeypatch: pytest.MonkeyPa
     intermittent 500 rather than as slowness somebody can see.
     """
     try:
-        assert _engine_with(monkeypatch)._pre_ping is True
+        # **Asserted against the declared default, not against an engine built
+        # under this machine's `.env`.** `Settings` reads `.env` through
+        # pydantic-settings, so monkeypatching the URL does not shield the rest:
+        # a developer whose `.env` carries `NEXUS_DB_POOL_PRE_PING=false` — this
+        # repository's does, deliberately, at line 69 — saw this fail while CI,
+        # which has no `.env`, saw it pass. That is the same shape as the
+        # `NEXUS_JOBS_DATABASE_URL` trap CLAUDE.md records, inverted.
+        assert Settings.model_fields["db_pool_pre_ping"].default is True
+        # The explicit cases still build a real engine, because what matters
+        # there is that the setting reaches the pool at all.
+        assert _engine_with(monkeypatch, NEXUS_DB_POOL_PRE_PING="true")._pre_ping is True
         assert _engine_with(monkeypatch, NEXUS_DB_POOL_PRE_PING="false")._pre_ping is False
     finally:
         for cache in (get_settings, get_engine, get_sessionmaker):

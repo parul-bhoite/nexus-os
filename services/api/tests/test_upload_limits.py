@@ -268,7 +268,10 @@ def test_the_phase_acceptance_three_files_in_one_go() -> None:
         # 3 — 30 MB is refused, and the refusal names the limit.
         too_big = post("huge.pdf", b"%PDF-1.4\n" + b"0" * (30 * MB))
         assert too_big.status_code == 413
-        assert "25 MB" in too_big.json()["detail"]
+        # `detail` is a structured object — `{"error", "message"}` — so the old
+        # `"25 MB" in too_big.json()["detail"]` tested its *keys* and could never
+        # have passed whatever the message said. The message itself was in KB.
+        assert "MB" in too_big.json()["detail"]["message"], too_big.text
 
         # The refused file was never stored. "Refused before upload" has to mean
         # no row and no bytes, or the quota it protects is already spent.

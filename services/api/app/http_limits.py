@@ -190,8 +190,16 @@ class BodySizeLimit:
             {
                 "detail": {
                     "error": "request_too_large",
+                    # **Megabytes, because a person reads this.** It said
+                    # `{limit // 1024} KB`, which renders a 25 MB cap as
+                    # "26112 KB" — a number nobody recognises as the limit they
+                    # were told about, and the "Upload failed" class of message
+                    # this module's own docstring exists to rule out. One
+                    # decimal so 25.5 MB does not round to the 25 MB a founder
+                    # just tried and had refused.
                     "message": (
-                        f"That request body is over the {limit // 1024} KB limit for this endpoint."
+                        f"That request body is over the {limit / 1024 / 1024:.1f} MB "
+                        "limit for this endpoint."
                     ),
                 }
             }
