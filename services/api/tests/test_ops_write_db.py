@@ -1,0 +1,324 @@
+"""Recording work, and the isolation a write surface needs.
+
+`doc/15` S10.1's acceptance test. **This is the first place a customer writes into
+NEXUS**, and a write surface fails differently from a read one: a read that
+escapes its workspace shows somebody another company's data, while a write that
+escapes *puts* data in another company — and the victim has no reason to doubt
+it, because it appears in their own board alongside their own records.
+
+`nexus_app` is `NOBYPASSRLS`, so an unscoped statement returns **zero rows rather
+than an error** (CLAUDE.md). That is what makes these worth running against a
+real Postgres: a hermetic version would assert a predicate string and prove
+nothing about the policy.
+
+Against Neon, with the sync-SQLAlchemy fixtures `test_surface_tiles.py` uses.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterator
+from uuid import UUID, uuid4
+
+import pytest
+import sqlalchemy as sa
+from fastapi.testclient import TestClient
+from sqlalchemy import Engine, create_engine
+
+from app.config import get_settings
+from app.db import get_engine, get_sessionmaker
+from app.domain.scopes import Department, Role
+from app.domain.session import ScopedSession
+from app.main import create_app
+from tests.dburl import async_database_url, database_url
+
+requires_db = pytest.mark.requires_db
+CSRF = "a-csrf-token"
+
+
+@pytest.fixture
+def engine() -> Iterator[Engine]:
+    url = database_url()
+    assert url is not None
+    made = create_engine(url, future=True)
+    yield made
+    made.dispose()
+
+
+@pytest.fixture
+def app_db(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    monkeypatch.setenv("NEXUS_DATABASE_URL", async_database_url() or "")
+    monkeypatch.setenv("NEXUS_STORAGE_SIGNING_SECRET", "test-secret")
+    for cache in (get_settings, get_engine, get_sessionmaker):
+        cache.cache_clear()
+    yield
+    for cache in (get_settings, get_engine, get_sessionmaker):
+        cache.cache_clear()
+
+
+def _workspace(conn: sa.Connection) -> tuple[UUID, UUID]:
+    user, tenant, ws = uuid4(), uuid4(), uuid4()
+    conn.execute(
+        sa.text("INSERT INTO app_user (id, email) VALUES (:i,:e)"),
+        {"i": str(user), "e": f"ops-{user.hex[:8]}@example.com"},
+    )
+    conn.execute(sa.text("INSERT INTO tenant (id, name) VALUES (:i,'T')"), {"i": str(tenant)})
+    conn.execute(sa.text("SELECT set_config('nexus.workspace_id', :w, true)"), {"w": str(ws)})
+    conn.execute(
+        sa.text(
+            "INSERT INTO workspace (id, workspace_id, tenant_id, name, domain)"
+            " VALUES (:i,:i,:t,'W',:d)"
+        ),
+        {"i": str(ws), "t": str(tenant), "d": f"ops-{ws.hex[:8]}.om"},
+    )
+    conn.execute(
+        sa.text(
+            "INSERT INTO membership (workspace_id, user_id, role, departments)"
+            " VALUES (:w,:u,'owner', ARRAY['operations']::text[])"
+        ),
+        {"w": str(ws), "u": str(user)},
+    )
+    return user, ws
+
+
+@pytest.fixture
+def two_workspaces(engine: Engine) -> Iterator[tuple[tuple[UUID, UUID], tuple[UUID, UUID]]]:
+    with engine.begin() as conn:
+        first = _workspace(conn)
+    with engine.begin() as conn:
+        second = _workspace(conn)
+    yield first, second
+    for user, ws in (first, second):
+        with engine.begin() as conn:
+            conn.execute(
+                sa.text("SELECT set_config('nexus.workspace_id', :w, true)"), {"w": str(ws)}
+            )
+            for statement in (
+                "DELETE FROM ops_task WHERE workspace_id = :w",
+                "DELETE FROM ops_project WHERE workspace_id = :w",
+                "DELETE FROM membership WHERE workspace_id = :w",
+                "DELETE FROM workspace WHERE id = :w",
+            ):
+                conn.execute(sa.text(statement), {"w": str(ws)})
+            conn.execute(sa.text("DELETE FROM app_user WHERE id = :u"), {"u": str(user)})
+
+
+@pytest.fixture
+def client(app_db: None) -> Iterator[TestClient]:
+    app = create_app()
+    with TestClient(app) as made:
+        yield made
+    app.dependency_overrides.clear()
+
+
+def as_member(client: TestClient, who: tuple[UUID, UUID], role: Role = Role.OWNER) -> None:
+    from app.deps import current_scope
+
+    user, ws = who
+    scope = ScopedSession(
+        user_id=user,
+        tenant_id=uuid4(),
+        workspace_id=ws,
+        role=role,
+        departments=frozenset() if role is Role.VIEWER else frozenset({Department.OPERATIONS}),
+    )
+    client.app.dependency_overrides[current_scope] = lambda: scope  # type: ignore[attr-defined]
+    client.cookies.set("nexus_csrf", CSRF)
+
+
+def _post(client: TestClient, path: str, body: dict[str, object]) -> object:
+    return client.post(path, json=body, headers={"X-CSRF-Token": CSRF})
+
+
+# ── Recording, and reading back ───────────────────────────────
+
+
+@requires_db
+def test_a_project_and_a_task_are_recorded_and_read_back(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """`doc/15` S10.1's acceptance: a founder records work through the app and
+    the tiles have something to count."""
+    mine, _ = two_workspaces
+    as_member(client, mine)
+
+    project = _post(client, "/ops/projects", {"name": "Sohar fit-out", "status": "active"})
+    assert project.status_code == 201, project.text  # type: ignore[attr-defined]
+    project_id = project.json()["id"]  # type: ignore[attr-defined]
+
+    task = _post(
+        client,
+        "/ops/tasks",
+        {"title": "Order the steel", "project_id": project_id, "due_on": "2026-09-01"},
+    )
+    assert task.status_code == 201, task.text  # type: ignore[attr-defined]
+
+    body = client.get("/ops").json()
+    assert [p["name"] for p in body["projects"]] == ["Sohar fit-out"]
+    assert [t["title"] for t in body["tasks"]] == ["Order the steel"]
+    assert body["recorded_at"], "a recorded workspace must carry a date"
+
+
+@requires_db
+def test_a_workspace_that_has_recorded_nothing_says_so(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """**Not an empty board.** Never having used the layer leaves the tiles
+    `locked`; having used it and closed everything is a different state, and
+    `recorded_at` is what tells them apart."""
+    mine, _ = two_workspaces
+    as_member(client, mine)
+
+    body = client.get("/ops").json()
+
+    assert body == {"projects": [], "tasks": [], "recorded_at": ""}
+
+
+@requires_db
+def test_a_task_needs_no_project(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """ "Call the supplier" is work without being a project. Requiring one would
+    make somebody invent a project to record a task — and an invented project
+    then counts on the board."""
+    mine, _ = two_workspaces
+    as_member(client, mine)
+
+    assert _post(client, "/ops/tasks", {"title": "Call the supplier"}).status_code == 201  # type: ignore[attr-defined]
+
+
+# ── Isolation, which is what a write surface gets wrong ───────
+
+
+@requires_db
+def test_another_workspaces_records_are_invisible(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    mine, theirs = two_workspaces
+    as_member(client, mine)
+    _post(client, "/ops/projects", {"name": "Mine"})
+
+    as_member(client, theirs)
+    body = client.get("/ops").json()
+
+    assert body["projects"] == []
+
+
+@requires_db
+def test_a_task_cannot_be_attached_to_another_workspaces_project(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """**The failure a write surface has that a read one does not.**
+
+    Succeeding here would put a task in another company's project — and the
+    victim has no reason to doubt it, because it appears on their own board
+    beside their own records. RLS hides the parent row, so without this check the
+    insert fails as a foreign-key error naming a constraint; with it, a 404
+    naming the project.
+    """
+    mine, theirs = two_workspaces
+    as_member(client, mine)
+    project_id = _post(client, "/ops/projects", {"name": "Mine"}).json()["id"]  # type: ignore[attr-defined]
+
+    as_member(client, theirs)
+    response = _post(client, "/ops/tasks", {"title": "Sneak", "project_id": project_id})
+
+    assert response.status_code == 404  # type: ignore[attr-defined]
+
+
+@requires_db
+def test_archiving_another_workspaces_project_changes_nothing(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """The delete is idempotent and scoped, so this is a no-op rather than a
+    refusal — and the row must survive. An unscoped `UPDATE` would silently
+    archive somebody else's project and return 204 either way, which is exactly
+    the shape `nexus_app` being NOBYPASSRLS protects against."""
+    mine, theirs = two_workspaces
+    as_member(client, mine)
+    project_id = _post(client, "/ops/projects", {"name": "Mine"}).json()["id"]  # type: ignore[attr-defined]
+
+    as_member(client, theirs)
+    client.delete(f"/ops/projects/{project_id}", headers={"X-CSRF-Token": CSRF})
+
+    as_member(client, mine)
+    assert [p["name"] for p in client.get("/ops").json()["projects"]] == ["Mine"]
+
+
+@requires_db
+def test_an_archived_project_stops_counting_without_being_deleted(
+    client: TestClient,
+    engine: Engine,
+    two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]],
+) -> None:
+    """Archive, not delete: a founder who put something away by accident has a
+    way back, and the row keeps its tasks' history."""
+    mine, _ = two_workspaces
+    as_member(client, mine)
+    project_id = _post(client, "/ops/projects", {"name": "Put away"}).json()["id"]  # type: ignore[attr-defined]
+
+    client.delete(f"/ops/projects/{project_id}", headers={"X-CSRF-Token": CSRF})
+
+    assert client.get("/ops").json()["projects"] == []
+    with engine.begin() as conn:
+        conn.execute(
+            sa.text("SELECT set_config('nexus.workspace_id', :w, true)"), {"w": str(mine[1])}
+        )
+        row = conn.execute(
+            sa.text("SELECT archived_at FROM ops_project WHERE id = :p"), {"p": project_id}
+        ).one()
+    assert row.archived_at is not None
+
+
+# ── Who may write ─────────────────────────────────────────────
+
+
+@requires_db
+def test_a_viewer_may_not_record_work(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """Doc 06 §2.3 gives a Viewer company-wide material and no department.
+    Writing is not reading."""
+    mine, _ = two_workspaces
+    as_member(client, mine, Role.VIEWER)
+
+    assert _post(client, "/ops/projects", {"name": "No"}).status_code == 403  # type: ignore[attr-defined]
+
+
+@requires_db
+def test_a_contributor_may_record_work(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """**Deliberately wider than `/connections`.** Connecting a tool grants a read
+    of the whole company's data; recording a task is the work itself. A layer only
+    managers could write to is a layer nobody uses — and this source fails on
+    adoption."""
+    mine, _ = two_workspaces
+    as_member(client, mine, Role.CONTRIBUTOR)
+
+    assert _post(client, "/ops/projects", {"name": "Mine to do"}).status_code == 201  # type: ignore[attr-defined]
+
+
+@requires_db
+def test_recording_needs_csrf(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    mine, _ = two_workspaces
+    as_member(client, mine)
+
+    assert client.post("/ops/projects", json={"name": "No"}).status_code == 403
+
+
+@requires_db
+def test_an_unknown_status_is_refused_at_the_edge(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """Postgres would reject it too — as an IntegrityError reaching the client as
+    a 500 naming a constraint. The same refusal at the edge names the field and
+    what it accepts."""
+    mine, _ = two_workspaces
+    as_member(client, mine)
+
+    response = _post(client, "/ops/projects", {"name": "X", "status": "nearly"})
+
+    assert response.status_code == 422  # type: ignore[attr-defined]
+    assert "planned" in response.json()["detail"]  # type: ignore[attr-defined]

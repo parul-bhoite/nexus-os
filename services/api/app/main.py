@@ -25,6 +25,7 @@ from app.routes.documents import router as documents_router
 from app.routes.files import router as files_router
 from app.routes.onboarding import router as onboarding_router
 from app.routes.onboarding_agent import router as onboarding_agent_router
+from app.routes.ops import router as ops_router
 from app.routes.research import router as research_router
 from app.routes.review import router as review_router
 from app.routes.setup import router as setup_router
@@ -225,6 +226,7 @@ def create_app() -> FastAPI:
     app.include_router(spine_router)
     app.include_router(dashboards_router)
     app.include_router(connections_router)
+    app.include_router(ops_router)
     return app
 
 
