@@ -17,9 +17,8 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from uuid import UUID, uuid4
-
 from datetime import timedelta
+from uuid import UUID, uuid4
 
 import pytest
 import sqlalchemy as sa

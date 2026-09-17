@@ -1,6 +1,6 @@
 """The rail, the blocks, and the three gaps assigning them found.
 
-`doc/13` §4 and §6. A director's page is 4–6 named sections; the section is the
+`doc/13` §4 and §6. A director's page is 4-6 named sections; the section is the
 unit of navigation, the block is the unit of rendering, and the capability is
 the unit of truth. This file holds the joins between those three, and — more
 usefully — the places where they do not meet.

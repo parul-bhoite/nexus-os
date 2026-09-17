@@ -1,6 +1,6 @@
 """Sections, and the block each capability renders as.
 
-`doc/13` §4 and §6. A director's page is **4–6 named sections**, not one list of
+`doc/13` §4 and §6. A director's page is **4-6 named sections**, not one list of
 sixty tiles. The current UI is a flat `<ul>` of every offering, which cannot
 express "Dispatch board" or "Receivables ageing" and does not survive the
 catalogue: the section is the unit of navigation, the block is the unit of
@@ -343,7 +343,7 @@ def placement_of(capability_id: str) -> tuple[str, Block]:
 # in the customer's own language. A reserved region that says what it will do is
 # a preview of value; a blank one reads as a bug and a fake one reads as a lie.
 #
-# The questions are `doc/08` §2E–§8E verbatim. They were written as what a
+# The questions are `doc/08` §2E-§8E verbatim. They were written as what a
 # founder would actually type, which is why they are not paraphrased here.
 
 ASSISTANT_QUESTIONS: Final[dict[Department, tuple[str, ...]]] = {
@@ -452,21 +452,28 @@ WATCH_ITEMS: Final[tuple[WatchItem, ...]] = (
         question_key="lost_to",
         department=Department.MARKETING,
         label="Who you lose to",
-        measured_by="Observed movement on the competitors you named — new pages, new offers, ranking changes.",
+        measured_by=(
+            "Observed movement on the competitors you named — new pages, new offers, "
+            "ranking changes."
+        ),
         needs="the crawl, which runs already, plus keyword data for the ranking half",
     ),
     WatchItem(
         question_key="supplier_concentration",
         department=Department.OPERATIONS,
         label="Supplier concentration",
-        measured_by="What share of purchases actually goes to that supplier, and their on-time rate.",
+        measured_by=(
+            "What share of purchases actually goes to that supplier, and their on-time rate."
+        ),
         needs="purchase history in the operations layer",
     ),
     WatchItem(
         question_key="people_risk",
         department=Department.HR,
         label="Your biggest people risk",
-        measured_by="Whether the vacancy or the gap you named is still open, and what it is holding back.",
+        measured_by=(
+            "Whether the vacancy or the gap you named is still open, and what it is holding back."
+        ),
         needs="the roster, and the operations layer for the impact half",
     ),
     WatchItem(
@@ -508,7 +515,7 @@ class NotAsked:
     source: str
 
 
-# `doc/08` §2B–§8B, verbatim. **Showing the customer what NEXUS refuses to ask
+# `doc/08` §2B-§8B, verbatim. **Showing the customer what NEXUS refuses to ask
 # them is a product surface, not an internal rule** (§11's second addition) —
 # and it is the highest-intent place in the application to put a Connect
 # button, because the person is reading the list of things they will not have to
