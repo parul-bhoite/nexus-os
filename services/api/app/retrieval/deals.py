@@ -19,12 +19,14 @@ because it sees the rows.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Final
+from typing import Any, Final
 from uuid import UUID
 
 import sqlalchemy as sa
+from sqlalchemy import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.calculators.pipeline import Deal
@@ -37,43 +39,6 @@ TYPED: Final = "nexus"
 safety of that reuse is the partition below.** A provider name is what tells a
 synced deal from one somebody wrote down.
 """
-
-_SYNCED: Final = sa.text(
-    """
-    SELECT external_id, amount_minor, currency, stage, closes_on, fetched_at
-      FROM crm_deal
-     WHERE workspace_id = :w AND provider <> :typed
-     ORDER BY fetched_at DESC, external_id
-    """
-)
-"""Every deal a **provider** told us about, newest fetch first.
-
-**The `provider <> :typed` clause is not a tidy-up.** Without it this query
-returns hand-typed deals as well, and `sales.pipeline_board` reports them as
-though a CRM had said so — a typed number and a measured one rendered
-identically, which is the thing `doc/05` §0 exists to prevent. It would be
-silent: the figure would look exactly as plausible as before.
-
-**No `LIMIT`.** A pipeline computed over the first hundred rows and presented as
-the pipeline is a wrong number with a plausible denominator — the failure the
-adapter's `truncated` flag exists to report, and it would be reintroduced here by
-a cap added for tidiness.
-
-`ORDER BY fetched_at DESC, external_id` is stable: the second key is what stops
-two deals fetched in the same instant swapping places between requests, which
-would make the working drawer look rewritten while saying the same thing.
-"""
-
-
-_TYPED: Final = sa.text(
-    """
-    SELECT external_id, amount_minor, currency, stage, closes_on, fetched_at
-      FROM crm_deal
-     WHERE workspace_id = :w AND provider = :typed
-     ORDER BY fetched_at DESC, external_id
-    """
-)
-"""Every deal somebody wrote down here. The other half of the partition."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,15 +55,43 @@ class DealSnapshot:
     provider: str
 
 
-async def current_deals(db: AsyncSession, scope: ScopedSession) -> DealSnapshot | None:
-    """This workspace's deals, or `None` if none have ever been read.
+async def both_populations(
+    db: AsyncSession, scope: ScopedSession
+) -> tuple[DealSnapshot | None, DealSnapshot | None]:
+    """Synced deals and typed deals, in **one round trip** — `(synced, typed)`.
 
-    **`None` is load-bearing and is not an empty list.** No rows means no sync
-    has happened — the tile is `locked` and should say so. An empty list means a
-    connected CRM with no open deals, which is a real pipeline of zero. Collapsing
-    the two would let "we have never looked" render as "you have no deals" (I10).
+    `current_deals` and `current_typed_deals` read the same table with opposite
+    `provider` predicates, so asking twice is a round trip spent on a `WHERE`
+    clause. The surface needs both on every load; against a database this machine
+    reaches in about a second per statement, that second buys nothing.
+
+    **The partition still happens, and still cannot be skipped** (ADR 0038) — it
+    moves from the predicate to the loop below, where it is just as explicit. A
+    typed deal reaching `sales.pipeline_board` would be reported as though a CRM
+    had said so, which is the failure the partition exists to prevent.
+
+    The two functions remain, because they are the honest thing for a caller that
+    wants one population; this is for the caller that wants both.
     """
-    rows = (await db.execute(_SYNCED, {"w": str(scope.workspace_id), "typed": TYPED})).all()
+    rows = (await db.execute(_ALL, {"w": str(scope.workspace_id)})).all()
+    synced = [row for row in rows if row.provider != TYPED]
+    typed = [row for row in rows if row.provider == TYPED]
+
+    return (
+        _snapshot(synced, provider="crm"),
+        _snapshot(typed, provider=TYPED),
+    )
+
+
+def _snapshot(rows: Sequence[Row[Any]], *, provider: str) -> DealSnapshot | None:
+    """One population's snapshot, or `None` when it has none.
+
+    **`None` is not an empty list**, and the distinction is the whole reason
+    `current_deals` documents it: no rows means no sync has happened and the tile
+    is `locked`; an empty list would mean a connected CRM with nothing open,
+    which is a real pipeline of zero (I10). Shared so the two populations cannot
+    answer that question differently.
+    """
     if not rows:
         return None
 
@@ -113,13 +106,24 @@ async def current_deals(db: AsyncSession, scope: ScopedSession) -> DealSnapshot 
             )
             for row in rows
         ],
-        # The newest fetch in the set. `ORDER BY fetched_at DESC` puts it first,
-        # and it is the honest date for the figure: the oldest would claim the
-        # pipeline is staler than it is.
+        # The newest fetch in the set. The ORDER BY puts it first, and it is the
+        # honest date for the figure: the oldest would claim the pipeline is
+        # staler than it is.
         fetched_at=rows[0].fetched_at,
-        provider="crm",
+        provider=provider,
     )
 
+
+_ALL: Final = sa.text(
+    """
+    SELECT provider, external_id, amount_minor, currency, stage, closes_on, fetched_at
+      FROM crm_deal
+     WHERE workspace_id = :w
+     ORDER BY fetched_at DESC, external_id
+    """
+)
+"""Both populations, for the caller that needs both. `provider` is selected so
+the partition can be made in Python rather than by asking twice."""
 
 _TYPED_ROWS: Final = sa.text(
     """
@@ -169,37 +173,3 @@ async def typed_deal_records(db: AsyncSession, scope: ScopedSession) -> list[Typ
         )
         for row in rows
     ]
-
-
-async def current_typed_deals(db: AsyncSession, scope: ScopedSession) -> DealSnapshot | None:
-    """The deals somebody recorded by hand, or `None` if nobody has — ADR 0038.
-
-    Deliberately the same shape as `current_deals`, because a typed deal and a
-    synced one are the same *kind* of fact with different standing. What differs
-    is the provenance the figure carries, not the arithmetic —
-    `calculators/pipeline.py` is untouched by this and that was the argument for
-    reusing the table at all.
-
-    `fetched_at` here is the moment somebody saved the row rather than the moment
-    we asked a provider. The column's name is wider than `0031`'s comment made
-    it; the figure never says "read from your CRM" about one of these, because
-    `self_reported` decides that sentence.
-    """
-    rows = (await db.execute(_TYPED, {"w": str(scope.workspace_id), "typed": TYPED})).all()
-    if not rows:
-        return None
-
-    return DealSnapshot(
-        deals=[
-            Deal(
-                external_id=str(row.external_id),
-                amount_minor=row.amount_minor,
-                currency=row.currency,
-                stage=row.stage,
-                closes_on=row.closes_on,
-            )
-            for row in rows
-        ],
-        fetched_at=rows[0].fetched_at,
-        provider=TYPED,
-    )

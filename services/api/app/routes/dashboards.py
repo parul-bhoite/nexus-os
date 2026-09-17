@@ -100,7 +100,10 @@ from app.grounding.context import CompanyContext, assemble
 from app.grounding.pipeline import Outcome, UnavailableReason
 from app.logging import get_logger
 from app.retrieval.crawl import CrawlSnapshot, current_page_signals
-from app.retrieval.deals import DealSnapshot, current_deals, current_typed_deals
+from app.retrieval.deals import (
+    DealSnapshot,
+    both_populations,
+)
 from app.retrieval.narration import current_narrations
 from app.retrieval.ops import OpsSnapshot, current_ops
 from app.retrieval.scoped import apply_workspace_scope, scoped_connection
@@ -245,13 +248,19 @@ async def observed_sources(scope: CurrentScope) -> Observed:
     this way since step C.
     """
     async with scoped_connection(scope) as db:
-        # Four reads, one connection, once per request. Each feeds every tile
-        # on the page, so a per-tile read would be the same round trip to
-        # `us-east-2` repeated for one answer.
+        # Four statements, one connection, once per request. Each feeds every
+        # tile on the page, so a per-tile read would be the same round trip to
+        # `us-east-2` repeated for one answer — and on this link one round trip
+        # measures about a second, which is what makes the count the thing worth
+        # reducing rather than any single query.
+        # Both deal populations in one statement. They read the same table with
+        # opposite `provider` predicates, so asking twice spent a round trip on
+        # a `WHERE` clause — and on this link a round trip is about a second.
+        synced, typed = await both_populations(db, scope)
         return Observed(
             crawl=await current_page_signals(db, scope),
-            deals=await current_deals(db, scope),
-            typed_deals=await current_typed_deals(db, scope),
+            deals=synced,
+            typed_deals=typed,
             ops=await current_ops(db, scope),
             narrations=await current_narrations(db, scope),
         )
