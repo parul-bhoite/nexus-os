@@ -272,16 +272,33 @@ def test_nothing_outside_the_ai_package_names_the_vendor() -> None:
 
     `config.py` is exempt: it holds the key and the model name, which are
     configuration rather than an SDK dependency.
+
+    **One string is exempt rather than one file.** HubSpot publishes its MCP
+    server at `https://mcp.hubspot.com/anthropic` — their path, named after the
+    protocol's author, and nothing to do with which model we call. Swapping our
+    provider does not change that URL, so it is not the dependency this test
+    exists to prevent. Exempting the literal keeps the guard over the rest of
+    `connectors/hubspot.py`; exempting the file would leave a connector free to
+    import the SDK tomorrow, which is exactly what this asserts against.
     """
     from pathlib import Path
 
+    # A third party's own endpoint, not a dependency of ours. Listed so a second
+    # one has to be added deliberately and with a reason beside it.
+    their_urls = ("https://mcp.hubspot.com/anthropic",)
+
     app_dir = Path(__file__).resolve().parents[1] / "app"
+
+    def names_the_vendor(path: Path) -> bool:
+        source = path.read_text(encoding="utf-8").lower()
+        for url in their_urls:
+            source = source.replace(url.lower(), "")
+        return "anthropic" in source
+
     offenders = sorted(
         path.relative_to(app_dir).as_posix()
         for path in app_dir.rglob("*.py")
-        if "anthropic" in path.read_text(encoding="utf-8").lower()
-        and path.parent.name != "ai"
-        and path.name != "config.py"
+        if names_the_vendor(path) and path.parent.name != "ai" and path.name != "config.py"
     )
 
     assert offenders == [], (

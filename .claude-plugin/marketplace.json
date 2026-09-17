@@ -1,0 +1,11 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "nexus-os",
+  "owner": {
+    "name": "Xebia ADF"
+  },
+  "metadata": {
+    "description": "Marketplace for plugins developed inside the NEXUS OS repository."
+  },
+  "plugins": []
+}

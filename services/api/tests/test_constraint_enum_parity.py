@@ -27,6 +27,7 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy import Engine, create_engine
 
+from app.calculators.completeness import ENTITIES
 from app.connectors.domain_check import Method, Strength
 from app.documents.classify import ReviewState
 from app.documents.status import DocumentStatus
@@ -43,6 +44,13 @@ from app.domain.reporting import Scale, WeekStart
 from app.domain.research import SourceKind, SourceState
 from app.domain.scopes import Role, Scope, scope_code
 from app.grounding.pipeline import Outcome
+from app.routes.ops import (
+    ISSUE_STATUSES,
+    MILESTONE_STATUSES,
+    PROJECT_STATUSES,
+    SEVERITIES,
+    TASK_STATUSES,
+)
 from tests.dburl import database_url
 
 DB_URL = database_url()
@@ -206,6 +214,39 @@ MAPPINGS: tuple[Mapping, ...] = (
         "ck_page_signals_captured_by",
         "app.domain.page_signals.CaptureSource",
         frozenset(source.value for source in CaptureSource),
+    ),
+    # The ops layer (`doc/15`, migrations 0032-0036). **Registered late, and the
+    # comment two above had already said why that costs.** Six value-list CHECKs
+    # went in across five migrations and five slices without a line here, so this
+    # test failed instead of the ones each slice was written for.
+    #
+    # Mappings rather than `UNMAPPED` entries: every one has a real Python
+    # counterpart that is *load bearing*. `routes/ops._validate` refuses an
+    # unknown value against these frozensets so the caller gets a 422 naming the
+    # field rather than an `IntegrityError` reaching them as a 500 naming an
+    # index. If the set and the constraint drift, that refusal either rejects
+    # what the database would take or admits what it will not — which is the
+    # failure this whole file exists to catch.
+    Mapping(
+        "ck_ops_project_status",
+        "app.routes.ops.PROJECT_STATUSES",
+        PROJECT_STATUSES,
+    ),
+    Mapping("ck_ops_task_status", "app.routes.ops.TASK_STATUSES", TASK_STATUSES),
+    Mapping(
+        "ck_ops_milestone_status",
+        "app.routes.ops.MILESTONE_STATUSES",
+        MILESTONE_STATUSES,
+    ),
+    Mapping("ck_ops_issue_status", "app.routes.ops.ISSUE_STATUSES", ISSUE_STATUSES),
+    Mapping("ck_ops_issue_severity", "app.routes.ops.SEVERITIES", SEVERITIES),
+    # The only one of the six whose counterpart is not a route constant: D29 asks
+    # "is this all of them?" per entity, and `ENTITIES` is what both the gate and
+    # the write path read.
+    Mapping(
+        "ck_ops_completeness_entity",
+        "app.calculators.completeness.ENTITIES",
+        ENTITIES,
     ),
 )
 
