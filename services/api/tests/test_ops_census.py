@@ -98,7 +98,10 @@ def test_a_capability_nothing_censuses_is_none_not_a_zero() -> None:
     """`compute_from_crawl`'s rule, for the same reason: a zero would say this
     company has no projects, where the truth is that nobody wrote the
     calculation."""
-    assert compute_from_ops("operations.stock_levels", _snapshot(), today=TODAY) is None
+    # `operations.score_drivers` — a composite, and D31's open question, so
+    # nothing censuses it. This named `stock_levels` until S10.5 censused it,
+    # which is the right way for this test to fail.
+    assert compute_from_ops("operations.score_drivers", _snapshot(), today=TODAY) is None
 
 
 def test_an_empty_list_is_a_real_zero_and_not_none() -> None:
@@ -185,7 +188,9 @@ def test_the_trace_names_a_method_a_reader_can_go_and_check(capability_id: str) 
     result = compute_from_ops(capability_id, _snapshot(), today=TODAY)
 
     assert result is not None
-    assert result.trace["method"] == "calculators.ops.count_items"
+    # Derived from the dispatch, not written out: S10.5's stock census counts
+    # against a level rather than a date, so it declares a different calculator.
+    assert result.trace["method"] == OPS_CENSUSES[capability_id].method
     assert result.trace["delta"] == "no_baseline"
 
 

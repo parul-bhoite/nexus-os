@@ -117,6 +117,42 @@ class IssueOut(BaseModel):
     due_on: date | None
 
 
+class StockItemIn(BaseModel):
+    name: Annotated[str, Field(min_length=1, max_length=200)]
+    on_hand: Annotated[int, Field(ge=0)]
+    minimum: Annotated[int, Field(ge=0)]
+    """**The founder's own level**, and the only thing the tile compares against.
+    `ge=0` at both ends: a negative count on hand drags a shortfall the wrong
+    way, and a negative minimum makes every item permanently sufficient."""
+
+    unit: Annotated[str | None, Field(max_length=40)] = None
+
+
+class StockItemOut(BaseModel):
+    id: UUID
+    name: str
+    unit: str | None
+    on_hand: int
+    minimum: int
+
+
+class SupplierIn(BaseModel):
+    name: Annotated[str, Field(min_length=1, max_length=200)]
+    spend_minor: Annotated[int | None, Field(ge=0)] = None
+    """Minor units of the workspace's reporting currency. `None` is a supplier
+    nobody has priced — a real state, counted as recorded and left out of the
+    share rather than treated as zero (I10)."""
+
+    category: Annotated[str | None, Field(max_length=100)] = None
+
+
+class SupplierOut(BaseModel):
+    id: UUID
+    name: str
+    category: str | None
+    spend_minor: int | None
+
+
 class DispatchIn(BaseModel):
     reference: Annotated[str, Field(min_length=1, max_length=200)]
     promised_on: date
@@ -191,6 +227,8 @@ class OpsOut(BaseModel):
     milestones: list[MilestoneOut]
     issues: list[IssueOut]
     dispatches: list[DispatchOut]
+    stock: list[StockItemOut]
+    suppliers: list[SupplierOut]
     grace_days: int | None
     """Days past the promise before an order is late, or `None` if nobody has
     said. `None` is why `on_time_dispatch` refuses, and the reason there is no
@@ -225,7 +263,15 @@ def _may_write(scope: CurrentScope) -> None:
 
 
 ARCHIVABLE: Final[frozenset[str]] = frozenset(
-    {"ops_project", "ops_task", "ops_milestone", "ops_issue", "ops_dispatch"}
+    {
+        "ops_project",
+        "ops_task",
+        "ops_milestone",
+        "ops_issue",
+        "ops_dispatch",
+        "ops_stock_item",
+        "ops_supplier",
+    }
 )
 """The tables `_archive` may write to.
 
@@ -290,6 +336,8 @@ async def read_ops(scope: CurrentScope) -> OpsOut:
             milestones=[],
             issues=[],
             dispatches=[],
+            stock=[],
+            suppliers=[],
             grace_days=None,
             completeness=[],
             recorded_at="",
@@ -331,6 +379,14 @@ async def read_ops(scope: CurrentScope) -> OpsOut:
                 dispatched_on=d.dispatched_on,
             )
             for d in snapshot.dispatches
+        ],
+        stock=[
+            StockItemOut(id=i.id, name=i.name, unit=i.unit, on_hand=i.on_hand, minimum=i.minimum)
+            for i in snapshot.stock
+        ],
+        suppliers=[
+            SupplierOut(id=s.id, name=s.name, category=s.category, spend_minor=s.spend_minor)
+            for s in snapshot.suppliers
         ],
         grace_days=snapshot.grace_days,
         completeness=[
@@ -767,3 +823,109 @@ async def set_dispatch_rule(body: DispatchRuleIn, scope: CurrentScope) -> Dispat
 
     log.info("ops.dispatch_rule_set", grace_days=body.grace_days)
     return DispatchRuleOut(grace_days=body.grace_days)
+
+
+@router.post(
+    "/stock",
+    response_model=StockItemOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_csrf)],
+)
+async def create_stock_item(body: StockItemIn, scope: CurrentScope) -> StockItemOut:
+    """Record a stock line and the minimum to hold — `doc/15` S10.5.
+
+    **Recording one of these is what answers `stock_posture`.** That question —
+    "do you hold stock, or order per job?" — is asked during onboarding and
+    arrives as free prose, so nothing reads it. A workspace with stock lines
+    holds stock; one with none leaves the tile locked. The record is the answer,
+    which is the same adoption test `OPS_LAYER` uses everywhere else.
+    """
+    _may_write(scope)
+
+    async with scoped_connection(scope) as db:
+        row = (
+            await db.execute(
+                sa.text(
+                    "INSERT INTO ops_stock_item"
+                    " (workspace_id, name, unit, on_hand, minimum, created_by)"
+                    " VALUES (:w, :name, :unit, :on_hand, :minimum, :user)"
+                    " RETURNING id, name, unit, on_hand, minimum"
+                ),
+                {
+                    "w": str(scope.workspace_id),
+                    "name": body.name.strip(),
+                    "unit": body.unit.strip() if body.unit else None,
+                    "on_hand": body.on_hand,
+                    "minimum": body.minimum,
+                    "user": str(scope.user_id),
+                },
+            )
+        ).one()
+        await db.commit()
+
+    log.info("ops.stock_item_created", short=body.on_hand < body.minimum)
+    return StockItemOut(
+        id=row.id,
+        name=row.name,
+        unit=row.unit,
+        on_hand=row.on_hand,
+        minimum=row.minimum,
+    )
+
+
+@router.post(
+    "/suppliers",
+    response_model=SupplierOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_csrf)],
+)
+async def create_supplier(body: SupplierIn, scope: CurrentScope) -> SupplierOut:
+    """Record a supplier and what you spend with them — `doc/15` S10.5.
+
+    **The spend is a figure, never a share.** A founder is not asked what
+    percentage of their purchasing goes to one supplier: that is the number
+    NEXUS works out, and asking for it would be `doc/05` §0's self-reported
+    figure wearing a computed one's clothes.
+    """
+    _may_write(scope)
+
+    async with scoped_connection(scope) as db:
+        row = (
+            await db.execute(
+                sa.text(
+                    "INSERT INTO ops_supplier"
+                    " (workspace_id, name, category, spend_minor, created_by)"
+                    " VALUES (:w, :name, :category, :spend, :user)"
+                    " RETURNING id, name, category, spend_minor"
+                ),
+                {
+                    "w": str(scope.workspace_id),
+                    "name": body.name.strip(),
+                    "category": body.category.strip() if body.category else None,
+                    "spend": body.spend_minor,
+                    "user": str(scope.user_id),
+                },
+            )
+        ).one()
+        await db.commit()
+
+    log.info("ops.supplier_created", priced=body.spend_minor is not None)
+    return SupplierOut(id=row.id, name=row.name, category=row.category, spend_minor=row.spend_minor)
+
+
+@router.delete(
+    "/stock/{item_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_csrf)],
+)
+async def archive_stock_item(item_id: UUID, scope: CurrentScope) -> None:
+    await _archive(scope, "ops_stock_item", item_id)
+
+
+@router.delete(
+    "/suppliers/{supplier_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_csrf)],
+)
+async def archive_supplier(supplier_id: UUID, scope: CurrentScope) -> None:
+    await _archive(scope, "ops_supplier", supplier_id)

@@ -100,9 +100,15 @@ class RegisterCompanyRequest(BaseModel):
     # about the company and the input the research run is queued against.
     website_url: str = Field(min_length=3, max_length=2048)
     # `country`, `reporting_currency` and `headcount_band` were here and are
-    # gone. Nothing read the columns they wrote — no SELECT in this codebase
-    # names any of the three — and the currency is asked properly later, by the
-    # question catalogue as a constrained choice that arrives with a scope.
+    # gone. The currency is asked properly later, by the question catalogue as a
+    # constrained choice that arrives with a scope.
+    #
+    # **This used to say "nothing read the columns they wrote", and that stopped
+    # being true in `doc/15` S10.5**: `retrieval/ops.py` now selects
+    # `reporting_currency` so the supplier-concentration figure can format the
+    # money either side of its share. It reads `NULL` for any workspace that has
+    # not been through reporting settings, which the figure handles by showing
+    # the share alone rather than by inventing a currency.
     # Asking for a fact at the front door because there is a column for it is
     # backwards; the column exists to hold an answer something needs.
     #

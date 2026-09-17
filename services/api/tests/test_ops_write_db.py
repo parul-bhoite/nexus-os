@@ -95,6 +95,8 @@ def two_workspaces(engine: Engine) -> Iterator[tuple[tuple[UUID, UUID], tuple[UU
             )
             for statement in (
                 "DELETE FROM ops_completeness WHERE workspace_id = :w",
+                "DELETE FROM ops_supplier WHERE workspace_id = :w",
+                "DELETE FROM ops_stock_item WHERE workspace_id = :w",
                 "DELETE FROM ops_dispatch WHERE workspace_id = :w",
                 "DELETE FROM ops_issue WHERE workspace_id = :w",
                 "DELETE FROM ops_milestone WHERE workspace_id = :w",
@@ -754,3 +756,114 @@ def test_dispatches_are_isolated_between_workspaces(
     as_member(client, theirs)
 
     assert client.get("/ops").json()["dispatches"] == []
+
+
+# ── Stock and suppliers — `doc/15` S10.5 ──────────────────────
+
+
+@requires_db
+def test_a_stock_line_is_recorded_and_read_back(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """Recording one of these is what answers "do you hold stock, or order per
+    job?" — the onboarding question arrives as prose nothing reads."""
+    mine, _ = two_workspaces
+    as_member(client, mine)
+
+    response = _post(client, "/ops/stock", {"name": "Bolts", "on_hand": 2, "minimum": 10})
+
+    assert response.status_code == 201, response.text
+    assert [i["name"] for i in client.get("/ops").json()["stock"]] == ["Bolts"]
+
+
+@requires_db
+def test_a_negative_quantity_is_refused(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """A negative count on hand drags a shortfall the wrong way; a negative
+    minimum makes every item permanently sufficient. The CHECK constraint says
+    the same at the other end."""
+    mine, _ = two_workspaces
+    as_member(client, mine)
+
+    assert (
+        _post(client, "/ops/stock", {"name": "X", "on_hand": -1, "minimum": 1}).status_code == 422
+    )
+    assert (
+        _post(client, "/ops/stock", {"name": "X", "on_hand": 1, "minimum": -1}).status_code == 422
+    )
+
+
+@requires_db
+def test_a_supplier_may_have_no_spend_recorded(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """A real and common state. Counted as recorded, left out of the share, and
+    never treated as zero (I10)."""
+    mine, _ = two_workspaces
+    as_member(client, mine)
+
+    response = _post(client, "/ops/suppliers", {"name": "Unpriced Co"})
+
+    assert response.status_code == 201, response.text
+    assert response.json()["spend_minor"] is None
+
+
+@requires_db
+def test_a_negative_spend_is_refused(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    mine, _ = two_workspaces
+    as_member(client, mine)
+
+    response = _post(client, "/ops/suppliers", {"name": "X", "spend_minor": -1})
+
+    assert response.status_code == 422
+
+
+@requires_db
+def test_stock_and_suppliers_are_isolated_between_workspaces(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    mine, theirs = two_workspaces
+    as_member(client, mine)
+    _post(client, "/ops/stock", {"name": "Bolts", "on_hand": 1, "minimum": 5})
+    _post(client, "/ops/suppliers", {"name": "Al Bahja", "spend_minor": 1000})
+
+    as_member(client, theirs)
+    body = client.get("/ops").json()
+
+    assert body["stock"] == []
+    assert body["suppliers"] == []
+
+
+@requires_db
+def test_completeness_accepts_stock_and_suppliers(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """Seven entities now, and `ENTITIES` is kept in step with
+    `ck_ops_completeness_entity` by hand — a value legal in Python and refused by
+    the constraint is a 500 on a write somebody was told was fine."""
+    mine, _ = two_workspaces
+    as_member(client, mine)
+
+    for entity in ("stock", "suppliers"):
+        assert _post(client, "/ops/completeness", {"entity": entity}).status_code == 201, entity
+
+
+@requires_db
+def test_archived_stock_and_suppliers_stop_counting(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    mine, _ = two_workspaces
+    as_member(client, mine)
+    item = _post(client, "/ops/stock", {"name": "Bolts", "on_hand": 1, "minimum": 5}).json()["id"]
+    vendor = _post(client, "/ops/suppliers", {"name": "Al Bahja"}).json()["id"]
+
+    assert client.delete(f"/ops/stock/{item}", headers={"X-CSRF-Token": CSRF}).status_code == 204
+    assert (
+        client.delete(f"/ops/suppliers/{vendor}", headers={"X-CSRF-Token": CSRF}).status_code == 204
+    )
+
+    body = client.get("/ops").json()
+    assert body["stock"] == [] and body["suppliers"] == []

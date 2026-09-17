@@ -232,8 +232,40 @@ comparison is the only thing keeping prose about last week's number beside this 
 Asserted by `scripts/ops_walkthrough.py`: 67 checks, green, including both gates refusing
 in turn and the figure moving when the founder widens the grace.
 
-### S10.5 — Stock and suppliers
+### S10.5 — Stock and suppliers ✅ *shipped 17 September 2026*
 `operations.stock_levels`, `operations.supplier_risk`. Each consumes a fact.
+
+Migration `0036` adds `ops_stock_item` and `ops_supplier` (RLS forced) and widens
+`ck_ops_completeness_entity` to the **seven** entities this plan always implied.
+
+**The pair makes the layer's dividing line visible.** Stock is a *count* — "3 of 12 below
+their minimum" is true whether or not the record is complete, so the tile works from the
+first row. Concentration is a *share*, so it stands behind D29's gate exactly as the
+on-time figure does: three of ten suppliers recorded would otherwise report one of them as
+60% of the company's exposure.
+
+**Neither fact is consumed, and the records answer them instead.** `stock_posture` ("do
+you hold stock, or order per job?") and `supplier_concentration` ("which supplier are you
+most exposed to?") are both free prose, like D32's pair. Recording a stock line *is* the
+answer to the first; the second asks for a judgement NEXUS now computes, which is the
+better way round.
+
+**Ordered by consequence means the shortfall, not the ratio.** Two items each one unit
+short — one with a minimum of two, one of two hundred — are the same order to place. A
+ratio would also divide by a minimum of zero, a legitimate value meaning "hold none of
+this", and rank an item nobody wants above everything else.
+
+**Nothing suggests a reorder quantity**, which would need lead times and consumption this
+layer does not hold, and **nothing grades the exposure**: whether 40% with one supplier is
+dangerous depends on how replaceable they are, which nobody has told us.
+
+Two shapes had to generalise, both mine from S10.4 — recorded as **ADR 0037**, which
+amends ADR 0036's description of the rate figure: `RateComputation` held the dispatch
+calculator's own type, and `CountFigureOut` hard-coded "still open" — wrong for stock,
+where the same field counts lines under a level. They now carry `RateParts` and an
+`open_label`.
+
+Asserted by `scripts/ops_walkthrough.py`: 83 checks, green.
 
 ### S10.6 — Deals-lite, per D30
 

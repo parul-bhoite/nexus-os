@@ -28,6 +28,10 @@ function rate(overrides: Partial<RateFigure> = {}): RateFigure {
     percentage: 75,
     numerator: 3,
     denominator: 4,
+    denominator_label: 'orders that went out',
+    unit: 'count',
+    currency: null,
+    excluded: 3,
     outstanding: 3,
     overdue: 2,
     grace_days: 1,
@@ -93,6 +97,49 @@ describe('when both gates are open', () => {
   })
 })
 
+describe('a share of money', () => {
+  const share = (extra: Partial<RateFigure> = {}) =>
+    rate({
+      label: 'Your largest supplier',
+      percentage: 60,
+      numerator: 60_000,
+      denominator: 100_000,
+      denominator_label: 'of the spend you have recorded',
+      unit: 'money',
+      currency: 'OMR',
+      excluded: 1,
+      outstanding: 0,
+      overdue: 0,
+      grace_days: null,
+      ...extra,
+    })
+
+  it('formats both halves as money rather than minor units', () => {
+    render(<BlockCard block={block(share())} department="operations" />)
+
+    expect(screen.getByText('60%')).toBeTruthy()
+    expect(screen.getByText(/OMR/)).toBeTruthy()
+    expect(screen.queryByText(/60000/)).toBeNull()
+  })
+
+  it('shows the share alone when the workspace has no reporting currency', () => {
+    /** A young workspace has money it cannot format. Printing minor units would
+     *  read as a count of things; the share is true either way. */
+    const { container } = render(
+      <BlockCard block={block(share({ currency: null }))} department="operations" />,
+    )
+
+    expect(screen.getByText('60%')).toBeTruthy()
+    expect(container.textContent).not.toMatch(/60000|100000/)
+  })
+
+  it('reports what it left out of the share', () => {
+    render(<BlockCard block={block(share())} department="operations" />)
+
+    expect(screen.getByText(/1 is recorded with no figure/)).toBeTruthy()
+  })
+})
+
 describe('when a gate is shut', () => {
   it('never draws zero per cent in place of a refusal', () => {
     /** **The worst thing this tile could do.** "0% on time" is a damning
@@ -116,7 +163,9 @@ describe('when a gate is shut', () => {
       />,
     )
 
-    expect(screen.getByText(/Confirm on Your work that this is all of your orders/)).toBeTruthy()
+    // Record-type neutral since S10.5: the same refusal now serves supplier
+    // concentration, where "your orders" would be the wrong noun.
+    expect(screen.getByText(/Confirm on Your work that this is the whole list/)).toBeTruthy()
   })
 
   it('tells a reader with no rule to set one — a different job', () => {

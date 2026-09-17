@@ -254,7 +254,7 @@ function CountFigureBody({ figure }: { figure: CountFigure }) {
       <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <span className="font-display text-3xl leading-none text-ink-900">{figure.recorded}</span>
         <span className="text-sm text-ink-500">
-          {figure.noun} recorded, {figure.open_items} still open
+          {figure.noun} recorded, {figure.open_items} {figure.open_label}
         </span>
       </p>
 
@@ -339,10 +339,12 @@ function CountFigureBody({ figure }: { figure: CountFigure }) {
 function RateFigureBody({ figure }: { figure: RateFigure }) {
   const REASON: Record<string, string> = {
     unvouched:
-      'Confirm on Your work that this is all of your orders, and this becomes a percentage.',
+      'Confirm on Your work that this is the whole list, and this becomes a percentage.',
     no_rule:
       'Set how many days past the promised date an order counts as late, and this becomes a percentage.',
     nothing_sent: 'Nothing has gone out yet, so there is no on-time figure to work out.',
+    nothing_priced:
+      'None of your suppliers has a spend figure yet, so there is no share to work out.',
   }
 
   return (
@@ -358,8 +360,21 @@ function RateFigureBody({ figure }: { figure: RateFigure }) {
           </span>
           {/* The denominator travels with the number — a rate on its own is a
               claim the reader cannot check. */}
+          {/* The denominator travels with the number, named — a rate whose
+              denominator is unlabelled is a claim nobody can check. Money is
+              formatted rather than shown in minor units. */}
           <span className="text-sm text-ink-500">
-            {figure.numerator} of {figure.denominator} orders that went out
+            {figure.unit === 'money'
+              ? figure.currency
+                ? `${money(figure.numerator as number, figure.currency)} of ${money(
+                    figure.denominator as number,
+                    figure.currency,
+                  )} ${figure.denominator_label}`
+                : /* Money the workspace has no currency for. The share is still
+                     true; the amounts are minor units and showing them raw
+                     would read as a count of things. */
+                  figure.denominator_label
+              : `${figure.numerator} of ${figure.denominator} ${figure.denominator_label}`}
           </span>
         </p>
       )}
@@ -382,6 +397,15 @@ function RateFigureBody({ figure }: { figure: RateFigure }) {
               : `, and ${figure.overdue} of those ${figure.overdue === 1 ? 'is' : 'are'} past the promise`
             : ''}
           .
+        </p>
+      ) : null}
+
+      {figure.excluded > 0 && figure.outstanding === 0 ? (
+        /* A rate with no "outstanding" idea still leaves things out — an
+           unpriced supplier. Said plainly rather than folded into the total. */
+        <p className="mt-2 text-sm text-ink-500">
+          {figure.excluded} {figure.excluded === 1 ? 'is' : 'are'} recorded with no figure,
+          so {figure.excluded === 1 ? 'it is' : 'they are'} not in this share.
         </p>
       ) : null}
 

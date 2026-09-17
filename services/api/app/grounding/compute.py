@@ -31,11 +31,13 @@ from app.calculators.completeness import (
     ISSUES,
     MILESTONES,
     PROJECTS,
+    STOCK,
+    SUPPLIERS,
     TASKS,
     Confirmation,
     may_compute_a_rate,
 )
-from app.calculators.dispatch import OnTime, on_time_rate
+from app.calculators.dispatch import on_time_rate
 from app.calculators.ops import (
     Bucket,
     Dated,
@@ -45,6 +47,8 @@ from app.calculators.ops import (
     count_open_by_severity,
 )
 from app.calculators.pipeline import Deal, Pipeline, compute_pipeline
+from app.calculators.stock import count_stock
+from app.calculators.supplier import concentration
 from app.domain.page_signals import PageSignals
 from app.grounding.pipeline import Computed
 from app.retrieval.crawl import CrawlSnapshot
@@ -232,6 +236,15 @@ class Census:
     measures: str
     method: str
 
+    open_label: str = "still open"
+    """What the second number means, in the tile's own words.
+
+    "12 projects recorded, 3 still open" is right for work and wrong for stock,
+    where the same field counts lines under their minimum. Carried rather than
+    hard-coded in the client, because the phrase is a fact about the record type
+    and the client should not have to know which capability it is drawing.
+    """
+
     graded: GradedRecords | None = None
     """Where the severity breakdown comes from, for the capabilities that have
     one. `None` for most: a project is not more or less severe than another
@@ -279,6 +292,21 @@ OPS_CENSUSES: Final[dict[str, Census]] = {
         ),
         method="calculators.ops.count_items",
     ),
+    "operations.stock_levels": Census(
+        select=lambda snapshot: snapshot.stock,
+        entity=STOCK,
+        noun="items",
+        open_label="below their minimum",
+        label="Stock recorded",
+        measures=(
+            "Every stock line recorded, counted, and how many are under the minimum "
+            "you set for them — the shortest first, because one unit short of two "
+            "hundred and one unit short of two are the same order to place. Not a "
+            "reorder quantity: that needs lead times and consumption nobody has given "
+            "us, and a number invented here would look exactly like one we measured."
+        ),
+        method="calculators.stock.count_stock",
+    ),
     "operations.issue_register": Census(
         select=lambda snapshot: snapshot.issues,
         entity=ISSUES,
@@ -311,6 +339,51 @@ be grounded in nothing.
 
 
 @dataclass(frozen=True, slots=True)
+class RateParts:
+    """A rate, normalised, whatever produced it.
+
+    **Added when the second rate arrived.** `RateComputation` used to hold an
+    `OnTime` — the dispatch calculator's own shape — which made the figure and
+    the one calculator that fed it the same thing. Supplier concentration is
+    also a rate and shares none of `OnTime`'s fields, so the union's fourth arm
+    would have needed a fifth for every rate after it.
+    """
+
+    numerator: int
+    denominator: int
+    percentage: float | None
+
+    denominator_label: str
+    """What the fraction is over, in words — "orders that went out", "of
+    recorded spend". Rendered, because a rate whose denominator is unnamed is a
+    number nobody can check."""
+
+    unit: str = "count"
+    """`"count"` or `"money"`. **Not inferred from `currency` being set**, because
+    a workspace that has not finished its reporting settings has money with no
+    currency — and a client reading `currency is None` as "these are counts"
+    would print minor units at somebody as though they were order numbers."""
+
+    currency: str | None = None
+    """The workspace's reporting currency, when it has one. `None` is a real
+    state: `POST /companies` deliberately does not write it (the fact is asked
+    later, as a constrained choice), so a young workspace has money it cannot
+    format. Never defaulted here — a currency nobody chose is a fact nobody
+    gave."""
+
+    outstanding: int = 0
+    overdue: int = 0
+    """Counts that sit beside the rate and are true under every refusal.
+    Defaulted because not every rate has an equivalent — concentration has
+    `unpriced` and uses neither."""
+
+    excluded: int = 0
+    """Recorded, and deliberately not in the denominator: an unpriced supplier,
+    an order that has not gone out. The figure says so rather than folding it in
+    or dropping it (I10)."""
+
+
+@dataclass(frozen=True, slots=True)
 class Ratio:
     """One rate-producing calculator, and what it is honest to call its output.
 
@@ -326,6 +399,18 @@ class Ratio:
 
 
 OPS_RATIOS: Final[dict[str, Ratio]] = {
+    "operations.supplier_risk": Ratio(
+        entity=SUPPLIERS,
+        label="Your largest supplier",
+        measures=(
+            "The share of the spend you have recorded that goes to one supplier. "
+            "Not on-time delivery per supplier — that needs a record of what each one "
+            "promised and when it arrived, which this layer does not hold — and not a "
+            "judgement about whether that share is dangerous, which depends on how "
+            "replaceable they are."
+        ),
+        method="calculators.supplier.concentration",
+    ),
     "operations.on_time_dispatch": Ratio(
         entity=DISPATCHES,
         label="Dispatched on time",
@@ -369,6 +454,11 @@ class RateRefusal(StrEnum):
     (I10). Not a refusal so much as an absence, and named separately because the
     customer has nothing left to do about it."""
 
+    NOTHING_PRICED = "nothing_priced"
+    """Suppliers are recorded and none carries a spend figure, so there is
+    nothing to take a share of. Distinct from `NOTHING_SENT` because the thing
+    to do about it is different: enter what you spend, rather than wait."""
+
 
 @dataclass(frozen=True, slots=True)
 class RateComputation:
@@ -377,7 +467,7 @@ class RateComputation:
     capability_id: str
     label: str
     measures: str
-    rate: OnTime
+    parts: RateParts
     confirmation: Confirmation | None
     refused: RateRefusal | None
     """`None` exactly when `rate.percentage` may be shown. The two are decided
@@ -386,6 +476,59 @@ class RateComputation:
     recorded_at: datetime
     computed: Computed
     trace: dict[str, Any]
+
+
+def _parts_for(
+    capability_id: str, snapshot: OpsSnapshot, *, today: date
+) -> tuple[RateParts, RateRefusal | None]:
+    """Normalise one capability's own calculator into a rate, and say what is
+    missing when the answer is nothing.
+
+    **An explicit branch per capability, not a registry of callables.** There
+    are two, they have genuinely different shapes, and a dict of lambdas here
+    would be indirection bought with nothing. The refusal returned is the one
+    *specific to this rate* — completeness is checked by the caller, because it
+    applies to every rate and has to be checked first.
+    """
+    if capability_id == "operations.supplier_risk":
+        share = concentration(snapshot.suppliers)
+        return (
+            RateParts(
+                numerator=share.largest_minor,
+                denominator=share.total_minor,
+                percentage=share.percentage,
+                denominator_label="of the spend you have recorded",
+                # Money, so the client formats it — or, with no reporting
+                # currency set, shows the share alone rather than minor units.
+                unit="money",
+                currency=snapshot.reporting_currency,
+                excluded=share.unpriced,
+            ),
+            None if share.percentage is not None else RateRefusal.NOTHING_PRICED,
+        )
+
+    rate = on_time_rate(snapshot.dispatches, today=today, grace_days=snapshot.grace_days or 0)
+    specific: RateRefusal | None = None
+    if snapshot.grace_days is None:
+        # The rule has to exist before the numerator means anything (D32). This
+        # is checked before the denominator, because a founder with no rule set
+        # has something to do either way.
+        specific = RateRefusal.NO_RULE
+    elif rate.percentage is None:
+        specific = RateRefusal.NOTHING_SENT
+
+    return (
+        RateParts(
+            numerator=rate.on_time,
+            denominator=rate.dispatched,
+            percentage=rate.percentage,
+            denominator_label="orders that went out",
+            outstanding=rate.outstanding,
+            overdue=rate.overdue,
+            excluded=rate.outstanding,
+        ),
+        specific,
+    )
 
 
 def compute_rate_from_ops(
@@ -408,21 +551,21 @@ def compute_rate_from_ops(
         return None
 
     confirmation = snapshot.confirmations.get(ratio.entity)
-    # Zero only for the arithmetic that does not depend on it. Every branch
-    # below that could show a percentage is gated before this is used.
-    rate = on_time_rate(snapshot.dispatches, today=today, grace_days=snapshot.grace_days or 0)
+    parts, specific = _parts_for(capability_id, snapshot, today=today)
 
+    # **Completeness is checked first, whatever the rate.** Both missing is the
+    # first-run state, and telling somebody to price their suppliers while we
+    # also cannot trust the list sends them to do the less useful job first.
     refused: RateRefusal | None = None
     if not may_compute_a_rate(confirmation):
         refused = RateRefusal.UNVOUCHED
-    elif snapshot.grace_days is None:
-        refused = RateRefusal.NO_RULE
-    elif rate.percentage is None:
-        refused = RateRefusal.NOTHING_SENT
+    else:
+        refused = specific
 
     values: dict[str, float] = {
-        "outstanding": float(rate.outstanding),
-        "overdue": float(rate.overdue),
+        "outstanding": float(parts.outstanding),
+        "overdue": float(parts.overdue),
+        "excluded": float(parts.excluded),
     }
     if refused is None:
         # **Only when it may be shown.** `answer._permitted` treats everything
@@ -431,10 +574,9 @@ def compute_rate_from_ops(
         # reader could never see.
         values.update(
             {
-                "numerator": float(rate.on_time),
-                "denominator": float(rate.dispatched),
-                "percentage": float(rate.percentage or 0.0),
-                "late": float(rate.late),
+                "numerator": float(parts.numerator),
+                "denominator": float(parts.denominator),
+                "percentage": float(parts.percentage or 0.0),
             }
         )
 
@@ -442,7 +584,7 @@ def compute_rate_from_ops(
         capability_id=capability_id,
         label=ratio.label,
         measures=ratio.measures,
-        rate=rate,
+        parts=parts,
         confirmation=confirmation,
         refused=refused,
         recorded_at=snapshot.recorded_at or datetime.combine(today, datetime.min.time(), UTC),
@@ -450,10 +592,11 @@ def compute_rate_from_ops(
         trace={
             "capability": capability_id,
             "measures": ratio.measures,
-            "numerator": rate.on_time,
-            "denominator": rate.dispatched,
-            "outstanding": rate.outstanding,
-            "overdue": rate.overdue,
+            "numerator": parts.numerator,
+            "denominator": parts.denominator,
+            "outstanding": parts.outstanding,
+            "overdue": parts.overdue,
+            "excluded": parts.excluded,
             "grace_days": snapshot.grace_days,
             "refused": refused.value if refused else "",
             "source": "your own records",
@@ -478,6 +621,7 @@ class CountComputation:
     label: str
     measures: str
     noun: str
+    open_label: str
     counts: OpsCounts
     breakdown: tuple[Bucket, ...]
     """Open items per severity band, or empty for a record type that has none.
@@ -517,13 +661,29 @@ def compute_from_ops(
     if census is None:
         return None
 
-    counts = count_items(census.select(snapshot), today=today)
     confirmation = snapshot.confirmations.get(census.entity)
-    breakdown = (
-        count_open_by_severity(census.graded(snapshot), order=SEVERITY_ORDER)
-        if census.graded is not None
-        else ()
-    )
+
+    if capability_id == "operations.stock_levels":
+        # **Stock is counted against a level, not a date.** A stock line has no
+        # status and nothing to be overdue against, so `count_items` — which
+        # counts what is not done and what is past its date — has nothing to
+        # read. The shape it produces is the same: a population, the part
+        # needing attention, and a ranked list of which.
+        stock = count_stock(snapshot.stock)
+        counts = OpsCounts(
+            recorded=stock.recorded,
+            open_items=stock.below_minimum,
+            overdue=0,
+            undated=0,
+        )
+        breakdown = tuple(Bucket(label=item.name, count=item.shortfall) for item in stock.shortest)
+    else:
+        counts = count_items(census.select(snapshot), today=today)
+        breakdown = (
+            count_open_by_severity(census.graded(snapshot), order=SEVERITY_ORDER)
+            if census.graded is not None
+            else ()
+        )
 
     # **Every number the prose may state, and only these** — `compute_from_deals`
     # gives the reasoning. Narration is refused for counts (ADR 0034); filled in
@@ -539,13 +699,17 @@ def compute_from_ops(
     # Each band is a figure the prose may state, so each is declared. Prefixed
     # rather than bare — a key called "high" beside "open" and "overdue" reads
     # as a fourth kind of count rather than a slice of one of them.
-    values.update({f"severity_{bucket.label}": float(bucket.count) for bucket in breakdown})
+    # Prefixed by what the band means, so a key never collides with a count and
+    # never reads as one. Stock's bands are shortfalls per item, not severities.
+    prefix = "short_" if capability_id == "operations.stock_levels" else "severity_"
+    values.update({f"{prefix}{bucket.label}": float(bucket.count) for bucket in breakdown})
 
     return CountComputation(
         capability_id=capability_id,
         label=census.label,
         measures=census.measures,
         noun=census.noun,
+        open_label=census.open_label,
         counts=counts,
         breakdown=breakdown,
         confirmation=confirmation,

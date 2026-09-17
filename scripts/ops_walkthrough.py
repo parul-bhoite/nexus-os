@@ -354,7 +354,61 @@ r = a.post("/dashboards/operations/narrate", json={"key": "operations.on_time_di
            headers=token(a))
 check("a rate is still refused for narration (ADR 0036)", r.status_code == 404, str(r.status_code))
 
-print("\n\033[1m7. Another workspace sees none of it\033[0m")
+print("\n\033[1m7. Stock and suppliers — S10.5\033[0m")
+for name, on_hand, minimum in (("Bolts", 2, 10), ("Nuts", 50, 10), ("Glue", 0, 40)):
+    a.post(
+        "/ops/stock",
+        json={"name": name, "on_hand": on_hand, "minimum": minimum},
+        headers=token(a),
+    )
+r = a.post("/ops/stock", json={"name": "Bad", "on_hand": -1, "minimum": 1}, headers=token(a))
+check("a negative quantity is refused", r.status_code == 422, str(r.status_code))
+
+for name, spend in (("Al Bahja", 600_00), ("Gulf Traders", 400_00), ("Unpriced Co", None)):
+    a.post("/ops/suppliers", json={"name": name, "spend_minor": spend}, headers=token(a))
+
+tiles = {x["key"]: x for x in a.get("/dashboards/surface").json().get("measured", [])}
+stock = tiles.get("operations.stock_levels", {}).get("figure") or {}
+risk = tiles.get("operations.supplier_risk", {}).get("figure") or {}
+
+check("operations.stock_levels carries a figure", bool(stock), str(list(tiles)))
+check("it is a count, because a level comparison is not a rate",
+      stock.get("kind") == "count", str(stock)[:200])
+check("three lines recorded, two under their minimum",
+      (stock.get("recorded"), stock.get("open_items")) == (3, 2), str(stock)[:250])
+check("and it says what the second number means",
+      stock.get("open_label") == "below their minimum", str(stock)[:250])
+check("ranked by shortfall rather than alphabetically",
+      [b["label"] for b in stock.get("breakdown", [])] == ["Glue", "Bolts"],
+      str(stock.get("breakdown")))
+check("no percentage on the stock tile", "%" not in str(stock), str(stock)[:200])
+
+check("operations.supplier_risk carries a figure", bool(risk), str(list(tiles)))
+check("it is a rate", risk.get("kind") == "rate", str(risk)[:200])
+check("and it refuses until the supplier list is vouched for",
+      risk.get("refused") == "unvouched", str(risk)[:250])
+check("the unpriced supplier is reported, not dropped", risk.get("excluded") == 1,
+      str(risk)[:250])
+
+a.post("/ops/completeness", json={"entity": "suppliers"}, headers=token(a))
+tiles = {x["key"]: x for x in a.get("/dashboards/surface").json().get("measured", [])}
+risk = tiles.get("operations.supplier_risk", {}).get("figure") or {}
+check("vouched, the share appears with no second gate to pass",
+      risk.get("refused") == "" and risk.get("percentage") == 60.0, str(risk)[:250])
+check("it is declared as money, so a client never prints minor units",
+      risk.get("unit") == "money", str(risk)[:250])
+# **`POST /companies` deliberately does not store `reporting_currency`** — the
+# fact is asked later as a constrained choice — so a workspace this young has
+# money it cannot format. The share is true either way and the tile shows it
+# alone; inventing a currency here would be a fact nobody gave.
+check("and carries no currency until the workspace has set one",
+      risk.get("currency") is None, str(risk)[:250])
+check("the denominator is named", bool(risk.get("denominator_label")), str(risk)[:250])
+check("vouching for suppliers did not vouch for stock",
+      (tiles.get("operations.stock_levels", {}).get("figure") or {}).get("complete_as_of") == "",
+      str(tiles.get("operations.stock_levels"))[:200])
+
+print("\n\033[1m8. Another workspace sees none of it\033[0m")
 b = founder("b")
 r = b.get("/ops")
 check(
@@ -369,7 +423,7 @@ if project_id:
     still = a.get("/ops").json()["projects"]
     check("the project is still there for its owner", len(still) == 1, str(still)[:200])
 
-print("\n\033[1m8. Archive stops it counting without deleting it\033[0m")
+print("\n\033[1m9. Archive stops it counting without deleting it\033[0m")
 if project_id:
     r = a.delete(f"/ops/projects/{project_id}", headers=token(a))
     check("DELETE /ops/projects/{id} -> 204", r.status_code == 204, str(r.status_code))

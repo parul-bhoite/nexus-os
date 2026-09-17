@@ -30,6 +30,7 @@ function count(overrides: Partial<CountFigure> = {}): CountFigure {
     measures:
       'Every project recorded in NEXUS, counted. Not a completion rate and not an on-time percentage.',
     noun: 'projects',
+    open_label: 'still open',
     recorded: 12,
     open_items: 7,
     overdue: 2,

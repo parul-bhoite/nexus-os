@@ -376,9 +376,17 @@ us inventing a threshold, and it fails silently on wording it does not recognise
 the worst available failure mode. A strict zero-grace comparison was rejected too: it is a
 threshold nobody set, wearing the disguise of not having one.
 
-**Still open, and now visible:** `late_definition` and `promised_lead_time` are asked but
-not consumed. The honest fix is to change what they collect — a number, or a small set of
-choices — which is a change to onboarding rather than to the ops layer.
+**Still open, and now visible: four onboarding facts are asked and consumed by nothing.**
+`late_definition` and `promised_lead_time` (S10.4), then `stock_posture` and
+`supplier_concentration` (S10.5). Every one is collected as free prose, and every one is a
+fact a figure would need as a number or a constrained choice.
+
+Two of them have since been answered better by the records themselves — recording a stock
+line *is* the answer to "do you hold stock", and "which supplier are you most exposed to"
+is a judgement NEXUS now computes rather than asks for. The other two need a real value.
+
+The honest fix is to change what these questions collect, which is a change to onboarding
+rather than to the ops layer, and it should be made as one decision rather than four.
 
 ---
 

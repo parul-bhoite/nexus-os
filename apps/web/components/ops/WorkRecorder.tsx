@@ -8,12 +8,16 @@ import {
   SEVERITIES,
   TASK_STATUSES,
   archiveDispatch,
+  archiveStockItem,
+  archiveSupplier,
   archiveIssue,
   archiveMilestone,
   archiveProject,
   archiveTask,
   confirmComplete,
   createDispatch,
+  createStockItem,
+  createSupplier,
   createIssue,
   createMilestone,
   createProject,
@@ -144,6 +148,15 @@ export function WorkRecorder() {
   const [dispatchSent, setDispatchSent] = useState('')
   const [savingDispatch, setSavingDispatch] = useState(false)
   const [grace, setGrace] = useState('')
+
+  const [stockName, setStockName] = useState('')
+  const [stockOnHand, setStockOnHand] = useState('')
+  const [stockMinimum, setStockMinimum] = useState('')
+  const [savingStock, setSavingStock] = useState(false)
+
+  const [supplierName, setSupplierName] = useState('')
+  const [supplierSpend, setSupplierSpend] = useState('')
+  const [savingSupplier, setSavingSupplier] = useState(false)
   const [savingRule, setSavingRule] = useState(false)
 
   const [issueTitle, setIssueTitle] = useState('')
@@ -294,12 +307,60 @@ export function WorkRecorder() {
     }
   }
 
+  async function submitStock(event: React.FormEvent) {
+    event.preventDefault()
+    setSavingStock(true)
+    setFeedback(null)
+    try {
+      await createStockItem({
+        name: stockName,
+        on_hand: Number(stockOnHand),
+        minimum: Number(stockMinimum),
+        unit: null,
+      })
+      setStockName('')
+      setStockOnHand('')
+      setStockMinimum('')
+      setFeedback({ kind: 'done', text: 'Stock line recorded.' })
+      await reload()
+    } catch (error) {
+      setFeedback({ kind: 'error', text: messageOf(error, 'Could not record that stock line.') })
+    } finally {
+      setSavingStock(false)
+    }
+  }
+
+  async function submitSupplier(event: React.FormEvent) {
+    event.preventDefault()
+    setSavingSupplier(true)
+    setFeedback(null)
+    try {
+      await createSupplier({
+        name: supplierName,
+        // Major units in, minor units stored — money in a float stops adding
+        // up, and the API takes the integer.
+        spend_minor: supplierSpend ? Math.round(Number(supplierSpend) * 100) : null,
+        category: null,
+      })
+      setSupplierName('')
+      setSupplierSpend('')
+      setFeedback({ kind: 'done', text: 'Supplier recorded.' })
+      await reload()
+    } catch (error) {
+      setFeedback({ kind: 'error', text: messageOf(error, 'Could not record that supplier.') })
+    } finally {
+      setSavingSupplier(false)
+    }
+  }
+
   const ARCHIVERS = {
     project: archiveProject,
     task: archiveTask,
     milestone: archiveMilestone,
     issue: archiveIssue,
     dispatch: archiveDispatch,
+    stock: archiveStockItem,
+    supplier: archiveSupplier,
   } as const
 
   async function archive(kind: keyof typeof ARCHIVERS, id: string) {
@@ -336,13 +397,17 @@ export function WorkRecorder() {
   const milestones = ops?.milestones ?? []
   const issues = ops?.issues ?? []
   const dispatches = ops?.dispatches ?? []
+  const stock = ops?.stock ?? []
+  const suppliers = ops?.suppliers ?? []
   const nothingYet =
     ops !== null &&
     projects.length === 0 &&
     tasks.length === 0 &&
     milestones.length === 0 &&
     issues.length === 0 &&
-    dispatches.length === 0
+    dispatches.length === 0 &&
+    stock.length === 0 &&
+    suppliers.length === 0
   const confirmedFor = (entity: string) =>
     (ops?.completeness ?? []).find((entry) => entry.entity === entity) ?? null
 
@@ -943,6 +1008,188 @@ export function WorkRecorder() {
                   type="button"
                   disabled={archiving}
                   onClick={() => void archive('dispatch', dispatch.id)}
+                  className="text-2xs text-ink-500 underline hover:text-ink-800 disabled:opacity-60"
+                >
+                  Archive
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="font-display text-lg text-ink-900">Stock</h2>
+        {/* Recording one of these is what answers "do you hold stock, or order
+            per job?" — asked at onboarding as prose that nothing reads. The
+            record is the answer. */}
+        <p className="max-w-prose text-sm text-ink-600">
+          The minimum is yours. NEXUS says which lines are under it and by how much, and
+          never what to order — that needs lead times and consumption nobody has given it.
+        </p>
+
+        <form onSubmit={submitStock} className="grid max-w-2xl gap-3 sm:grid-cols-3">
+          <div>
+            <label className={LABEL} htmlFor="stock-name">
+              Item
+            </label>
+            <input
+              id="stock-name"
+              required
+              maxLength={200}
+              value={stockName}
+              onChange={(event) => setStockName(event.target.value)}
+              className={`mt-1 ${FIELD}`}
+            />
+          </div>
+          <div>
+            <label className={LABEL} htmlFor="stock-on-hand">
+              On hand
+            </label>
+            <input
+              id="stock-on-hand"
+              type="number"
+              min={0}
+              required
+              value={stockOnHand}
+              onChange={(event) => setStockOnHand(event.target.value)}
+              className={`mt-1 ${FIELD}`}
+            />
+          </div>
+          <div>
+            <label className={LABEL} htmlFor="stock-minimum">
+              Minimum
+            </label>
+            <input
+              id="stock-minimum"
+              type="number"
+              min={0}
+              required
+              value={stockMinimum}
+              onChange={(event) => setStockMinimum(event.target.value)}
+              className={`mt-1 ${FIELD}`}
+            />
+          </div>
+          <div className="sm:col-span-3">
+            <button
+              type="submit"
+              disabled={savingStock}
+              className="rounded-lg bg-ink-800 px-4 py-2 text-sm font-medium text-bone-50 disabled:opacity-60"
+            >
+              {savingStock ? 'Recording…' : 'Record stock line'}
+            </button>
+          </div>
+        </form>
+
+        {stock.length > 0 ? (
+          <Completeness
+            noun="stock lines"
+            confirmed={confirmedFor('stock')}
+            busy={confirming === 'stock'}
+            onConfirm={() => void confirm('stock')}
+          />
+        ) : null}
+
+        {stock.length > 0 ? (
+          <ul className="max-w-2xl divide-y divide-ink-100 rounded-xl border border-ink-100">
+            {stock.map((item) => (
+              <li key={item.id} className="flex flex-wrap items-baseline gap-x-3 px-4 py-3">
+                <span className="min-w-0 grow text-sm text-ink-800">{item.name}</span>
+                <span className="text-2xs text-ink-500">
+                  {item.on_hand} on hand, minimum {item.minimum}
+                </span>
+                {item.on_hand < item.minimum ? (
+                  <span className="font-mono text-2xs uppercase tracking-[0.08em] text-clay-600">
+                    short {item.minimum - item.on_hand}
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  disabled={archiving}
+                  onClick={() => void archive('stock', item.id)}
+                  className="text-2xs text-ink-500 underline hover:text-ink-800 disabled:opacity-60"
+                >
+                  Archive
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="font-display text-lg text-ink-900">Suppliers</h2>
+        {/* The founder enters what they spend. The share is what NEXUS works
+            out — asking for a percentage would be a self-reported figure
+            wearing a computed one's clothes. */}
+        <p className="max-w-prose text-sm text-ink-600">
+          Enter what you spend with each one and NEXUS works out how exposed you are to the
+          largest. Leave the amount blank if you do not have it — that supplier is counted,
+          and left out of the share.
+        </p>
+
+        <form onSubmit={submitSupplier} className="grid max-w-2xl gap-3 sm:grid-cols-3">
+          <div className="sm:col-span-2">
+            <label className={LABEL} htmlFor="supplier-name">
+              Supplier
+            </label>
+            <input
+              id="supplier-name"
+              required
+              maxLength={200}
+              value={supplierName}
+              onChange={(event) => setSupplierName(event.target.value)}
+              className={`mt-1 ${FIELD}`}
+            />
+          </div>
+          <div>
+            <label className={LABEL} htmlFor="supplier-spend">
+              Spend <span className="font-normal text-ink-400">(optional)</span>
+            </label>
+            <input
+              id="supplier-spend"
+              type="number"
+              min={0}
+              step="0.01"
+              value={supplierSpend}
+              onChange={(event) => setSupplierSpend(event.target.value)}
+              className={`mt-1 ${FIELD}`}
+            />
+          </div>
+          <div className="sm:col-span-3">
+            <button
+              type="submit"
+              disabled={savingSupplier}
+              className="rounded-lg bg-ink-800 px-4 py-2 text-sm font-medium text-bone-50 disabled:opacity-60"
+            >
+              {savingSupplier ? 'Recording…' : 'Record supplier'}
+            </button>
+          </div>
+        </form>
+
+        {suppliers.length > 0 ? (
+          <Completeness
+            noun="suppliers"
+            confirmed={confirmedFor('suppliers')}
+            busy={confirming === 'suppliers'}
+            onConfirm={() => void confirm('suppliers')}
+          />
+        ) : null}
+
+        {suppliers.length > 0 ? (
+          <ul className="max-w-2xl divide-y divide-ink-100 rounded-xl border border-ink-100">
+            {suppliers.map((supplier) => (
+              <li key={supplier.id} className="flex flex-wrap items-baseline gap-x-3 px-4 py-3">
+                <span className="min-w-0 grow text-sm text-ink-800">{supplier.name}</span>
+                <span className="text-2xs text-ink-400">
+                  {supplier.spend_minor === null
+                    ? 'no figure'
+                    : (supplier.spend_minor / 100).toLocaleString()}
+                </span>
+                <button
+                  type="button"
+                  disabled={archiving}
+                  onClick={() => void archive('supplier', supplier.id)}
                   className="text-2xs text-ink-500 underline hover:text-ink-800 disabled:opacity-60"
                 >
                   Archive

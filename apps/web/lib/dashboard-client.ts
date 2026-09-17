@@ -157,6 +157,9 @@ export type CountFigure = {
   measures: string
   /** What one row is, in the plural — "projects", "tasks". */
   noun: string
+  /** What `open_items` means here. "still open" for work, "below their minimum"
+   *  for stock — the same field counting a different thing. */
+  open_label: string
   /** How many rows exist. The population, and deliberately **not** a
    *  denominator: dividing by it is the complete-looking percentage over a
    *  partial record that this kind exists to refuse. */
@@ -227,7 +230,20 @@ export type RateFigure = {
   /** The customer's own rule. `null` until somebody sets it, which is one of the
    *  refusals — a percentage whose rule is invisible cannot be checked. */
   grace_days: number | null
-  /** `''` when the rate is shown; else `unvouched`, `no_rule`, `nothing_sent`. */
+  /** What the fraction is over, in words. A rate whose denominator is unnamed
+   *  is a number nobody can check. */
+  denominator_label: string
+  /** `'count'` or `'money'`. Explicit rather than inferred from `currency`:
+   *  money with no reporting currency is a real state, and reading
+   *  `currency === null` as "counts" would print minor units at somebody. */
+  unit: string
+  /** The workspace's reporting currency, or `null` when it has not set one. */
+  currency: string | null
+  /** Recorded and deliberately outside the denominator — an unpriced supplier,
+   *  an order not yet sent. Reported rather than folded in (I10). */
+  excluded: number
+  /** `''` when shown; else `unvouched`, `no_rule`, `nothing_sent`,
+   *  `nothing_priced`. */
   refused: string
   self_reported: boolean
   complete_as_of: string

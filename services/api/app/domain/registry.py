@@ -492,6 +492,11 @@ _IMPLEMENTED: Final[frozenset[str]] = frozenset(
         # stand in front of the percentage (ADR 0035, ADR 0036) and the counts
         # beside it are served either way.
         "operations.on_time_dispatch",
+        # `doc/15` S10.5, the last two record types in the plan. Stock is a
+        # count against a level somebody set; supplier concentration is a share
+        # and stands behind D29's gate as the on-time figure does.
+        "operations.stock_levels",
+        "operations.supplier_risk",
     }
 )
 
@@ -527,6 +532,8 @@ _REACHABLE: Final[frozenset[str]] = _setup_and_watchlist_ids() | frozenset(
         # Reachable as soon as an order is recorded. Whether it shows a *rate*
         # is a further question the figure answers for itself.
         "operations.on_time_dispatch",
+        "operations.stock_levels",
+        "operations.supplier_risk",
     }
 )
 """**The capabilities a person can actually open.**

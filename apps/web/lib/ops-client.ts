@@ -53,6 +53,23 @@ export type Issue = {
   due_on: string | null
 }
 
+export type StockItem = {
+  id: string
+  name: string
+  unit: string | null
+  on_hand: number
+  minimum: number
+}
+
+export type SupplierRecord = {
+  id: string
+  name: string
+  category: string | null
+  /** Minor units of the workspace's reporting currency. `null` is a supplier
+   *  nobody has priced — counted as recorded, left out of the share (I10). */
+  spend_minor: number | null
+}
+
 export type DispatchRecord = {
   id: string
   project_id: string | null
@@ -96,6 +113,8 @@ export type Ops = {
   milestones: Milestone[]
   issues: Issue[]
   dispatches: DispatchRecord[]
+  stock: StockItem[]
+  suppliers: SupplierRecord[]
   /** Days past the promise before an order is late, or `null` if nobody has
    *  said. `null` is why the on-time figure refuses (ADR 0036). */
   grace_days: number | null
@@ -188,6 +207,48 @@ export function createIssue(body: {
     '/ops/issues',
     { method: 'POST', body: JSON.stringify(body) },
     'Could not record that issue.',
+  )
+}
+
+export function createStockItem(body: {
+  name: string
+  on_hand: number
+  minimum: number
+  unit: string | null
+}): Promise<StockItem> {
+  return send<StockItem>(
+    '/ops/stock',
+    { method: 'POST', body: JSON.stringify(body) },
+    'Could not record that stock line.',
+  )
+}
+
+/** The spend is a figure, never a share — the share is what NEXUS works out. */
+export function createSupplier(body: {
+  name: string
+  spend_minor: number | null
+  category: string | null
+}): Promise<SupplierRecord> {
+  return send<SupplierRecord>(
+    '/ops/suppliers',
+    { method: 'POST', body: JSON.stringify(body) },
+    'Could not record that supplier.',
+  )
+}
+
+export function archiveStockItem(id: string): Promise<void> {
+  return send<void>(
+    `/ops/stock/${encodeURIComponent(id)}`,
+    { method: 'DELETE' },
+    'Could not archive that stock line.',
+  )
+}
+
+export function archiveSupplier(id: string): Promise<void> {
+  return send<void>(
+    `/ops/suppliers/${encodeURIComponent(id)}`,
+    { method: 'DELETE' },
+    'Could not archive that supplier.',
   )
 }
 

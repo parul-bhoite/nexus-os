@@ -94,7 +94,34 @@ _DISPATCHES: Final = sa.text(
     """
 )
 
-_GRACE: Final = sa.text("SELECT dispatch_grace_days FROM workspace WHERE id = :w")
+_STOCK: Final = sa.text(
+    """
+    SELECT id, name, unit, on_hand, minimum, updated_at
+      FROM ops_stock_item
+     WHERE workspace_id = :w AND archived_at IS NULL
+     ORDER BY name
+    """
+)
+"""Live stock lines, by name.
+
+**Ordered here by name and by consequence in the calculator.** The shortfall is
+`minimum - on_hand`, which Postgres could sort on — but ranking is a computation
+the working drawer has to be able to show, and `retrieval/` putting arithmetic
+in SQL is where `calculators/` stops being able to see it.
+"""
+
+_SUPPLIERS: Final = sa.text(
+    """
+    SELECT id, name, category, spend_minor, updated_at
+      FROM ops_supplier
+     WHERE workspace_id = :w AND archived_at IS NULL
+     ORDER BY name
+    """
+)
+
+_WORKSPACE_RULES: Final = sa.text(
+    "SELECT dispatch_grace_days, reporting_currency FROM workspace WHERE id = :w"
+)
 """The rule the on-time rate is computed under — ADR 0036.
 
 `NULL` means nobody has said what late means here, and that is a gate rather
@@ -195,6 +222,23 @@ class DispatchRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class StockItem:
+    id: UUID
+    name: str
+    unit: str | None
+    on_hand: int
+    minimum: int
+
+
+@dataclass(frozen=True, slots=True)
+class SupplierRecord:
+    id: UUID
+    name: str
+    category: str | None
+    spend_minor: int | None
+
+
+@dataclass(frozen=True, slots=True)
 class OpsSnapshot:
     """What this workspace has recorded, and when it last changed.
 
@@ -209,6 +253,12 @@ class OpsSnapshot:
     milestones: list[Milestone] = field(default_factory=list)
     issues: list[Issue] = field(default_factory=list)
     dispatches: list[DispatchRecord] = field(default_factory=list)
+    stock: list[StockItem] = field(default_factory=list)
+    suppliers: list[SupplierRecord] = field(default_factory=list)
+
+    reporting_currency: str | None = None
+    """The workspace's own, carried so a money rate can be formatted rather than
+    printed in minor units."""
 
     grace_days: int | None = None
     """Days past the promised date before an order is late, or `None` if nobody
@@ -241,19 +291,39 @@ async def current_ops(db: AsyncSession, scope: ScopedSession) -> OpsSnapshot | N
     milestone_rows = (await db.execute(_MILESTONES, workspace)).all()
     issue_rows = (await db.execute(_ISSUES, workspace)).all()
     dispatch_rows = (await db.execute(_DISPATCHES, workspace)).all()
+    stock_rows = (await db.execute(_STOCK, workspace)).all()
+    supplier_rows = (await db.execute(_SUPPLIERS, workspace)).all()
 
-    if not any((project_rows, task_rows, milestone_rows, issue_rows, dispatch_rows)):
+    if not any(
+        (
+            project_rows,
+            task_rows,
+            milestone_rows,
+            issue_rows,
+            dispatch_rows,
+            stock_rows,
+            supplier_rows,
+        )
+    ):
         # Read before the confirmations on purpose: a workspace that has
         # recorded nothing cannot have vouched for anything, and a third round
         # trip to `us-east-2` to prove that costs a page load for no answer.
         return None
 
     confirmation_rows = (await db.execute(_COMPLETENESS, workspace)).all()
-    grace = (await db.execute(_GRACE, workspace)).scalar_one_or_none()
+    rules = (await db.execute(_WORKSPACE_RULES, workspace)).one_or_none()
 
     stamps = [
         row.updated_at
-        for rows in (project_rows, task_rows, milestone_rows, issue_rows, dispatch_rows)
+        for rows in (
+            project_rows,
+            task_rows,
+            milestone_rows,
+            issue_rows,
+            dispatch_rows,
+            stock_rows,
+            supplier_rows,
+        )
         for row in rows
     ]
 
@@ -311,7 +381,27 @@ async def current_ops(db: AsyncSession, scope: ScopedSession) -> OpsSnapshot | N
             )
             for row in dispatch_rows
         ],
-        grace_days=grace,
+        stock=[
+            StockItem(
+                id=row.id,
+                name=row.name,
+                unit=row.unit,
+                on_hand=row.on_hand,
+                minimum=row.minimum,
+            )
+            for row in stock_rows
+        ],
+        suppliers=[
+            SupplierRecord(
+                id=row.id,
+                name=row.name,
+                category=row.category,
+                spend_minor=row.spend_minor,
+            )
+            for row in supplier_rows
+        ],
+        grace_days=rules.dispatch_grace_days if rules else None,
+        reporting_currency=rules.reporting_currency if rules else None,
         recorded_at=max(stamps) if stamps else None,
         confirmations={
             row.entity: Confirmation(

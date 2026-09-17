@@ -499,6 +499,11 @@ class CountFigureOut(BaseModel):
     noun: str
     """What one row is, in the plural. "projects", "tasks"."""
 
+    open_label: str = "still open"
+    """What `open_items` means here, in words. "still open" for work, "below
+    their minimum" for stock — the same field counting a different thing, and
+    the phrase belongs to the record type rather than to the client."""
+
     recorded: int
     """How many rows exist. The population, and deliberately **not** a
     denominator: dividing anything by it would produce exactly the
@@ -589,12 +594,31 @@ class RateFigureOut(BaseModel):
     """Both `null` under a refusal, for `percentage`'s reason: half a fraction is
     an invitation to finish it. Present together or not at all."""
 
-    outstanding: int
+    denominator_label: str = ""
+    """What the fraction is over, in words — "orders that went out", "of the
+    spend you have recorded". A rate whose denominator is unnamed is a number
+    nobody can check."""
+
+    unit: str = "count"
+    """`"count"` or `"money"`. Explicit rather than inferred from `currency`,
+    because money with no reporting currency is a real state and a client that
+    read `currency === null` as "counts" would show minor units as though they
+    were a number of things."""
+
+    currency: str | None = None
+    """The workspace's reporting currency, or `null` when it has not set one.
+    Never defaulted: a currency nobody chose is a fact nobody gave."""
+
+    excluded: int = 0
+    """Recorded and deliberately outside the denominator — an unpriced supplier,
+    an order not yet sent. Reported rather than folded in or dropped (I10)."""
+
+    outstanding: int = 0
     """Recorded and not yet sent. **Always served, gates or no gates** — it is a
     count, true either way, and withholding it would tell a founder nothing when
-    we can honestly tell them something."""
+    we can honestly tell them something. Zero for a rate with no such idea."""
 
-    overdue: int
+    overdue: int = 0
     """Of `outstanding`, the ones already past the promise plus grace."""
 
     grace_days: int | None
@@ -1089,14 +1113,19 @@ def rate_figure_out(capability: Capability, ops: OpsSnapshot | None) -> RateFigu
         return None
 
     shown = computation.refused is None
+    parts = computation.parts
     return RateFigureOut(
         label=computation.label,
         measures=computation.measures,
-        percentage=computation.rate.percentage if shown else None,
-        numerator=computation.rate.on_time if shown else None,
-        denominator=computation.rate.dispatched if shown else None,
-        outstanding=computation.rate.outstanding,
-        overdue=computation.rate.overdue,
+        percentage=parts.percentage if shown else None,
+        numerator=parts.numerator if shown else None,
+        denominator=parts.denominator if shown else None,
+        denominator_label=parts.denominator_label,
+        unit=parts.unit,
+        currency=parts.currency,
+        excluded=parts.excluded,
+        outstanding=parts.outstanding,
+        overdue=parts.overdue,
         grace_days=ops.grace_days,
         refused=computation.refused.value if computation.refused else "",
         complete_as_of=(
@@ -1130,6 +1159,7 @@ def count_figure_out(capability: Capability, ops: OpsSnapshot | None) -> CountFi
         label=computation.label,
         measures=computation.measures,
         noun=computation.noun,
+        open_label=computation.open_label,
         recorded=computation.counts.recorded,
         open_items=computation.counts.open_items,
         overdue=computation.counts.overdue,
