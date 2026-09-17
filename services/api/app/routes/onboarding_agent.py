@@ -451,11 +451,15 @@ async def _workspace_identity(db: Any, scope: ScopedSession) -> tuple[str, str]:
     the only authority on which company this is.
     """
     row = (
-        await db.execute(
-            sa.text("SELECT name, domain FROM workspace WHERE id = :w"),
-            {"w": scope.workspace_id},
+        (
+            await db.execute(
+                sa.text("SELECT name, domain FROM workspace WHERE id = :w"),
+                {"w": scope.workspace_id},
+            )
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
     if row is None or not row["domain"]:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -507,17 +511,21 @@ async def _who(db: Any, scope: ScopedSession) -> dict[str, str]:
     no answer at all, which is what the previous shape returned too.
     """
     row = (
-        await db.execute(
-            sa.text(
-                "SELECT u.display_name, m.designation, m.stated_department, w.name AS company"
-                " FROM app_user u"
-                " JOIN membership m ON m.user_id = u.id AND m.workspace_id = :w"
-                " JOIN workspace w ON w.id = :w"
-                " WHERE u.id = :u AND m.revoked_at IS NULL"
-            ),
-            {"w": scope.workspace_id, "u": scope.user_id},
+        (
+            await db.execute(
+                sa.text(
+                    "SELECT u.display_name, m.designation, m.stated_department, w.name AS company"
+                    " FROM app_user u"
+                    " JOIN membership m ON m.user_id = u.id AND m.workspace_id = :w"
+                    " JOIN workspace w ON w.id = :w"
+                    " WHERE u.id = :u AND m.revoked_at IS NULL"
+                ),
+                {"w": scope.workspace_id, "u": scope.user_id},
+            )
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
     if row is None:
         return {}
     out = {
@@ -594,17 +602,21 @@ async def _deep_research(db: Any, scope: ScopedSession) -> dict[str, Any]:
     result would put "we found nothing" where "we have not looked" is true.
     """
     rows = (
-        await db.execute(
-            sa.text(
-                "SELECT s.kind, s.result_json FROM research_source s"
-                " JOIN research_run r ON r.id = s.run_id"
-                " WHERE s.workspace_id = :w AND s.state = 'succeeded'"
-                "   AND s.result_json IS NOT NULL"
-                " ORDER BY r.requested_at DESC, s.finished_at DESC"
-            ),
-            {"w": scope.workspace_id},
+        (
+            await db.execute(
+                sa.text(
+                    "SELECT s.kind, s.result_json FROM research_source s"
+                    " JOIN research_run r ON r.id = s.run_id"
+                    " WHERE s.workspace_id = :w AND s.state = 'succeeded'"
+                    "   AND s.result_json IS NOT NULL"
+                    " ORDER BY r.requested_at DESC, s.finished_at DESC"
+                ),
+                {"w": scope.workspace_id},
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
 
     pages: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -761,14 +773,11 @@ async def start(scope: CurrentScope) -> StateOut:
             # of its opening facts changes, from the site to the person, which is
             # the same precedence the brief step already grants them when it says
             # "you outrank the website".
-            reason = (
-                (outcome.error_reason if outcome is not None else "")
-                or ("nothing readable in the pages returned" if fetched else "no pages returned")
+            reason = (outcome.error_reason if outcome is not None else "") or (
+                "nothing readable in the pages returned" if fetched else "no pages returned"
             )
             log.info("onboarding.crawl.unreadable", domain=domain, reason=reason)
-            await store.save_crawl(
-                db, session_id=session_id, pages=[], unreadable_reason=reason
-            )
+            await store.save_crawl(db, session_id=session_id, pages=[], unreadable_reason=reason)
             return await _state(db, scope, await _load(db, scope))
 
         # Held under `research.crawl` rather than passed back through the
@@ -842,9 +851,14 @@ async def read(scope: CurrentScope) -> StateOut:
 
         for turn in state.turns:
             await store.append_turn(
-                db, session_id=stored.id, workspace_id=scope.workspace_id,
-                role=turn.role, text=turn.text, target_field=turn.target_field,
-                skill=turn.skill, skill_version=turn.skill_version,
+                db,
+                session_id=stored.id,
+                workspace_id=scope.workspace_id,
+                role=turn.role,
+                text=turn.text,
+                target_field=turn.target_field,
+                skill=turn.skill,
+                skill_version=turn.skill_version,
             )
         return await _state(db, scope, await _load(db, scope))
 
@@ -906,8 +920,10 @@ async def describe(payload: DescribeIn, scope: CurrentScope) -> StateOut:
         # and here it points at them.
         research = {
             "profile": {
-                "found": True, "value": values["profile"],
-                "confidence": "stated", "source": "you",
+                "found": True,
+                "value": values["profile"],
+                "confidence": "stated",
+                "source": "you",
             },
             "products_services": {"found": False},
             "brand_voice": {"found": False},
@@ -930,14 +946,19 @@ async def describe(payload: DescribeIn, scope: CurrentScope) -> StateOut:
         )
         stored.turns.append(
             await store.append_turn(
-                db, session_id=stored.id, workspace_id=scope.workspace_id,
-                role="agent", text=agent_line,
+                db,
+                session_id=stored.id,
+                workspace_id=scope.workspace_id,
+                role="agent",
+                text=agent_line,
             )
         )
         for key, name, question in _DESCRIBE_FIELDS:
             stored.turns.append(
                 await store.append_turn(
-                    db, session_id=stored.id, workspace_id=scope.workspace_id,
+                    db,
+                    session_id=stored.id,
+                    workspace_id=scope.workspace_id,
                     # **No `target_field` on the agent turn, deliberately.**
                     # `_rehydrate` counts `asked` as "agent turns carrying a
                     # target", so tagging these three spent three of the five
@@ -953,13 +974,18 @@ async def describe(payload: DescribeIn, scope: CurrentScope) -> StateOut:
                     # catalogue's scope. The question still shows in the
                     # transcript — an agent turn with no target renders as an
                     # ordinary bubble.
-                    role="agent", text=question,
+                    role="agent",
+                    text=question,
                 )
             )
             stored.turns.append(
                 await store.append_turn(
-                    db, session_id=stored.id, workspace_id=scope.workspace_id,
-                    role="user", text=values[name], target_field=key,
+                    db,
+                    session_id=stored.id,
+                    workspace_id=scope.workspace_id,
+                    role="user",
+                    text=values[name],
+                    target_field=key,
                 )
             )
 
@@ -986,8 +1012,12 @@ async def confirm_brief(payload: BriefIn, scope: CurrentScope) -> StateOut:
         await agent.confirm_brief(state, payload.corrections)
         for key, value in payload.corrections.items():
             await store.append_turn(
-                db, session_id=stored.id, workspace_id=scope.workspace_id,
-                role="user", text=value, target_field=key,
+                db,
+                session_id=stored.id,
+                workspace_id=scope.workspace_id,
+                role="user",
+                text=value,
+                target_field=key,
             )
         await db.execute(
             sa.text(
@@ -1087,9 +1117,7 @@ async def _ask_next(
         # `/next` is the resume endpoint and is called again on a session
         # already past discovery, where this would drag the phase backwards.
         if stored.phase == store.Phase.DISCOVERY.value:
-            await store.set_phase(
-                db, session_id=stored.id, phase=store.Phase.DOCUMENTS.value
-            )
+            await store.set_phase(db, session_id=stored.id, phase=store.Phase.DOCUMENTS.value)
             stored.phase = store.Phase.DOCUMENTS.value
             log.info(
                 "onboarding.interview_closed",
@@ -1101,8 +1129,11 @@ async def _ask_next(
 
     stored.turns.append(
         await store.append_turn(
-            db, session_id=stored.id, workspace_id=scope.workspace_id,
-            role="agent", text=str(result["question"]),
+            db,
+            session_id=stored.id,
+            workspace_id=scope.workspace_id,
+            role="agent",
+            text=str(result["question"]),
             target_field=str(result["target"]),
             skill=str(result.get("skill", "")),
             skill_version=str(result.get("skill_version", "")),
@@ -1169,8 +1200,12 @@ async def open_discovery(payload: DiscoveryIn, scope: CurrentScope) -> AnswerOut
         ):
             stored.turns.append(
                 await store.append_turn(
-                    db, session_id=stored.id, workspace_id=scope.workspace_id,
-                    role=role, text=text, target_field="persona.stated_purpose",
+                    db,
+                    session_id=stored.id,
+                    workspace_id=scope.workspace_id,
+                    role=role,
+                    text=text,
+                    target_field="persona.stated_purpose",
                     skill="user-discovery",
                 )
             )
@@ -1238,8 +1273,12 @@ async def submit_answer(payload: AnswerIn, scope: CurrentScope) -> AnswerOut:
         await agent.submit_answer(_rehydrate(stored), target=target, text=payload.text)
         stored.turns.append(
             await store.append_turn(
-                db, session_id=stored.id, workspace_id=scope.workspace_id,
-                role="user", text=payload.text, target_field=target,
+                db,
+                session_id=stored.id,
+                workspace_id=scope.workspace_id,
+                role="user",
+                text=payload.text,
+                target_field=target,
             )
         )
         # Appended above *before* this runs, so the generator sees the answer in
@@ -1281,9 +1320,7 @@ async def _uploaded(db: Any) -> int:
     documents" — and a count that took a workspace id would be a count that
     could be asked about somebody else's.
     """
-    return int(
-        (await db.execute(sa.text("SELECT COUNT(*) FROM document"))).scalar_one()
-    )
+    return int((await db.execute(sa.text("SELECT COUNT(*) FROM document"))).scalar_one())
 
 
 @router.post("/documents", response_model=StateOut, dependencies=[Depends(require_csrf)])
@@ -1309,8 +1346,12 @@ async def documents_done(payload: DocumentsIn, scope: CurrentScope) -> StateOut:
     async with scoped_connection(scope) as db:
         stored = await _load(db, scope)
 
-        if stored.phase in (store.Phase.TOOLS.value, store.Phase.PERSONA.value,
-                            store.Phase.ASSEMBLING.value, store.Phase.READY.value):
+        if stored.phase in (
+            store.Phase.TOOLS.value,
+            store.Phase.PERSONA.value,
+            store.Phase.ASSEMBLING.value,
+            store.Phase.READY.value,
+        ):
             return await _state(db, scope, stored)
 
         if stored.phase != store.Phase.DOCUMENTS.value:
@@ -1468,14 +1509,17 @@ async def finish(scope: CurrentScope) -> StateOut:
         # that a concurrent request may already have advanced; acting on it
         # would run the same stage twice and pay for the model call twice.
         locked = (
-            await db.execute(
-                sa.text(
-                    "SELECT phase, status FROM onboarding_session"
-                    " WHERE id = :sid FOR UPDATE"
-                ),
-                {"sid": stored.id},
+            (
+                await db.execute(
+                    sa.text(
+                        "SELECT phase, status FROM onboarding_session WHERE id = :sid FOR UPDATE"
+                    ),
+                    {"sid": stored.id},
+                )
             )
-        ).mappings().first()
+            .mappings()
+            .first()
+        )
         if locked is None:  # pragma: no cover - _load just returned this row
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="session vanished")
 
@@ -1511,8 +1555,7 @@ async def finish(scope: CurrentScope) -> StateOut:
                 detail={
                     "error": "steps_outstanding",
                     "message": (
-                        "Your documents and tools come before this. "
-                        "Nothing is built until they do."
+                        "Your documents and tools come before this. Nothing is built until they do."
                     ),
                     "phase": phase,
                 },
@@ -1653,9 +1696,7 @@ def _with_tool_gaps(context: dict[str, Any], providers: Sequence[str]) -> dict[s
     return {**context, "known_gaps": readable_gaps(gaps)}
 
 
-def _with_promoted_facts(
-    context: dict[str, Any], answers: Mapping[str, str]
-) -> dict[str, Any]:
+def _with_promoted_facts(context: dict[str, Any], answers: Mapping[str, str]) -> dict[str, Any]:
     """Put the department thresholds into the preamble every later agent reads.
 
     **They were missing.** A completed journey's `context.facts` held the brain

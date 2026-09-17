@@ -112,9 +112,7 @@ def _snapshot(
     }
 
 
-_INSTRUCTION: Final = (
-    "Write the sentence for the figure in your grounding."
-)
+_INSTRUCTION: Final = "Write the sentence for the figure in your grounding."
 """What the narrator is asked, in one line.
 
 Every skill in this product sends a user turn naming the task —
@@ -218,9 +216,7 @@ async def narrate(
         #
         # Derived from the strings **we sent**, above, and never from the
         # answer that comes back. That direction is the whole invariant.
-        supplied = numerals_supplied(
-            str(trace.get("window", "")), str(trace.get("delta", ""))
-        )
+        supplied = numerals_supplied(str(trace.get("window", "")), str(trace.get("delta", "")))
 
         answer = await run(
             skill=NARRATOR,

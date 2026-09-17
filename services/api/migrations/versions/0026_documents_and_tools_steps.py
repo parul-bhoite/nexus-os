@@ -113,8 +113,9 @@ def upgrade() -> None:
         # Who made the claim, and when. Not derivable from `updated_at`, which
         # answers "when did this row last change" and not "who told us this".
         sa.Column("declared_by", sa.Uuid, nullable=False),
-        sa.Column("declared_at", sa.DateTime(timezone=True), nullable=False,
-                  server_default=sa.func.now()),
+        sa.Column(
+            "declared_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
         # Null until the OAuth half lands, and then never null again for a row
         # that reached `connected` — the CHECK below is what makes that true.
         sa.Column("connected_at", sa.DateTime(timezone=True)),
@@ -123,10 +124,12 @@ def upgrade() -> None:
         # verdict about a system we have never read would be fabricated.
         sa.Column("capabilities", postgresql.JSONB),
         sa.Column("last_error", sa.Text),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False,
-                  server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False,
-                  server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspace.id"], ondelete="CASCADE"),
         # `RESTRICT`, not `CASCADE`. A member leaving must not silently delete
         # the record of which systems the company runs on — that is a fact about
@@ -182,8 +185,7 @@ def downgrade() -> None:
     # are. It costs the person the closing card again, which is the cheapest
     # possible consequence of a rollback.
     op.execute(
-        "UPDATE onboarding_session SET phase = 'discovery'"
-        " WHERE phase IN ('documents', 'tools')"
+        "UPDATE onboarding_session SET phase = 'discovery' WHERE phase IN ('documents', 'tools')"
     )
     op.drop_constraint("ck_onboarding_session_phase", "onboarding_session")
     op.create_check_constraint(

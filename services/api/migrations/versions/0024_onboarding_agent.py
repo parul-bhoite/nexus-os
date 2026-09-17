@@ -53,10 +53,12 @@ def upgrade() -> None:
         sa.Column("brief", postgresql.JSONB),
         sa.Column("persona_draft", postgresql.JSONB),
         sa.Column("context", postgresql.JSONB),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False,
-                  server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False,
-                  server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
         sa.Column("completed_at", sa.DateTime(timezone=True)),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspace.id"], ondelete="CASCADE"),
         sa.CheckConstraint(
@@ -90,14 +92,16 @@ def upgrade() -> None:
         sa.Column("scope", sa.SmallInteger),
         sa.Column("skill", sa.Text),
         sa.Column("skill_version", sa.Text),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False,
-                  server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
         sa.ForeignKeyConstraint(["session_id"], ["onboarding_session.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspace.id"], ondelete="CASCADE"),
         sa.UniqueConstraint("session_id", "seq", name="uq_onboarding_turn_seq"),
         sa.CheckConstraint("role IN ('agent', 'user')", name="ck_onboarding_turn_role"),
-        sa.CheckConstraint("scope IS NULL OR scope BETWEEN 1 AND 5",
-                           name="ck_onboarding_turn_scope"),
+        sa.CheckConstraint(
+            "scope IS NULL OR scope BETWEEN 1 AND 5", name="ck_onboarding_turn_scope"
+        ),
         sa.CheckConstraint(
             "target_field IS NULL OR scope IS NOT NULL",
             name="ck_onboarding_turn_scoped_answer",

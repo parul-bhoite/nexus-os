@@ -173,5 +173,3 @@ def extract_text(html: str) -> str:
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
     return str(soup.get_text(" ", strip=True))
-
-

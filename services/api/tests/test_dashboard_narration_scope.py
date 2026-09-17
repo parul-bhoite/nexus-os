@@ -208,9 +208,7 @@ def test_a_narration_without_a_csrf_header_is_refused(client: TestClient) -> Non
     decorator rather than a branch."""
     as_role(client, _scope(Role.OWNER, frozenset(Department)))
 
-    response = client.post(
-        "/dashboards/marketing/narrate", json={"key": "marketing.seo_gaps"}
-    )
+    response = client.post("/dashboards/marketing/narrate", json={"key": "marketing.seo_gaps"})
 
     assert response.status_code == 403
 

@@ -74,9 +74,7 @@ so the two cannot disagree.
 """
 
 
-async def current_narrations(
-    db: AsyncSession, scope: ScopedSession
-) -> dict[str, StoredNarration]:
+async def current_narrations(db: AsyncSession, scope: ScopedSession) -> dict[str, StoredNarration]:
     """Every capability's most recent sentence, keyed by capability id.
 
     Returns what was *written*, not what should be *shown*. Whether a stored

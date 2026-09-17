@@ -246,9 +246,7 @@ def test_the_idle_timeout_outlasts_the_slowest_model_call() -> None:
     idle_seconds = float(idle.removesuffix("s"))
 
     registry = SkillRegistry().load()
-    slowest = max(
-        (registry.get(name).timeout_seconds or 0) for name in registry.names()
-    )
+    slowest = max((registry.get(name).timeout_seconds or 0) for name in registry.names())
     assert slowest > 0, "no skill declares a timeout; this test would prove nothing"
     assert idle_seconds > slowest, (
         f"idle_in_transaction_session_timeout is {idle_seconds}s but a skill may "

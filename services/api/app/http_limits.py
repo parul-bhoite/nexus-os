@@ -191,8 +191,7 @@ class BodySizeLimit:
                 "detail": {
                     "error": "request_too_large",
                     "message": (
-                        f"That request body is over the {limit // 1024} KB limit for this "
-                        "endpoint."
+                        f"That request body is over the {limit // 1024} KB limit for this endpoint."
                     ),
                 }
             }

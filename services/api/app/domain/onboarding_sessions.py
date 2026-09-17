@@ -128,15 +128,19 @@ def _loads(value: Any) -> Mapping[str, Any]:
 
 async def active(db: AsyncSession, *, workspace_id: UUID) -> StoredSession | None:
     row = (
-        await db.execute(
-            sa.text(
-                "SELECT id, workspace_id, status, phase, domain, research, brief,"
-                " persona_draft, context FROM onboarding_session"
-                " WHERE workspace_id = :ws AND status = :active"
-            ),
-            {"ws": workspace_id, "active": SessionStatus.ACTIVE.value},
+        (
+            await db.execute(
+                sa.text(
+                    "SELECT id, workspace_id, status, phase, domain, research, brief,"
+                    " persona_draft, context FROM onboarding_session"
+                    " WHERE workspace_id = :ws AND status = :active"
+                ),
+                {"ws": workspace_id, "active": SessionStatus.ACTIVE.value},
+            )
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
     if row is None:
         return None
 
@@ -145,14 +149,18 @@ async def active(db: AsyncSession, *, workspace_id: UUID) -> StoredSession | Non
 
 async def _hydrate(db: AsyncSession, row: RowMapping) -> StoredSession:
     turns = (
-        await db.execute(
-            sa.text(
-                "SELECT seq, role, text, target_field, scope FROM onboarding_turn"
-                " WHERE session_id = :sid ORDER BY seq"
-            ),
-            {"sid": row["id"]},
+        (
+            await db.execute(
+                sa.text(
+                    "SELECT seq, role, text, target_field, scope FROM onboarding_turn"
+                    " WHERE session_id = :sid ORDER BY seq"
+                ),
+                {"sid": row["id"]},
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
 
     return StoredSession(
         id=row["id"],
@@ -166,8 +174,11 @@ async def _hydrate(db: AsyncSession, row: RowMapping) -> StoredSession:
         context=_loads(row["context"]),
         turns=[
             StoredTurn(
-                seq=t["seq"], role=t["role"], text=t["text"],
-                target_field=t["target_field"], scope=t["scope"],
+                seq=t["seq"],
+                role=t["role"],
+                text=t["text"],
+                target_field=t["target_field"],
+                scope=t["scope"],
             )
             for t in turns
         ],
@@ -184,15 +195,19 @@ async def latest(db: AsyncSession, *, workspace_id: UUID) -> StoredSession | Non
     Brain they already have.
     """
     row = (
-        await db.execute(
-            sa.text(
-                "SELECT id, workspace_id, status, phase, domain, research, brief,"
-                " persona_draft, context FROM onboarding_session"
-                " WHERE workspace_id = :ws ORDER BY created_at DESC LIMIT 1"
-            ),
-            {"ws": workspace_id},
+        (
+            await db.execute(
+                sa.text(
+                    "SELECT id, workspace_id, status, phase, domain, research, brief,"
+                    " persona_draft, context FROM onboarding_session"
+                    " WHERE workspace_id = :ws ORDER BY created_at DESC LIMIT 1"
+                ),
+                {"ws": workspace_id},
+            )
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
     return None if row is None else await _hydrate(db, row)
 
 
@@ -205,14 +220,18 @@ async def by_id(db: AsyncSession, *, session_id: UUID) -> StoredSession | None:
     there returns None and the request 404s on its own success.
     """
     row = (
-        await db.execute(
-            sa.text(
-                "SELECT id, workspace_id, status, phase, domain, research, brief,"
-                " persona_draft, context FROM onboarding_session WHERE id = :sid"
-            ),
-            {"sid": session_id},
+        (
+            await db.execute(
+                sa.text(
+                    "SELECT id, workspace_id, status, phase, domain, research, brief,"
+                    " persona_draft, context FROM onboarding_session WHERE id = :sid"
+                ),
+                {"sid": session_id},
+            )
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
     return None if row is None else await _hydrate(db, row)
 
 
@@ -267,14 +286,18 @@ async def start(db: AsyncSession, *, workspace_id: UUID, user_id: UUID, domain: 
         return existing.id
 
     row = (
-        await db.execute(
-            sa.text(
-                "INSERT INTO onboarding_session (workspace_id, user_id, domain)"
-                " VALUES (:ws, :uid, :domain) RETURNING id"
-            ),
-            {"ws": workspace_id, "uid": user_id, "domain": domain},
+        (
+            await db.execute(
+                sa.text(
+                    "INSERT INTO onboarding_session (workspace_id, user_id, domain)"
+                    " VALUES (:ws, :uid, :domain) RETURNING id"
+                ),
+                {"ws": workspace_id, "uid": user_id, "domain": domain},
+            )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     return UUID(str(row["id"]))
 
 
@@ -427,9 +450,7 @@ async def save_crawl(
     )
 
 
-async def save_research(
-    db: AsyncSession, *, session_id: UUID, research: Mapping[str, Any]
-) -> None:
+async def save_research(db: AsyncSession, *, session_id: UUID, research: Mapping[str, Any]) -> None:
     """Merge a research payload into the session's `research` column.
 
     Merged rather than replaced, for the same reason `save_crawl` merges: the
@@ -505,16 +526,19 @@ async def append_turn(
                 " RETURNING seq"
             ),
             {
-                "sid": session_id, "ws": workspace_id,
-                "role": role, "text": text, "target": target_field,
-                "scope": scope, "skill": skill, "version": skill_version,
+                "sid": session_id,
+                "ws": workspace_id,
+                "role": role,
+                "text": text,
+                "target": target_field,
+                "scope": scope,
+                "skill": skill,
+                "version": skill_version,
             },
         )
     ).scalar_one()
 
-    return StoredTurn(
-        seq=int(seq), role=role, text=text, target_field=target_field, scope=scope
-    )
+    return StoredTurn(seq=int(seq), role=role, text=text, target_field=target_field, scope=scope)
 
 
 async def complete(db: AsyncSession, *, session_id: UUID, context: Mapping[str, Any]) -> None:

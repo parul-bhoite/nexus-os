@@ -157,8 +157,15 @@ def test_an_unrelated_fact_does_not_mark_it_stale() -> None:
 def test_a_department_is_never_offered_another_departments_facts() -> None:
     from app.ai.runtime.fields import askable_fields
 
-    for department in ("hr", "sales", "finance", "operations", "marketing",
-                       "strategy", "executive"):
+    for department in (
+        "hr",
+        "sales",
+        "finance",
+        "operations",
+        "marketing",
+        "strategy",
+        "executive",
+    ):
         offered = askable_fields(department)
         foreign = [
             spec.key
@@ -183,14 +190,17 @@ def test_every_department_is_offered_its_own_facts_and_the_shared_set() -> None:
     shared = {s.key for s in askable_fields(None) if s.department is None}
     assert shared, "there are no shared askable fields; this test proves nothing"
 
-    for department in ("hr", "sales", "finance", "operations", "marketing",
-                       "strategy", "executive"):
+    for department in (
+        "hr",
+        "sales",
+        "finance",
+        "operations",
+        "marketing",
+        "strategy",
+        "executive",
+    ):
         offered = {s.key for s in askable_fields(department)}
-        own = {
-            s.key
-            for s in askable_fields(None)
-            if s.department == department
-        }
+        own = {s.key for s in askable_fields(None) if s.department == department}
         assert own, f"{department} has no askable facts at all"
         assert own <= offered, f"{department} lost its own fields"
         assert shared <= offered, f"{department} lost the shared fields"
@@ -284,27 +294,38 @@ def test_well_worded_questions_are_not_rejected() -> None:
     from app.ai.runtime.fields import FIELD_CATALOGUE, question_elicits
 
     good = [
-        ("fact.sales.stale_days",
-         "When a deal goes quiet, how many days pass before you flag it for attention?"),
-        ("fact.finance.approver",
-         "When you're forecasting cash and you hit that threshold, who needs to sign off "
-         "on the plan change?"),
-        ("fact.operations.late_rule",
-         "What's the threshold before it counts as late to your customers — is it a "
-         "specific number of hours, or does it depend on what was promised?"),
+        (
+            "fact.sales.stale_days",
+            "When a deal goes quiet, how many days pass before you flag it for attention?",
+        ),
+        (
+            "fact.finance.approver",
+            "When you're forecasting cash and you hit that threshold, who needs to sign off "
+            "on the plan change?",
+        ),
+        (
+            "fact.operations.late_rule",
+            "What's the threshold before it counts as late to your customers — is it a "
+            "specific number of hours, or does it depend on what was promised?",
+        ),
         # Both of these were asked and accepted in a live People interview.
-        ("fact.hr.hire_approver",
-         "You mentioned cutting time-to-hire as a priority — who signs off on a new hire "
-         "at your company?"),
+        (
+            "fact.hr.hire_approver",
+            "You mentioned cutting time-to-hire as a priority — who signs off on a new hire "
+            "at your company?",
+        ),
         ("fact.hr.people_risk", "Whose departure would hurt the team most right now?"),
-        ("brain.competitors",
-         "When you're competing for those board-level relationships, who do you actually "
-         "lose to?"),
-        ("fact.finance.approval_threshold",
-         "Above what amount does spend need your sign-off?"),
+        (
+            "brain.competitors",
+            "When you're competing for those board-level relationships, who do you actually "
+            "lose to?",
+        ),
+        ("fact.finance.approval_threshold", "Above what amount does spend need your sign-off?"),
         ("fact.hr.review_cycle", "How often do performance reviews happen?"),
-        ("fact.executive.distrusted_number",
-         "Which number in your current reporting do you not trust?"),
+        (
+            "fact.executive.distrusted_number",
+            "Which number in your current reporting do you not trust?",
+        ),
     ]
     for key, question in good:
         assert question_elicits(question, FIELD_CATALOGUE[key]), f"{key} rejected: {question}"
@@ -395,8 +416,15 @@ def test_every_department_has_a_fallback_for_its_own_facts() -> None:
     """
     from app.ai.runtime.fields import askable_fields, next_fallback
 
-    for department in ("hr", "sales", "finance", "operations", "marketing",
-                       "strategy", "executive"):
+    for department in (
+        "hr",
+        "sales",
+        "finance",
+        "operations",
+        "marketing",
+        "strategy",
+        "executive",
+    ):
         own = [
             s
             for s in askable_fields(department)

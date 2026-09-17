@@ -184,9 +184,7 @@ def test_a_crawl_alone_makes_the_audits_partial_not_live() -> None:
         # itself, which is ours, so this is "we have not looked yet" rather
         # than "connect something".
         assert (
-            state_from_sources(
-                capability.required_sources, reachable=True, connected=frozenset()
-            )
+            state_from_sources(capability.required_sources, reachable=True, connected=frozenset())
             is WidgetState.LOCKED
         )
 

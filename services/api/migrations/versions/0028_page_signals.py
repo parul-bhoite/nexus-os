@@ -58,9 +58,7 @@ depends_on = None
 def upgrade() -> None:
     op.create_table(
         "page_signals",
-        sa.Column(
-            "id", sa.Uuid, primary_key=True, server_default=sa.text("gen_random_uuid()")
-        ),
+        sa.Column("id", sa.Uuid, primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("workspace_id", sa.Uuid, nullable=False),
         sa.Column("captured_by", sa.Text, nullable=False),
         sa.Column("session_id", sa.Uuid),

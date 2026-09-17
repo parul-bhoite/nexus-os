@@ -101,9 +101,7 @@ def user_and_workspace(engine: Engine) -> Iterator[tuple[UUID, UUID]]:
             sa.text("INSERT INTO app_user (id, email) VALUES (:i,:e)"),
             {"i": str(user), "e": f"narr-e2e-{user.hex[:8]}@example.com"},
         )
-        conn.execute(
-            sa.text("INSERT INTO tenant (id, name) VALUES (:i,'T')"), {"i": str(tenant)}
-        )
+        conn.execute(sa.text("INSERT INTO tenant (id, name) VALUES (:i,'T')"), {"i": str(tenant)})
         set_workspace(conn, ws)
         conn.execute(
             sa.text(

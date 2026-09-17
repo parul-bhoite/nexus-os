@@ -88,6 +88,7 @@ async def live_membership_count(
     ).scalar_one()
     return int(count)
 
+
 # `assert_no_live_membership` was here, and ADR 0026 removed it. It refused a
 # second `membership` row for a user, which is what made "one person, one
 # company" true — and multi-entity is that decision reversed.

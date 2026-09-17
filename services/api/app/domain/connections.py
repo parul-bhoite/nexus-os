@@ -233,9 +233,7 @@ async def declared(db: AsyncSession, *, workspace_id: UUID) -> tuple[str, ...]:
     rows = (
         (
             await db.execute(
-                sa.text(
-                    "SELECT provider FROM workspace_connection WHERE workspace_id = :w"
-                ),
+                sa.text("SELECT provider FROM workspace_connection WHERE workspace_id = :w"),
                 {"w": str(workspace_id)},
             )
         )

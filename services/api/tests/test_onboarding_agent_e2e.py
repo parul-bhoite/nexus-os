@@ -62,12 +62,24 @@ PAGES = [
 def _research() -> str:
     return json.dumps(
         {
-            "profile": {"found": True, "value": "Industrial supplies and distribution.",
-                        "confidence": "read", "source": "/about"},
-            "products_services": {"found": True, "value": "Valves, fittings, fasteners, PPE.",
-                                  "confidence": "read", "source": "/products"},
-            "brand_voice": {"found": True, "value": "Plain and technical.",
-                            "confidence": "inferred", "reasoning": "tone across pages"},
+            "profile": {
+                "found": True,
+                "value": "Industrial supplies and distribution.",
+                "confidence": "read",
+                "source": "/about",
+            },
+            "products_services": {
+                "found": True,
+                "value": "Valves, fittings, fasteners, PPE.",
+                "confidence": "read",
+                "source": "/products",
+            },
+            "brand_voice": {
+                "found": True,
+                "value": "Plain and technical.",
+                "confidence": "inferred",
+                "reasoning": "tone across pages",
+            },
             "technology_seen": [],
             "could_not_determine": [{"topic": "Target customers", "why": "not stated"}],
             "pages_read": 2,
@@ -79,8 +91,12 @@ def _summary() -> str:
     return json.dumps(
         {
             "statements": [
-                {"field": "brain.profile", "text": "You sell industrial supplies.",
-                 "confidence": "read", "source": "/about"},
+                {
+                    "field": "brain.profile",
+                    "text": "You sell industrial supplies.",
+                    "confidence": "read",
+                    "source": "/about",
+                },
             ],
             "needs_you": [{"topic": "Target customers", "why_only_you": "only you know"}],
             "assumptions": [{"text": "Currency is OMR", "evidence": ".om domain"}],
@@ -180,8 +196,12 @@ def _persona() -> str:
     return json.dumps(
         {
             "fields": [
-                {"key": "persona.priority_topics", "value": "cash",
-                 "derived_from": "worried about cash", "confidence": "stated"},
+                {
+                    "key": "persona.priority_topics",
+                    "value": "cash",
+                    "derived_from": "worried about cash",
+                    "confidence": "stated",
+                },
             ],
             "summary": "Wants cash first.",
         }
@@ -198,13 +218,21 @@ def _brain(with_unsourced: bool = False) -> str:
     exercised on every run rather than only in the test written for it.
     """
     values: list[dict[str, Any]] = [
-        {"key": "brain.profile", "value": "Industrial supplies.",
-         "source_kind": "crawl", "provenance": "/about"},
+        {
+            "key": "brain.profile",
+            "value": "Industrial supplies.",
+            "source_kind": "crawl",
+            "provenance": "/about",
+        },
     ]
     if with_unsourced:
         values.append(
-            {"key": "brain.goals", "value": "Grow 40%", "source_kind": "inference",
-             "provenance": ""}
+            {
+                "key": "brain.goals",
+                "value": "Grow 40%",
+                "source_kind": "inference",
+                "provenance": "",
+            }
         )
     return json.dumps(
         {"values": values, "assumptions": [], "unavailable": [], "generated_by": "model"}
@@ -295,8 +323,13 @@ def test_every_scripted_target_is_a_declared_field() -> None:
     """The targets these tests drive through must exist, or the test proves nothing."""
     from app.ai.runtime.fields import resolve
 
-    for key in ("brain.target_customers", "fact.finance.approval_threshold",
-                "brain.profile", "brain.goals", "persona.priority_topics"):
+    for key in (
+        "brain.target_customers",
+        "fact.finance.approval_threshold",
+        "brain.profile",
+        "brain.goals",
+        "persona.priority_topics",
+    ):
         assert resolve(key).key == key
 
 
@@ -373,8 +406,11 @@ def _scope(user: UUID, ws: UUID) -> ScopedSession:
     from app.domain.session import ScopedSession
 
     return ScopedSession(
-        user_id=user, tenant_id=uuid4(), workspace_id=ws,
-        role=Role.OWNER, departments=frozenset(Department),
+        user_id=user,
+        tenant_id=uuid4(),
+        workspace_id=ws,
+        role=Role.OWNER,
+        departments=frozenset(Department),
     )
 
 
@@ -616,14 +652,18 @@ async def test_the_whole_journey_completes_and_persists(
                 sa.text("SELECT set_config('nexus.workspace_id', :w, true)"), {"w": str(ws)}
             )
             row = (
-                await db.execute(
-                    sa.text(
-                        "SELECT status, completed_at FROM onboarding_session"
-                        " WHERE workspace_id = :w"
-                    ),
-                    {"w": str(ws)},
+                (
+                    await db.execute(
+                        sa.text(
+                            "SELECT status, completed_at FROM onboarding_session"
+                            " WHERE workspace_id = :w"
+                        ),
+                        {"w": str(ws)},
+                    )
                 )
-            ).mappings().one()
+                .mappings()
+                .one()
+            )
             assert row["status"] == "completed"
             assert row["completed_at"] is not None
         finally:
@@ -722,9 +762,7 @@ async def test_the_collection_steps_come_before_the_assembly(
             ).scalar_one() == 0, "a refused declaration wrote a row anyway"
 
             # 5. The real declaration.
-            state = await routes.declare_tools(
-                routes.ToolsIn(providers=["hubspot", "xero"]), scope
-            )
+            state = await routes.declare_tools(routes.ToolsIn(providers=["hubspot", "xero"]), scope)
             # The phase deliberately stays put: `/finish` is what starts the
             # assembly, and inventing a phase between the two would be
             # inventing a state whose only purpose is to be passed through.
@@ -734,14 +772,18 @@ async def test_the_collection_steps_come_before_the_assembly(
                 sa.text("SELECT set_config('nexus.workspace_id', :w, true)"), {"w": str(ws)}
             )
             rows = (
-                await db.execute(
-                    sa.text(
-                        "SELECT provider, state, connected_at FROM workspace_connection"
-                        " WHERE workspace_id = :w ORDER BY provider"
-                    ),
-                    {"w": str(ws)},
+                (
+                    await db.execute(
+                        sa.text(
+                            "SELECT provider, state, connected_at FROM workspace_connection"
+                            " WHERE workspace_id = :w ORDER BY provider"
+                        ),
+                        {"w": str(ws)},
+                    )
                 )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
             assert [r["provider"] for r in rows] == ["hubspot", "xero"]
             assert {r["state"] for r in rows} == {"declared"}
             assert all(r["connected_at"] is None for r in rows), (
@@ -757,9 +799,7 @@ async def test_the_collection_steps_come_before_the_assembly(
             )
             assert (
                 await db.execute(
-                    sa.text(
-                        "SELECT provider FROM workspace_connection WHERE workspace_id = :w"
-                    ),
+                    sa.text("SELECT provider FROM workspace_connection WHERE workspace_id = :w"),
                     {"w": str(ws)},
                 )
             ).scalars().all() == ["xero"]
@@ -768,6 +808,7 @@ async def test_the_collection_steps_come_before_the_assembly(
             assert (await routes.finish(scope)).phase == "persona"
         finally:
             await _cleanup(db, user, ws)
+
 
 @requires_db
 async def test_the_scope_stored_is_the_catalogue_s_not_the_model_s(
@@ -781,9 +822,7 @@ async def test_the_scope_stored_is_the_catalogue_s_not_the_model_s(
     import app.routes.onboarding_agent as routes
     from app.ai.runtime.fields import resolve
 
-    provider = _provider(**{
-        "question-generation": _question("fact.finance.approval_threshold")
-    })
+    provider = _provider(**{"question-generation": _question("fact.finance.approval_threshold")})
     _wire(monkeypatch, provider)
 
     async with get_sessionmaker()() as db:
@@ -802,8 +841,11 @@ async def test_the_scope_stored_is_the_catalogue_s_not_the_model_s(
             await routes.submit_answer(routes.AnswerIn(text="OMR 1,000"), scope)
 
             rows = await _turns(db, ws)
-            answered = [r for r in rows if r["role"] == "user" and r["target_field"]
-                        == "fact.finance.approval_threshold"]
+            answered = [
+                r
+                for r in rows
+                if r["role"] == "user" and r["target_field"] == "fact.finance.approval_threshold"
+            ]
             assert len(answered) == 1
             assert answered[0]["scope"] == resolve("fact.finance.approval_threshold").scope == 3
         finally:
@@ -1114,14 +1156,18 @@ async def test_a_failed_stage_keeps_the_stages_before_it(
                 sa.text("SELECT set_config('nexus.workspace_id', :w, true)"), {"w": str(ws)}
             )
             row = (
-                await db.execute(
-                    sa.text(
-                        "SELECT phase, status, persona_draft FROM onboarding_session"
-                        " WHERE workspace_id = :w"
-                    ),
-                    {"w": str(ws)},
+                (
+                    await db.execute(
+                        sa.text(
+                            "SELECT phase, status, persona_draft FROM onboarding_session"
+                            " WHERE workspace_id = :w"
+                        ),
+                        {"w": str(ws)},
+                    )
                 )
-            ).mappings().one()
+                .mappings()
+                .one()
+            )
 
             # The point: stage one survived a stage-two failure.
             assert row["phase"] == "persona"
@@ -1491,9 +1537,7 @@ async def test_a_page_of_undecodable_bytes_reaches_the_manual_brief_not_a_500(
             await _cleanup(db, user, ws)
 
 
-async def _set_stated_department(
-    db: AsyncSession, *, user: UUID, ws: UUID, value: str
-) -> None:
+async def _set_stated_department(db: AsyncSession, *, user: UUID, ws: UUID, value: str) -> None:
     """Write `membership.stated_department`, with the scoping GUC set.
 
     `membership` is under row-level security and `nexus_app` is `NOBYPASSRLS`,
@@ -1503,13 +1547,10 @@ async def _set_stated_department(
     in the resolver rather than a missing GUC. `set_config(..., true)` is
     transaction-local, which is why it cannot be inherited from `_workspace`.
     """
-    await db.execute(
-        sa.text("SELECT set_config('nexus.workspace_id', :w, true)"), {"w": str(ws)}
-    )
+    await db.execute(sa.text("SELECT set_config('nexus.workspace_id', :w, true)"), {"w": str(ws)})
     await db.execute(
         sa.text(
-            "UPDATE membership SET stated_department = :d"
-            " WHERE user_id = :u AND workspace_id = :w"
+            "UPDATE membership SET stated_department = :d WHERE user_id = :u AND workspace_id = :w"
         ),
         {"d": value, "u": str(user), "w": str(ws)},
     )
@@ -1520,8 +1561,7 @@ async def _set_stated_department(
     written = (
         await db.execute(
             sa.text(
-                "SELECT stated_department FROM membership"
-                " WHERE user_id = :u AND workspace_id = :w"
+                "SELECT stated_department FROM membership WHERE user_id = :u AND workspace_id = :w"
             ),
             {"u": str(user), "w": str(ws)},
         )
@@ -1534,7 +1574,7 @@ async def _set_stated_department(
 async def test_the_greeting_says_the_department_label_not_its_key(
     app_db: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """"in People", never "in hr".
+    """ "in People", never "in hr".
 
     The stored value is the catalogue key, because narrowing the question
     catalogue needs the machine-readable form. The greeting needs the other
@@ -1803,14 +1843,18 @@ async def test_a_finished_journey_writes_the_brain_the_facts_and_the_persona(
 
             # ── company_brain ──
             brain = (
-                await db.execute(
-                    sa.text(
-                        "SELECT version, profile, provenance, generated_by, superseded_at"
-                        " FROM company_brain WHERE workspace_id = :w"
-                    ),
-                    {"w": str(ws)},
+                (
+                    await db.execute(
+                        sa.text(
+                            "SELECT version, profile, provenance, generated_by, superseded_at"
+                            " FROM company_brain WHERE workspace_id = :w"
+                        ),
+                        {"w": str(ws)},
+                    )
                 )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
             assert len(brain) == 1, "a finished journey must leave exactly one current brain"
             assert brain[0]["superseded_at"] is None
             # `ck_company_brain_grounded_has_provenance`: a brain that cannot
@@ -1820,28 +1864,34 @@ async def test_a_finished_journey_writes_the_brain_the_facts_and_the_persona(
 
             # ── brain_version, and the fact rows hanging off it ──
             version = (
-                await db.execute(
-                    sa.text(
-                        "SELECT id, version FROM brain_version WHERE workspace_id = :w"
-                    ),
-                    {"w": str(ws)},
+                (
+                    await db.execute(
+                        sa.text("SELECT id, version FROM brain_version WHERE workspace_id = :w"),
+                        {"w": str(ws)},
+                    )
                 )
-            ).mappings().one()
+                .mappings()
+                .one()
+            )
             assert version["version"] == brain[0]["version"], (
                 "the fact layer and the prose brain must name the same generation"
             )
 
             facts = (
-                await db.execute(
-                    sa.text(
-                        "SELECT key, value, source_kind, precedence, confidence,"
-                        "       source_ref, brain_version_id, confirmed_by_user_id,"
-                        "       confirmed_at"
-                        " FROM fact WHERE workspace_id = :w"
-                    ),
-                    {"w": str(ws)},
+                (
+                    await db.execute(
+                        sa.text(
+                            "SELECT key, value, source_kind, precedence, confidence,"
+                            "       source_ref, brain_version_id, confirmed_by_user_id,"
+                            "       confirmed_at"
+                            " FROM fact WHERE workspace_id = :w"
+                        ),
+                        {"w": str(ws)},
+                    )
                 )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
             assert facts, "the interview collected department facts and stored none"
 
             from app.domain.facts import SourceKind, rank
@@ -1856,21 +1906,23 @@ async def test_a_finished_journey_writes_the_brain_the_facts_and_the_persona(
                 assert fact["source_ref"].startswith("onboarding_session:")
                 assert fact["brain_version_id"] == version["id"]
                 # `ck_fact_confirmation_is_whole` — both or neither.
-                assert (fact["confirmed_by_user_id"] is None) == (
-                    fact["confirmed_at"] is None
-                )
+                assert (fact["confirmed_by_user_id"] is None) == (fact["confirmed_at"] is None)
                 assert fact["confirmed_by_user_id"] == user
 
             # ── persona ──
             persona = (
-                await db.execute(
-                    sa.text(
-                        "SELECT stated_purpose, priority_topics, language, timezone"
-                        " FROM persona WHERE workspace_id = :w AND user_id = :u"
-                    ),
-                    {"w": str(ws), "u": str(user)},
+                (
+                    await db.execute(
+                        sa.text(
+                            "SELECT stated_purpose, priority_topics, language, timezone"
+                            " FROM persona WHERE workspace_id = :w AND user_id = :u"
+                        ),
+                        {"w": str(ws), "u": str(user)},
+                    )
                 )
-            ).mappings().one()
+                .mappings()
+                .one()
+            )
             assert persona["priority_topics"], "the persona reached no row"
             # NOT NULL columns with defaults must not be nulled by an insert
             # that names them — the spine route learned this the hard way.
@@ -1954,14 +2006,18 @@ async def test_a_failed_assembly_stage_does_not_claim_nothing_was_saved(
                 sa.text("SELECT set_config('nexus.workspace_id', :w, true)"), {"w": str(ws)}
             )
             row = (
-                await db.execute(
-                    sa.text(
-                        "SELECT phase, status, persona_draft FROM onboarding_session"
-                        " WHERE workspace_id = :w"
-                    ),
-                    {"w": str(ws)},
+                (
+                    await db.execute(
+                        sa.text(
+                            "SELECT phase, status, persona_draft FROM onboarding_session"
+                            " WHERE workspace_id = :w"
+                        ),
+                        {"w": str(ws)},
+                    )
                 )
-            ).mappings().one()
+                .mappings()
+                .one()
+            )
             assert row["phase"] == "assembling", "the failure moved the phase backwards"
             assert row["status"] == "active"
             assert row["persona_draft"], "the committed persona was lost"
@@ -2023,7 +2079,8 @@ async def test_next_re_serves_an_outstanding_question_instead_of_asking_twice(
             # And the answer still binds to it.
             turn = await routes.submit_answer(routes.AnswerIn(text="Contractors"), scope)
             answered = [
-                r for r in await _turns(db, ws)
+                r
+                for r in await _turns(db, ws)
                 if r["role"] == "user" and r["target_field"] == first.target
             ]
             assert len(answered) == 1
@@ -2114,9 +2171,7 @@ async def test_the_dashboard_sees_what_the_interview_collected(
                 assert turn.question is not None
                 if turn.question.done:
                     break
-                turn = await routes.submit_answer(
-                    routes.AnswerIn(text="Forty-eight hours"), scope
-                )
+                turn = await routes.submit_answer(routes.AnswerIn(text="Forty-eight hours"), scope)
 
             # Still nothing: the answers are on the session, not promoted.
             mid = await dashboards.answered_questions(scope)

@@ -48,6 +48,7 @@ def _displays_rather_than_computes(capability_id: str) -> bool:
     """
     return capability_id.endswith((".setup", ".watchlist"))
 
+
 PREFIXES = {
     Department.EXECUTIVE: "executive",
     Department.MARKETING: "marketing",

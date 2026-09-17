@@ -212,8 +212,7 @@ def test_an_unreachable_tile_says_planned_and_never_locked() -> None:
                 continue
             checked += 1
             assert (
-                state_for(offering, connected=frozenset(), reachable=False)
-                is WidgetState.PLANNED
+                state_for(offering, connected=frozenset(), reachable=False) is WidgetState.PLANNED
             )
             # And connecting everything it names still does not move it. This is
             # the assertion that would have caught a `LOCKED` leaking through.

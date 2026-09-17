@@ -57,8 +57,13 @@ _ARRAY_COLUMNS = ("competitors", "assumptions")
 # `persona`'s own columns, from migration 0002. Every persona field in the
 # catalogue declares one of these in `FieldSpec.column`, which is what makes
 # this a lookup rather than a mapping table to keep in step.
-_PERSONA_TEXT = ("stated_purpose", "communication_style", "language", "timezone",
-                 "default_landing_screen")
+_PERSONA_TEXT = (
+    "stated_purpose",
+    "communication_style",
+    "language",
+    "timezone",
+    "default_landing_screen",
+)
 _PERSONA_ARRAY = ("priority_topics",)
 
 

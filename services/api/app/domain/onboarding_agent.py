@@ -350,8 +350,7 @@ class OnboardingAgent:
                 # reason, which the schema permits.
                 return {
                     "done": True,
-                    "reason": str(result.get("reason", "")).strip()
-                    or "I have enough to build on.",
+                    "reason": str(result.get("reason", "")).strip() or "I have enough to build on.",
                 }
             if result.get("rejected"):
                 # The reason travels to the next attempt. Without it the retry

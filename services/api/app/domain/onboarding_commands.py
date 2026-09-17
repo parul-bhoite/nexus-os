@@ -117,23 +117,24 @@ async def research_company(
     """
     research = await ctx.runner.invoke(
         "company-research",
-        messages=_user(
-            f"Read {company_name} at {domain}. Report only what these pages support."
-        ),
+        messages=_user(f"Read {company_name} at {domain}. Report only what these pages support."),
         grounding={"domain": domain, "pages": pages},
     )
 
     brief = await ctx.runner.invoke(
         "company-summary",
         messages=_user("Turn these observations into statements the owner can correct."),
-        grounding=_shared(ctx, {
-            "research": dict(research.data),
-            "company_name": company_name,
-            # The keys a statement may name. Grounded for the same reason as
-            # persona-builder's: the `field` comes back as a correction key and
-            # has to resolve in the catalogue.
-            "brain_fields": fields_for_prompt(brain_fields()),
-        }),
+        grounding=_shared(
+            ctx,
+            {
+                "research": dict(research.data),
+                "company_name": company_name,
+                # The keys a statement may name. Grounded for the same reason as
+                # persona-builder's: the `field` comes back as a correction key and
+                # has to resolve in the catalogue.
+                "brain_fields": fields_for_prompt(brain_fields()),
+            },
+        ),
     )
 
     # The gate, because grounding is guidance and this needs to be a guarantee.
@@ -155,9 +156,7 @@ async def research_company(
         kept.append(statement)
     brief_data["statements"] = kept
 
-    await _touch(
-        ctx, session_id, research=dict(research.data), brief=brief_data, phase="brief"
-    )
+    await _touch(ctx, session_id, research=dict(research.data), brief=brief_data, phase="brief")
 
     await ctx.hooks.emit(
         HookEvent(
@@ -215,9 +214,7 @@ async def generate_questions(
         (dict(ctx.grounding).get("user_context") or {}).get("department") or ""
     ).strip()
     available = tuple(
-        spec
-        for spec in askable_fields(department or None)
-        if spec.key not in already_known
+        spec for spec in askable_fields(department or None) if spec.key not in already_known
     )
     if not available:
         return {"done": True, "reason": "every askable field already has an answer"}
@@ -242,15 +239,18 @@ async def generate_questions(
             if not rejections
             else "That did not pass. Ask something different that fixes it."
         ),
-        grounding=_shared(ctx, {
-            "available_fields": fields_for_prompt(available),
-            "already_known": dict(already_known),
-            "conversation_so_far": conversation,
-            # Every refusal so far, not just the last. Carrying only the most
-            # recent lets a model alternate between two faults for ever, each
-            # looking novel to a prompt with a one-item memory.
-            "rejected_so_far": list(rejections),
-        }),
+        grounding=_shared(
+            ctx,
+            {
+                "available_fields": fields_for_prompt(available),
+                "already_known": dict(already_known),
+                "conversation_so_far": conversation,
+                # Every refusal so far, not just the last. Carrying only the most
+                # recent lets a model alternate between two faults for ever, each
+                # looking novel to a prompt with a one-item memory.
+                "rejected_so_far": list(rejections),
+            },
+        ),
     )
 
     if result.data.get("done"):
@@ -370,15 +370,18 @@ async def build_persona(
     result = await ctx.runner.invoke(
         "persona-builder",
         messages=_user("Assemble the persona from these answers."),
-        grounding=_shared(ctx, {
-            "answers": dict(answers),
-            "company_profile": company_profile,
-            # The exact keys, for the same reason question-generation gets its
-            # own list: the filter below refuses anything not in the catalogue,
-            # so a skill left to guess the key names produces an empty persona
-            # and a log full of correct refusals.
-            "persona_fields": fields_for_prompt(persona_fields()),
-        }),
+        grounding=_shared(
+            ctx,
+            {
+                "answers": dict(answers),
+                "company_profile": company_profile,
+                # The exact keys, for the same reason question-generation gets its
+                # own list: the filter below refuses anything not in the catalogue,
+                # so a skill left to guess the key names produces an empty persona
+                # and a log full of correct refusals.
+                "persona_fields": fields_for_prompt(persona_fields()),
+            },
+        ),
     )
 
     accepted: list[dict[str, Any]] = []
@@ -477,17 +480,18 @@ async def build_company_brain(
     specs = brain_group_fields(group)
     result = await ctx.runner.invoke(
         "company-brain-builder",
-        messages=_user(
-            f"Assemble the {group} part of the Company Brain for {company_name}."
+        messages=_user(f"Assemble the {group} part of the Company Brain for {company_name}."),
+        grounding=_shared(
+            ctx,
+            {
+                "research": dict(research),
+                "answers": dict(answers),
+                "company_name": company_name,
+                "domain": domain,
+                "brain_fields": fields_for_prompt(specs),
+                "deep_research": dict(deep_research) if deep_research else {},
+            },
         ),
-        grounding=_shared(ctx, {
-            "research": dict(research),
-            "answers": dict(answers),
-            "company_name": company_name,
-            "domain": domain,
-            "brain_fields": fields_for_prompt(specs),
-            "deep_research": dict(deep_research) if deep_research else {},
-        }),
         # Per group, not per skill. `BrainGroup.effort` carries the measurement
         # that made this necessary.
         effort=spec_group.effort,
@@ -556,9 +560,13 @@ async def build_company_brain(
             point=HookPoint.CONTEXT_UPDATED,
             workspace_id=ctx.workspace_id,
             session=ctx.session,
-            payload={"kind": "brain", "group": group, "values": len(accepted),
-                     "remaining_groups": len(remaining),
-                     "unavailable": len(payload["unavailable"])},
+            payload={
+                "kind": "brain",
+                "group": group,
+                "values": len(accepted),
+                "remaining_groups": len(remaining),
+                "unavailable": len(payload["unavailable"]),
+            },
         )
     )
     return payload
