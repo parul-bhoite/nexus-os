@@ -5,6 +5,14 @@
 @layer base {
   :root {
     --shell-x: clamp(1.25rem, 5vw, 3.5rem);
+    /* The product shell's gutter. Narrower than the marketing one, and the
+       *same* value the header and the nav panel both use — the audit found the
+       logo sitting 96px to the left of the sidebar because the header was
+       full-width padded and the body was a centred max-width container. One
+       variable is what stops them disagreeing. */
+    --app-x: clamp(1rem, 2.5vw, 2rem);
+    --app-header-h: 3.5rem;
+    --app-nav-w: 15rem;
   }
 
   html {
@@ -12,9 +20,9 @@
     -webkit-text-size-adjust: 100%;
   }
 
-  /* Scroll-reveal animations translate elements horizontally before they enter
-     the viewport, which can widen the document. `clip` contains that without
-     creating a scroll container (which would break position: sticky). */
+  /* Scroll-reveal animations translate elements before they enter the viewport,
+     which can widen the document. `clip` contains that without creating a
+     scroll container (which would break `position: sticky`). */
   html,
   body {
     overflow-x: clip;
@@ -31,21 +39,51 @@
     @apply bg-gold-300 text-ink-900;
   }
 
+  /* One focus style for the whole product.
+     The audit found three: a `ring-2` here, an `outline` with a different
+     offset there, and several controls with nothing at all. A keyboard user
+     cannot learn an interface whose focus indicator changes shape between two
+     buttons in the same row. */
   :focus-visible {
     @apply outline-none ring-2 ring-steel-500 ring-offset-2 ring-offset-white rounded-sm;
+  }
+
+  /* Any element that declares itself a surface re-bases the ring offset onto
+     its own background, so the ring does not draw a white halo on bone. */
+  .on-bone :focus-visible {
+    @apply ring-offset-bone-50;
   }
 
   h1, h2, h3, h4 {
     @apply font-display text-ink-800;
   }
 
-  /* Respect the OS setting — motion is decoration, never information. */
+  /* Figures are tabular everywhere, without a class.
+     A column of counts that shifts width as digits change is the clearest
+     possible sign that a number was not laid out on purpose. */
+  th, td, output, time, data {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Native controls inherit the product's type. Left alone they render at the
+     browser's 13.33px default in the system font, which is why the selects on
+     `/work` and `/settings` looked like they belonged to a different app. */
+  input, select, textarea, button {
+    font: inherit;
+    color: inherit;
+  }
+
+  /* Respect the OS setting — motion is decoration, never information.
+     This reaches CSS animations and transitions only; framer-motion animates
+     inline styles, so `lib/motion.ts` takes the same preference into account
+     for everything it drives. Both are needed. */
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
     *, *::before, *::after {
       animation-duration: 0.001ms !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
     }
   }
 }
@@ -65,17 +103,87 @@
     @apply w-full px-[var(--shell-x)];
   }
 
-  .eyebrow {
-    @apply font-mono text-2xs uppercase tracking-[0.22em] text-steel-500;
+  /* The product shell. Everything inside the signed-in app aligns to this one
+     container — header, nav panel and main region — so the three share a left
+     edge. See `--app-x`. */
+  .app-shell {
+    @apply mx-auto w-full max-w-app px-[var(--app-x)];
   }
 
-  /* Cut-paper surface: warm edge, inset highlight, soft cast shadow. */
+  .eyebrow {
+    @apply font-mono text-2xs uppercase tracking-[0.22em] text-steel-600;
+  }
+
+  /* A label on a control. One style, used on every form in the product.
+     `/settings` used 11px tracked-out mono and `/work` used sentence-case sans;
+     both are forms, so both now use this. */
+  .field-label {
+    @apply block text-label font-medium text-ink-700;
+  }
+
+  /* Text that qualifies a control or a figure. Never a warning colour — see
+     `.note-warn` for that, and use it only when something is actually wrong. */
+  .field-hint {
+    @apply text-meta text-ink-500;
+  }
+
+  .note-warn {
+    @apply text-meta text-clay-600;
+  }
+
+  /* One control shape for every native input, select and date field.
+     `/work` and `/settings` between them render about thirty-five of these, and
+     before this they rendered at the browser's default in the system font with
+     native chrome — the single largest source of "this looks unfinished" the
+     audit found. Both pages address their controls through one constant, so
+     this class is where their appearance actually lives. */
+  .control {
+    @apply w-full rounded-control border border-ink-200 bg-white px-3.5 py-2.5 text-body text-ink-800;
+    @apply transition-[border-color,box-shadow] duration-base ease-out;
+    @apply placeholder:text-ink-300 hover:border-ink-300;
+    @apply focus:outline-none focus:ring-2 focus:ring-steel-500 focus:ring-offset-2 focus:ring-offset-white;
+    @apply disabled:cursor-not-allowed disabled:bg-bone-100 disabled:text-ink-400;
+  }
+
+  /* A select is still a native select — the platform's keyboard behaviour,
+     type-ahead and mobile wheel are worth more than a custom listbox that
+     reimplements them badly. What was wrong was the arrow and the font, so the
+     arrow is replaced with one drawn in the product's own ink and the font is
+     inherited (see the element rule in the base layer). */
+  select.control {
+    @apply cursor-pointer appearance-none bg-no-repeat pr-10;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none'%3E%3Cpath d='m4 6.25 4 4 4-4' stroke='%234A6489' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-position: right 0.875rem center;
+  }
+
+  /* The picker indicator is dimmed, never hidden. Hiding it leaves a text field
+     that silently demands one locale's date order — which matters more here
+     than most places, for a product built for Oman. */
+  input[type='date'].control::-webkit-calendar-picker-indicator {
+    @apply cursor-pointer opacity-50 transition-opacity duration-micro;
+  }
+  input[type='date'].control:hover::-webkit-calendar-picker-indicator {
+    @apply opacity-100;
+  }
+
+  /* Cut-paper surface: warm edge, inset highlight, soft cast shadow.
+     `paper` is the marketing surface (20px radius); `surface` is the product's
+     (14px). Two names because the two contexts want different roundness and a
+     single value had to be wrong in one of them. */
   .paper {
-    @apply rounded-card border border-bone-300/70 bg-white shadow-paper;
+    @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
   }
 
   .paper-tinted {
-    @apply rounded-card border border-bone-300/70 bg-bone-50 shadow-paper;
+    @apply rounded-card border border-bone-300/70 bg-bone-50 shadow-e1;
+  }
+
+  .surface {
+    @apply rounded-data border border-ink-100 bg-white shadow-e1;
+  }
+
+  .surface-sunken {
+    @apply rounded-data border border-ink-100 bg-bone-50;
   }
 
   .link-underline {
@@ -83,7 +191,7 @@
   }
   .link-underline::after {
     content: '';
-    @apply absolute -bottom-0.5 left-0 h-px w-full origin-right scale-x-0 bg-current transition-transform duration-300 ease-out-expo;
+    @apply absolute -bottom-0.5 left-0 h-px w-full origin-right scale-x-0 bg-current transition-transform duration-base ease-out;
   }
   .link-underline:hover::after {
     @apply origin-left scale-x-100;
@@ -91,6 +199,14 @@
 
   .hairline {
     @apply h-px w-full bg-gradient-to-r from-transparent via-bone-300 to-transparent;
+  }
+
+  /* An interactive row or card. Collects the four states the audit found
+     applied inconsistently — rest, hover, focus and press — so a card that is
+     clickable feels clickable everywhere in the product. */
+  .interactive {
+    @apply transition-[background-color,border-color,box-shadow,transform] duration-base ease-out;
+    @apply hover:border-ink-200 hover:shadow-e2 active:translate-y-px;
   }
 }
 
@@ -113,12 +229,12 @@
    and by the time they are on screen the bundle has landed. */
 @layer utilities {
   @keyframes rise {
-    from { opacity: 0; transform: translateY(1rem); }
+    from { opacity: 0; transform: translateY(0.75rem); }
     to   { opacity: 1; transform: none; }
   }
 
   @keyframes rise-scale {
-    from { opacity: 0; transform: translateY(1.5rem) scale(0.96); }
+    from { opacity: 0; transform: translateY(1rem) scale(0.98); }
     to   { opacity: 1; transform: none; }
   }
 
@@ -135,19 +251,19 @@
   }
 
   .animate-rise {
-    animation: rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
   .animate-rise-scale {
-    animation: rise-scale 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: rise-scale 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
   .animate-fade-in {
-    animation: fade-in 0.8s ease-out both;
+    animation: fade-in 0.6s ease-out both;
   }
 
   .animate-word-rise {
-    animation: word-rise 0.85s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: word-rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 }
 
@@ -155,12 +271,42 @@
   .text-balance { text-wrap: balance; }
   .text-pretty { text-wrap: pretty; }
 
+  /* Tabular figures, for the places the element selector above cannot reach —
+     a count inside a `<span>`, a figure in a card. */
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  /* Applied only to an edge that has scrollable content past it — see `Tabs`.
+     An unconditional fade dissolves the first tab of a rail that fits. */
   .mask-fade-x {
-    -webkit-mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
-    mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+    mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+  }
+
+  .mask-fade-start {
+    -webkit-mask-image: linear-gradient(to right, transparent, black 6%);
+    mask-image: linear-gradient(to right, transparent, black 6%);
+  }
+
+  .mask-fade-end {
+    -webkit-mask-image: linear-gradient(to left, transparent, black 6%);
+    mask-image: linear-gradient(to left, transparent, black 6%);
   }
 
   .pause-on-hover:hover > * {
     animation-play-state: paused;
   }
+
+  /* Stops an animation from a React prop rather than from a pseudo-class, so a
+     visible Pause control can do what hovering does. WCAG 2.2.2 asks for a
+     mechanism, and hover is not one: it is unreachable from a keyboard and
+     meaningless on a touch screen. */
+  .motion-paused,
+  .motion-paused * {
+    animation-play-state: paused !important;
+  }
+
+  /* Hides content from the accessibility tree *and* from a text search, for
+     the duplicated half of a marquee. Without it a screen reader reads every
+     item twice. */
+  .aria-dupe { user-select: none; }
 }

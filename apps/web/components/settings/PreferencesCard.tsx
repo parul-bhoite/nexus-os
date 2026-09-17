@@ -120,9 +120,14 @@ export function PreferencesCard() {
     }
   }
 
-  const field =
-    'mt-1.5 w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-ink-900'
-  const label = 'font-mono text-2xs uppercase tracking-[0.12em] text-ink-400'
+  // The shared control and label classes, for the reason `WorkRecorder`
+  // gives: `/settings` labelled its fields in 11px tracked-out uppercase mono
+  // at 4.4:1 while `/work` used sentence-case sans, and both are forms. One
+  // class means there is nowhere to hold a second opinion — and `.control`
+  // carries the select chevron and the date indicator that made these read as
+  // the browser's controls rather than the product's.
+  const field = 'control'
+  const label = 'field-label'
 
   return (
     <section className="flex flex-col gap-5 rounded-2xl border border-ink-100 bg-white px-5 py-5 shadow-paper">

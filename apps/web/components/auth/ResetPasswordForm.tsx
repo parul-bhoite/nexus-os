@@ -115,7 +115,14 @@ export function ResetPasswordForm() {
       <Button
         type="submit"
         size="lg"
-        disabled={busy || password.length < MIN_PASSWORD_LENGTH || confirmation !== password}
+        disabledReason={
+          password.length < MIN_PASSWORD_LENGTH
+            ? `Your new password needs at least ${MIN_PASSWORD_LENGTH} characters.`
+            : confirmation !== password
+              ? 'The two passwords do not match yet.'
+              : undefined
+        }
+        disabled={busy}
         icon={busy ? undefined : <ArrowRight />}
         className="mt-1 w-full"
       >

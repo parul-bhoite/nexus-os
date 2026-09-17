@@ -152,7 +152,7 @@ export function Brain() {
               {brain.points.map((p, i) => (
                 <RevealItem key={p.title}>
                   <div className="flex gap-5">
-                    <span className="mt-1 font-mono text-xs text-gold-600">
+                    <span className="mt-1 font-mono text-xs text-gold-700">
                       {String(i + 1).padStart(2, '0')}
                     </span>
                     <div className="border-l border-bone-300 pl-5">

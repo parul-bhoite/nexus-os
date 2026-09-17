@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { departmentLabel } from '@/lib/onboarding-client'
+import { NavSkeleton } from '@/components/ui/Skeleton'
 import type { Dashboards } from '@/lib/dashboard-client'
 
 /**
@@ -32,9 +33,28 @@ import type { Dashboards } from '@/lib/dashboard-client'
  * Rendering the other six disabled would advertise what somebody cannot have,
  * which is the disclosure this codebase refuses everywhere else it decides
  * between 404 and 403.
+ *
+ * ## `null` is *unknown*, and now renders as unknown
+ *
+ * The audit caught this panel breaking `AppShell`'s own stated rule. `all` is
+ * `null` for the twelve to sixteen seconds `/api/dashboards` takes, and the
+ * group was simply omitted for that whole time — so the sidebar said "you hold
+ * no departments", which is exactly the absence the shell's documentation says
+ * a consumer must never state during a load. It then grew by seven rows when
+ * the fetch landed, moving everything under it.
+ *
+ * `null` now renders `NavSkeleton`, which reserves the height the real list
+ * will occupy. Nothing is claimed, and nothing jumps.
+ *
+ * ## Counts
+ *
+ * A director with unanswered questions carries the number. It is the one piece
+ * of information that changes what a reader would click, and it was already in
+ * the payload (`unanswered_questions`) and thrown away. `undefined` means the
+ * API did not say — rendered as nothing, never as zero.
  */
 
-type NavItem = { href: string; label: string; hint?: string }
+type NavItem = { href: string; label: string; hint?: string; count?: number }
 type NavGroup = { key: string; label: string; items: NavItem[] }
 
 /**
@@ -50,6 +70,7 @@ export function groupsFor(all: Dashboards | null): NavGroup[] {
   const directors = (all?.directors ?? []).map((entry) => ({
     href: entry.path,
     label: entry.label ?? departmentLabel(entry.department),
+    count: entry.unanswered_questions,
   }))
 
   return [
@@ -96,15 +117,24 @@ export function isCurrent(href: string, pathname: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
-export function NavPanel({ all, onNavigate }: { all: Dashboards | null; onNavigate?: () => void }) {
+export function NavPanel({
+  all,
+  onNavigate,
+}: {
+  all: Dashboards | null
+  onNavigate?: () => void
+}) {
   const pathname = usePathname()
 
+  // Unknown, not empty. See the note above.
+  if (all === null) return <NavSkeleton />
+
   return (
-    <nav aria-label="Sections" className="flex flex-col gap-6">
+    <nav aria-label="Sections" className="flex flex-col gap-5">
       {groupsFor(all).map((group) => (
         <div key={group.key}>
           {group.label ? (
-            <p className="mb-2 px-3 font-mono text-2xs uppercase tracking-[0.1em] text-ink-400">
+            <p className="mb-1.5 px-3 text-2xs font-medium uppercase tracking-[0.1em] text-ink-400">
               {group.label}
             </p>
           ) : null}
@@ -117,20 +147,38 @@ export function NavPanel({ all, onNavigate }: { all: Dashboards | null; onNaviga
                     href={item.href}
                     onClick={onNavigate}
                     aria-current={current ? 'page' : undefined}
-                    className={`block rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-steel-500 ${
+                    // 44px minimum. The old rows were 38px and the mobile menu
+                    // button 56×30, both under every platform's touch floor.
+                    className={`group flex min-h-[2.75rem] items-center gap-2 rounded-control px-3 py-2 text-body transition-colors duration-base ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steel-500 focus-visible:ring-offset-2 focus-visible:ring-offset-bone-50 ${
                       current
                         ? 'bg-ink-800 font-medium text-bone-50'
                         : 'text-ink-600 hover:bg-bone-200 hover:text-ink-900'
                     }`}
                   >
-                    {item.label}
-                    {item.hint ? (
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">{item.label}</span>
+                      {item.hint ? (
+                        <span
+                          className={`block truncate text-2xs ${
+                            current ? 'text-slate-300' : 'text-ink-400'
+                          }`}
+                        >
+                          {item.hint}
+                        </span>
+                      ) : null}
+                    </span>
+
+                    {/* The number of questions this director is still waiting
+                        on. `0` is not rendered: a badge saying zero is a badge
+                        saying nothing, and it would sit on five of seven rows. */}
+                    {item.count ? (
                       <span
-                        className={`mt-0.5 block text-2xs ${
-                          current ? 'text-bone-300' : 'text-ink-400'
+                        className={`tnum shrink-0 rounded-full px-1.5 py-0.5 text-2xs font-medium ${
+                          current ? 'bg-ink-700 text-slate-300' : 'bg-bone-200 text-ink-500'
                         }`}
                       >
-                        {item.hint}
+                        {item.count}
+                        <span className="sr-only"> questions unanswered</span>
                       </span>
                     ) : null}
                   </Link>

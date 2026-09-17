@@ -78,7 +78,8 @@ export function ForgotPasswordForm() {
       <Button
         type="submit"
         size="lg"
-        disabled={busy || email.trim() === ''}
+        disabledReason={email.trim() === '' ? 'Enter the address you signed up with.' : undefined}
+        disabled={busy}
         icon={busy ? undefined : <ArrowRight />}
         className="mt-1 w-full"
       >

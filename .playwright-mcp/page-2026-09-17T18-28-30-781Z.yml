@@ -1,0 +1,581 @@
+- generic [active] [ref=e1]:
+  - link "Skip to content" [ref=e2] [cursor=pointer]:
+    - /url: "#main"
+  - banner [ref=e3]:
+    - generic [ref=e5]:
+      - link "NEXUS OS home" [ref=e6] [cursor=pointer]:
+        - /url: "#top"
+        - generic [ref=e7]: NEXUSOS
+      - navigation "Primary" [ref=e13]:
+        - link "The loop" [ref=e14] [cursor=pointer]:
+          - /url: "#loop"
+        - link "Company Brain" [ref=e15] [cursor=pointer]:
+          - /url: "#brain"
+        - link "Your team" [ref=e16] [cursor=pointer]:
+          - /url: "#team"
+        - link "Capabilities" [ref=e17] [cursor=pointer]:
+          - /url: "#pillars"
+        - link "Trust" [ref=e18] [cursor=pointer]:
+          - /url: "#trust"
+        - link "Pricing" [ref=e19] [cursor=pointer]:
+          - /url: "#pricing"
+      - generic [ref=e20]:
+        - link "Sign in" [ref=e21] [cursor=pointer]:
+          - /url: /login
+        - link "Start free" [ref=e22] [cursor=pointer]:
+          - /url: /register
+  - main [ref=e27]:
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - generic [ref=e31]:
+          - generic [ref=e32]: AI Business Operating System
+          - heading "Your AI executive team. Built around your company." [level=1] [ref=e38]:
+            - generic [ref=e39]:
+              - generic [ref=e40]: Your
+              - generic [ref=e42]: AI
+            - generic [ref=e45]:
+              - generic [ref=e46]: executive
+              - generic [ref=e48]: team.
+            - generic [ref=e52]:
+              - generic [ref=e53]: Built
+              - generic [ref=e55]: around
+              - generic [ref=e57]: your
+              - generic [ref=e59]: company.
+          - paragraph [ref=e61]: Connect your website, documents and tools once. NEXUS learns how your business works, tells you what needs attention, helps you decide — and does the work.
+          - generic [ref=e62]:
+            - link "Create your account" [ref=e63] [cursor=pointer]:
+              - /url: /register
+            - link "See how it works" [ref=e68] [cursor=pointer]:
+              - /url: "#loop"
+          - paragraph [ref=e70]: Built for Oman and the wider GCC — OMR/AED/SAR, regional business norms, Arabic on the roadmap.
+        - generic [ref=e74]:
+          - 'img "Illustration: a layered paper landscape of mountains, sea and small boats, representing a business finding its direction." [ref=e75]'
+          - generic [ref=e185]:
+            - generic [ref=e186]:
+              - generic [ref=e190]: Morning Brief
+              - generic [ref=e191]: Illustrative
+            - paragraph [ref=e192]: Pipeline value rose while three deals went quiet for 11 days.
+            - generic [ref=e193]:
+              - generic [ref=e194]: "source: CRM"
+              - generic [ref=e195]: "source: GA4"
+          - generic [ref=e196]:
+            - generic [ref=e197]:
+              - generic [ref=e198]: Health Score
+              - generic [ref=e199]: Illustrative
+            - generic [ref=e200]: +4 wk
+            - generic [ref=e202]:
+              - generic [ref=e203]: "72"
+              - generic [ref=e204]: / 100
+            - generic [ref=e205]:
+              - generic [ref=e206]: Sales
+              - generic [ref=e209]: Marketing
+              - generic [ref=e212]: Finance
+      - generic [ref=e217]:
+        - generic [ref=e218]:
+          - generic [ref=e219]: One Company Brain
+          - generic [ref=e221]: Seven AI directors
+          - generic [ref=e223]: Every number traceable
+          - generic [ref=e225]: GCC-native
+          - generic [ref=e227]: Decisions, not dashboards
+        - generic [ref=e229]:
+          - generic [ref=e230]: One Company Brain
+          - generic [ref=e232]: Seven AI directors
+          - generic [ref=e234]: Every number traceable
+          - generic [ref=e236]: GCC-native
+          - generic [ref=e238]: Decisions, not dashboards
+    - generic [ref=e241]:
+      - generic [ref=e242]:
+        - generic [ref=e243]: The problem
+        - heading "A growing business is expected to operate like a large one." [level=2] [ref=e248]
+        - paragraph [ref=e250]: The owner is the strategist, the marketer, the analyst and the closer. Every available option is bad in a different way.
+      - generic [ref=e251]:
+        - article [ref=e253]:
+          - heading "Hire an executive team" [level=3] [ref=e259]
+          - paragraph [ref=e260]: Several senior salaries before a single result lands.
+        - article [ref=e262]:
+          - heading "Buy 5–6 SaaS tools" [level=3] [ref=e268]
+          - paragraph [ref=e269]: High combined cost, six logins, six data silos, none of them talk.
+        - article [ref=e271]:
+          - heading "Hire an agency" [level=3] [ref=e277]
+          - paragraph [ref=e278]: Good output, no institutional memory. It stops when the retainer stops.
+        - article [ref=e280]:
+          - heading "Use ChatGPT directly" [level=3] [ref=e285]
+          - paragraph [ref=e286]: Generic advice — it doesn't know your prices, customers or competitors.
+        - article [ref=e288]:
+          - heading "Do nothing" [level=3] [ref=e293]
+          - paragraph [ref=e294]: Decisions made on instinct. Problems found after they cost money.
+        - generic [ref=e296]:
+          - paragraph [ref=e297]: Every existing AI tool answers “what happened?”
+          - paragraph [ref=e299]: Nobody answers “what should I do about it?”
+          - paragraph [ref=e300]: — and then does it.
+    - generic [ref=e304]:
+      - generic [ref=e305]:
+        - generic [ref=e306]: How it works
+        - heading "One loop, running continuously." [level=2] [ref=e311]
+        - paragraph [ref=e313]: Anything that does not close this loop is a feature. The loop itself is the product.
+      - tablist "The NEXUS loop" [ref=e317]:
+        - tab "01 Connect Your website, tools and knowledge." [selected] [ref=e318] [cursor=pointer]:
+          - generic [ref=e319]: "01"
+          - generic [ref=e321]: Connect
+          - generic [ref=e322]: Your website, tools and knowledge.
+        - tab "02 Understand NEXUS learns your company into a permanent Company Brain." [ref=e323] [cursor=pointer]:
+          - generic [ref=e324]: "02"
+          - generic [ref=e325]: Understand
+          - generic [ref=e326]: NEXUS learns your company into a permanent Company Brain.
+        - tab "03 Decide It identifies the risks, opportunities and decisions in front of you." [ref=e327] [cursor=pointer]:
+          - generic [ref=e328]: "03"
+          - generic [ref=e329]: Decide
+          - generic [ref=e330]: It identifies the risks, opportunities and decisions in front of you.
+        - tab "04 Execute It creates the strategy, content, proposals and tasks." [ref=e331] [cursor=pointer]:
+          - generic [ref=e332]: "04"
+          - generic [ref=e333]: Execute
+          - generic [ref=e334]: It creates the strategy, content, proposals and tasks.
+        - tab "05 Improve It measures the result and adapts next week’s advice." [ref=e335] [cursor=pointer]:
+          - generic [ref=e336]: "05"
+          - generic [ref=e337]: Improve
+          - generic [ref=e338]: It measures the result and adapts next week’s advice.
+      - tabpanel "01 Connect Your website, tools and knowledge." [ref=e341]:
+        - generic [ref=e342]:
+          - generic [ref=e343]: Stage 01 — Connect
+          - heading "Your website, tools and knowledge." [level=3] [ref=e344]
+          - paragraph [ref=e345]: An 11-step guided setup. Website scan, document upload, Google Analytics, Search Console, your CRM and competitors — connected once.
+          - generic [ref=e346]:
+            - generic [ref=e347]: Website scan
+            - generic [ref=e348]: Documents
+            - generic [ref=e349]: GA4
+            - generic [ref=e350]: Search Console
+            - generic [ref=e351]: Competitors
+        - generic [ref=e353]:
+          - generic [ref=e354]: Illustrative
+          - generic [ref=e359]:
+            - generic [ref=e366]:
+              - generic [ref=e367]: Website
+              - generic [ref=e368]: nexus-demo.om
+            - generic [ref=e378]:
+              - generic [ref=e379]: Google Analytics 4
+              - generic [ref=e380]: OAuth connected
+            - generic [ref=e390]:
+              - generic [ref=e391]: Documents
+              - generic [ref=e392]: 12 files indexed
+            - generic [ref=e397]:
+              - generic [ref=e403]:
+                - generic [ref=e404]: Search Console
+                - generic [ref=e405]: Connect to enable SEO
+              - generic [ref=e406]: Connect
+    - generic [ref=e409]:
+      - generic [ref=e410]:
+        - generic [ref=e411]:
+          - generic [ref=e412]: The difference
+          - heading "Seven directors. One Company Brain." [level=2] [ref=e417]
+          - paragraph [ref=e419]: The Sales Director already knows what the Finance Advisor knows. This is not a bundle of chatbots — it is one shared understanding of your business, viewed seven ways.
+        - generic [ref=e420]:
+          - generic [ref=e422]:
+            - generic [ref=e423]: "01"
+            - generic [ref=e424]:
+              - heading "It learns once, then never forgets" [level=3] [ref=e425]
+              - paragraph [ref=e426]: Every document you upload, every decision you record and every week of history makes the next answer better than the last.
+          - generic [ref=e428]:
+            - generic [ref=e429]: "02"
+            - generic [ref=e430]:
+              - heading "It gets harder to leave on its own" [level=3] [ref=e431]
+              - paragraph [ref=e432]: A feature is copyable in a weekend. Your accumulated business context is not — and it compounds every week you use it.
+          - generic [ref=e434]:
+            - generic [ref=e435]: "03"
+            - generic [ref=e436]:
+              - heading "It reasons across the whole business" [level=3] [ref=e437]
+              - paragraph [ref=e438]: Point tools see one channel each. NEXUS connects a traffic drop to a stalled deal to a competitor’s new campaign — because it can see all three.
+      - 'img "Diagram: six connected data sources feeding one central Company Brain." [ref=e441]':
+        - generic [ref=e458]: COMPANY
+        - generic [ref=e459]: BRAIN
+        - generic [ref=e460]: Website
+        - generic [ref=e465]: Documents
+        - generic [ref=e470]: CRM
+        - generic [ref=e475]: Analytics
+        - generic [ref=e480]: Competitors
+        - generic [ref=e485]: Accounting
+    - generic [ref=e490]:
+      - generic [ref=e492]:
+        - generic [ref=e493]: Your AI executive team
+        - heading "Seven directors, on staff from day one." [level=2] [ref=e498]
+        - paragraph [ref=e500]: Each one owns a function. All seven read from the same brain.
+      - generic [ref=e503]:
+        - generic [ref=e504]:
+          - article [ref=e505]:
+            - heading "Chief of Staff" [level=3] [ref=e515]
+            - paragraph [ref=e516]: Daily executive brief, priorities, risks, cross-department recommendations
+            - generic [ref=e517]: reads the company brain
+          - article [ref=e518]:
+            - heading "Marketing Director" [level=3] [ref=e528]
+            - paragraph [ref=e529]: Strategy, campaign planning, content calendar, SEO, brand positioning
+            - generic [ref=e530]: reads the company brain
+          - article [ref=e531]:
+            - heading "Sales Director" [level=3] [ref=e541]
+            - paragraph [ref=e542]: Pipeline, lead intelligence, forecasting, proposals, follow-ups
+            - generic [ref=e543]: reads the company brain
+          - article [ref=e544]:
+            - heading "Finance Advisor" [level=3] [ref=e554]
+            - paragraph [ref=e555]: Revenue and margin analysis, cash-flow signals, budget scenarios, pricing
+            - generic [ref=e556]: reads the company brain
+          - article [ref=e557]:
+            - heading "HR Director" [level=3] [ref=e567]
+            - paragraph [ref=e568]: Policies, recruitment plans, onboarding, training, team capacity
+            - generic [ref=e569]: reads the company brain
+          - article [ref=e570]:
+            - heading "Operations Director" [level=3] [ref=e580]
+            - paragraph [ref=e581]: SOPs, workflow analysis, bottlenecks, task management
+            - generic [ref=e582]: reads the company brain
+          - article [ref=e583]:
+            - heading "Strategy Director" [level=3] [ref=e593]
+            - paragraph [ref=e594]: Expansion planning, market entry, business simulation, risk assessment
+            - generic [ref=e595]: reads the company brain
+        - generic [ref=e596]:
+          - article [ref=e597]:
+            - heading [level=3] [ref=e607]: Chief of Staff
+            - paragraph [ref=e608]: Daily executive brief, priorities, risks, cross-department recommendations
+            - generic [ref=e609]: reads the company brain
+          - article [ref=e610]:
+            - heading [level=3] [ref=e620]: Marketing Director
+            - paragraph [ref=e621]: Strategy, campaign planning, content calendar, SEO, brand positioning
+            - generic [ref=e622]: reads the company brain
+          - article [ref=e623]:
+            - heading [level=3] [ref=e633]: Sales Director
+            - paragraph [ref=e634]: Pipeline, lead intelligence, forecasting, proposals, follow-ups
+            - generic [ref=e635]: reads the company brain
+          - article [ref=e636]:
+            - heading [level=3] [ref=e646]: Finance Advisor
+            - paragraph [ref=e647]: Revenue and margin analysis, cash-flow signals, budget scenarios, pricing
+            - generic [ref=e648]: reads the company brain
+          - article [ref=e649]:
+            - heading [level=3] [ref=e659]: HR Director
+            - paragraph [ref=e660]: Policies, recruitment plans, onboarding, training, team capacity
+            - generic [ref=e661]: reads the company brain
+          - article [ref=e662]:
+            - heading [level=3] [ref=e672]: Operations Director
+            - paragraph [ref=e673]: SOPs, workflow analysis, bottlenecks, task management
+            - generic [ref=e674]: reads the company brain
+          - article [ref=e675]:
+            - heading [level=3] [ref=e685]: Strategy Director
+            - paragraph [ref=e686]: Expansion planning, market entry, business simulation, risk assessment
+            - generic [ref=e687]: reads the company brain
+      - paragraph [ref=e690]: Seven directors, one shared understanding of your business. The Sales Director already knows what the Finance Advisor knows.
+    - generic [ref=e692]:
+      - generic [ref=e693]:
+        - generic [ref=e694]: Seven pillars
+        - heading "Everything the business needs, in one place." [level=2] [ref=e699]
+        - paragraph [ref=e701]: Organised by outcome, not by tool.
+      - generic [ref=e702]:
+        - generic [ref=e705]:
+          - heading "Executive Command" [level=3] [ref=e706]
+          - paragraph [ref=e707]: Know what changed, why it matters, and what to do next.
+          - list [ref=e709]:
+            - listitem [ref=e710]: CEO Morning Brief
+            - listitem [ref=e711]: Company Health Score
+            - listitem [ref=e712]: Opportunity Radar
+            - listitem [ref=e713]: Decision Assistant
+            - listitem [ref=e714]: Business Simulator
+        - generic [ref=e717]:
+          - heading "Growth & Marketing" [level=3] [ref=e718]
+          - paragraph [ref=e719]: Plan, launch and optimise growth from one workspace.
+          - list [ref=e721]:
+            - listitem [ref=e722]: AI Marketing Director
+            - listitem [ref=e723]: Content & Campaign Calendar
+            - listitem [ref=e724]: SEO Intelligence
+            - listitem [ref=e725]: Brand Intelligence
+            - listitem [ref=e726]: Pricing Intelligence
+        - generic [ref=e729]:
+          - heading "Sales & Revenue" [level=3] [ref=e730]
+          - paragraph [ref=e731]: Find the right opportunities and move them toward revenue.
+          - list [ref=e733]:
+            - listitem [ref=e734]: Lead Intelligence
+            - listitem [ref=e735]: Sales Workspace & CRM
+            - listitem [ref=e736]: Proposal Studio
+            - listitem [ref=e737]: Communication Intelligence
+            - listitem [ref=e738]: Revenue Forecasting
+        - generic [ref=e741]:
+          - heading "Competitive Intelligence" [level=3] [ref=e742]
+          - paragraph [ref=e743]: Know who your competitors are, what they are doing, and how to respond.
+          - list [ref=e745]:
+            - listitem [ref=e746]: Competitor Discovery
+            - listitem [ref=e747]: Advertisement Tracking
+            - listitem [ref=e748]: SEO Gap Analysis
+            - listitem [ref=e749]: Alerts
+            - listitem [ref=e750]: Market Positioning
+        - generic [ref=e753]:
+          - heading "Customers & Retention" [level=3] [ref=e754]
+          - paragraph [ref=e755]: Identify customers at risk before the revenue disappears.
+          - list [ref=e757]:
+            - listitem [ref=e758]: Customer Health
+            - listitem [ref=e759]: Churn Prediction
+            - listitem [ref=e760]: Review Monitoring
+            - listitem [ref=e761]: Retention Campaigns
+            - listitem [ref=e762]: Revenue at Risk
+        - generic [ref=e765]:
+          - heading "People & Operations" [level=3] [ref=e766]
+          - paragraph [ref=e767]: Preserve knowledge and keep the company running consistently.
+          - list [ref=e769]:
+            - listitem [ref=e770]: Company Brain
+            - listitem [ref=e771]: SOP Builder
+            - listitem [ref=e772]: Workflow Automation
+            - listitem [ref=e773]: Team Capacity
+            - listitem [ref=e774]: Company Memory
+        - generic [ref=e777]:
+          - heading "Finance & Strategic Decisions" [level=3] [ref=e778]
+          - paragraph [ref=e779]: Test major decisions before committing money and resources.
+          - list [ref=e781]:
+            - listitem [ref=e782]: Financial Health
+            - listitem [ref=e783]: Margin Analysis
+            - listitem [ref=e784]: Pricing & Expansion Simulator
+            - listitem [ref=e785]: Scenario Planning
+            - listitem [ref=e786]: Risk Register
+    - generic [ref=e788]:
+      - generic [ref=e789]:
+        - generic [ref=e790]: What it feels like
+        - heading "Three moments." [level=2] [ref=e795]
+        - paragraph [ref=e797]: Not a demo. Your business.
+      - generic [ref=e799]:
+        - generic [ref=e801]:
+          - generic [ref=e802]:
+            - generic [ref=e803]: Minute10
+            - heading "The first read" [level=3] [ref=e806]
+          - paragraph [ref=e807]: Onboarding ends with a Company Brain — what you sell, who you sell it to, what you charge — and a dashboard that names, department by department, what it can already tell you and what it still needs.
+        - generic [ref=e809]:
+          - generic [ref=e810]:
+            - generic [ref=e811]: Day1
+            - heading "The morning brief" [level=3] [ref=e814]
+          - paragraph [ref=e815]: Six things that changed in the last seven days, and one recommended action that ties two of them together. This is the habit.
+        - generic [ref=e817]:
+          - generic [ref=e818]:
+            - generic [ref=e819]: Week4
+            - heading "The decision" [level=3] [ref=e822]
+          - paragraph [ref=e823]: A decision card with the reasoning, the data behind it and the risk level. Approve it, ask why, or dismiss it — inside the product.
+    - generic [ref=e829]:
+      - generic [ref=e830]:
+        - generic [ref=e831]:
+          - generic [ref=e832]: Why you can believe it
+          - heading "Never invent a number." [level=2] [ref=e837]: Never inventa number.
+          - paragraph [ref=e839]: The single reason AI business tools fail is that people stop believing the numbers. NEXUS is engineered around one rule — and it is enforced in code, not in a prompt.
+        - generic [ref=e840]:
+          - generic [ref=e842]:
+            - generic [ref=e843]: "1"
+            - generic [ref=e846]:
+              - generic [ref=e847]: Fetch real inputs
+              - generic [ref=e848]: gaps recorded explicitly
+          - generic [ref=e850]:
+            - generic [ref=e851]: "2"
+            - generic [ref=e854]:
+              - generic [ref=e855]: Compute in code
+              - generic [ref=e856]: scores, deltas, exposure
+          - generic [ref=e858]:
+            - generic [ref=e859]: "3"
+            - generic [ref=e862]:
+              - generic [ref=e863]: Ground the prompt
+              - generic [ref=e864]: company context + data block
+          - generic [ref=e866]:
+            - generic [ref=e867]: "4"
+            - generic [ref=e870]:
+              - generic [ref=e871]: Validate the output
+              - generic [ref=e872]: schema-checked, retried
+          - generic [ref=e874]:
+            - generic [ref=e875]: "5"
+            - generic [ref=e877]:
+              - generic [ref=e878]: Store the trace
+              - generic [ref=e879]: auditable forever
+      - generic [ref=e880]:
+        - generic [ref=e888]:
+          - heading "Fetched or calculated. Never guessed." [level=3] [ref=e889]
+          - paragraph [ref=e890]: Every figure you see is pulled from a connected source or computed deterministically in code. The AI interprets and phrases; it does not estimate.
+        - generic [ref=e898]:
+          - heading "Confidence is computed, not written." [level=3] [ref=e899]
+          - paragraph [ref=e900]: Confidence percentages, financial exposure and churn risk come from defined formulas in the backend. A language model never produces the figure.
+        - generic [ref=e908]:
+          - heading "Every proposal price is cited." [level=3] [ref=e909]
+          - paragraph [ref=e910]: Prices are retrieved from your own uploaded price list with a reference to the document and page. If a price is not found, you get a visible placeholder — never a plausible number.
+        - generic [ref=e918]:
+          - heading "Missing data shows as missing." [level=3] [ref=e919]
+          - paragraph [ref=e920]: No connected analytics means the marketing score says so. You get a visible gap and a prompt to connect the source, not a confident-sounding guess.
+        - generic [ref=e928]:
+          - heading "Every card can answer “why?”" [level=3] [ref=e929]
+          - paragraph [ref=e930]: Each insight stores the input data and the calculation behind it, so any recommendation can show its working.
+        - paragraph [ref=e932]: This is not marketing language. It is enforced as a per-module engineering contract with an automated test suite that runs on every change.
+    - generic [ref=e934]:
+      - generic [ref=e935]:
+        - generic [ref=e936]: Why NEXUS
+        - heading "The difference is structural." [level=2] [ref=e941]
+      - generic [ref=e942]:
+        - generic [ref=e944]:
+          - generic [ref=e946]: Point tools
+          - generic [ref=e947]: NEXUS OS
+        - generic [ref=e948]:
+          - generic [ref=e950]:
+            - generic [ref=e951]: Scope of knowledge
+            - generic [ref=e953]: One channel each
+            - generic [ref=e956]: Whole business, one brain
+          - generic [ref=e961]:
+            - generic [ref=e962]: Output
+            - generic [ref=e964]: Reports and dashboards
+            - generic [ref=e967]: Decisions plus the executed work
+          - generic [ref=e972]:
+            - generic [ref=e973]: Personalisation
+            - generic [ref=e975]: Templates
+            - generic [ref=e978]: Your prices, customers, competitors, voice
+          - generic [ref=e983]:
+            - generic [ref=e984]: Regional fit
+            - generic [ref=e986]: US / EU norms
+            - generic [ref=e989]: GCC norms, OMR/AED/SAR, Arabic on the roadmap
+          - generic [ref=e994]:
+            - generic [ref=e995]: Cost
+            - generic [ref=e997]: 5–6 subscriptions
+            - generic [ref=e1000]: One
+          - generic [ref=e1005]:
+            - generic [ref=e1006]: Memory
+            - generic [ref=e1008]: None across tools
+            - generic [ref=e1011]: Permanent, compounding Company Brain
+    - generic [ref=e1016]:
+      - generic [ref=e1017]:
+        - generic [ref=e1018]: Packaging
+        - heading "Three tiers. One subscription." [level=2] [ref=e1023]
+        - paragraph [ref=e1025]: Free trial, monthly billing, upgrade or downgrade any time, cancel any time. AI usage is our operating cost — never billed to you per generation.
+      - generic [ref=e1026]:
+        - generic [ref=e1028]:
+          - heading "Starter" [level=3] [ref=e1029]
+          - paragraph [ref=e1030]: Small teams proving the value
+          - generic [ref=e1031]:
+            - generic [ref=e1032]: $49
+            - generic [ref=e1033]: /month
+          - list [ref=e1035]:
+            - listitem [ref=e1036]:
+              - generic [ref=e1039]: Company Brain & guided onboarding
+            - listitem [ref=e1040]:
+              - generic [ref=e1043]: Morning Brief & Health Score
+            - listitem [ref=e1044]:
+              - generic [ref=e1047]: CRM & pipeline
+            - listitem [ref=e1048]:
+              - generic [ref=e1051]: Growth Planner & Content Studio
+            - listitem [ref=e1052]:
+              - generic [ref=e1055]: Proposal Studio (limited)
+            - listitem [ref=e1056]:
+              - generic [ref=e1058]: SEO Intelligence
+            - listitem [ref=e1059]:
+              - generic [ref=e1061]: Competitor War Room
+            - listitem [ref=e1062]:
+              - generic [ref=e1064]: Lead Intelligence
+          - link "Start free trial" [ref=e1066] [cursor=pointer]:
+            - /url: /register
+        - generic [ref=e1072]:
+          - generic [ref=e1073]: Most complete
+          - heading "Growth" [level=3] [ref=e1074]
+          - paragraph [ref=e1075]: The core product
+          - generic [ref=e1076]: Let's talk
+          - list [ref=e1079]:
+            - listitem [ref=e1080]:
+              - generic [ref=e1083]: Everything in Starter
+            - listitem [ref=e1084]:
+              - generic [ref=e1087]: Proposal Studio (full RAG)
+            - listitem [ref=e1088]:
+              - generic [ref=e1091]: SEO Intelligence
+            - listitem [ref=e1092]:
+              - generic [ref=e1095]: Competitor War Room
+            - listitem [ref=e1096]:
+              - generic [ref=e1099]: Lead Intelligence
+            - listitem [ref=e1100]:
+              - generic [ref=e1103]: Customer Intelligence & churn
+            - listitem [ref=e1104]:
+              - generic [ref=e1107]: Guided onboarding
+            - listitem [ref=e1108]:
+              - generic [ref=e1110]: Finance Advisor
+            - listitem [ref=e1111]:
+              - generic [ref=e1113]: Business Simulator
+          - link "Book a walkthrough" [ref=e1115] [cursor=pointer]:
+            - /url: "#cta"
+        - generic [ref=e1121]:
+          - heading "Enterprise" [level=3] [ref=e1122]
+          - paragraph [ref=e1123]: Multi-brand / multi-division
+          - generic [ref=e1124]: Let's talk
+          - list [ref=e1127]:
+            - listitem [ref=e1128]:
+              - generic [ref=e1131]: Everything in Growth
+            - listitem [ref=e1132]:
+              - generic [ref=e1135]: Finance Advisor & accounting sync
+            - listitem [ref=e1136]:
+              - generic [ref=e1139]: Business Simulator & Decision Intelligence
+            - listitem [ref=e1140]:
+              - generic [ref=e1143]: Multiple workspaces / divisions
+            - listitem [ref=e1144]:
+              - generic [ref=e1147]: White-glove onboarding
+            - listitem [ref=e1148]:
+              - generic [ref=e1151]: Custom integrations
+          - link "Talk to us" [ref=e1153] [cursor=pointer]:
+            - /url: "#cta"
+      - paragraph [ref=e1159]: Indicative packaging. Pricing is being validated with design-partner customers before launch — talk to us and it will be honest about where it stands.
+    - generic [ref=e1162]:
+      - generic [ref=e1164]:
+        - generic [ref=e1165]: Questions
+        - heading "The things people ask first." [level=2] [ref=e1170]
+      - generic [ref=e1171]:
+        - generic [ref=e1173]:
+          - heading [level=3] [ref=e1174]:
+            - button "How is this different from just using ChatGPT?" [expanded] [ref=e1175] [cursor=pointer]
+          - paragraph [ref=e1181]: "ChatGPT does not know your prices, your customers, your competitors or your brand voice — so it gives you generic advice you have to translate yourself. NEXUS learns your business once into a Company Brain, and every answer is grounded in your real connected data. It also does not stop at advice: the recommendation ends in an action you can take inside the product."
+        - heading [level=3] [ref=e1184]:
+          - button "What happens on day one if I have almost no data?" [ref=e1185] [cursor=pointer]
+        - heading [level=3] [ref=e1192]:
+          - button "Can I trust the numbers it shows me?" [ref=e1193] [cursor=pointer]
+        - heading [level=3] [ref=e1200]:
+          - button "Where does my data live, and is it used to train AI models?" [ref=e1201] [cursor=pointer]
+        - heading [level=3] [ref=e1208]:
+          - button "Do you scrape LinkedIn for leads?" [ref=e1209] [cursor=pointer]
+        - heading [level=3] [ref=e1216]:
+          - button "Is it available in Arabic?" [ref=e1217] [cursor=pointer]
+    - generic [ref=e1225]:
+      - heading "Ten minutes from now, NEXUS will know your business well enough to be useful." [level=2] [ref=e1231]
+      - paragraph [ref=e1232]: Answer what only you can answer. Every line it writes back names where it came from.
+      - generic [ref=e1233]:
+        - link "Create your account" [ref=e1234] [cursor=pointer]:
+          - /url: /register
+        - link "See how it works" [ref=e1239] [cursor=pointer]:
+          - /url: "#loop"
+      - paragraph [ref=e1241]: No card required for the trial · Cancel any time
+  - contentinfo [ref=e1254]:
+    - generic [ref=e1255]:
+      - generic [ref=e1256]:
+        - generic [ref=e1257]:
+          - generic [ref=e1258]: NEXUSOS
+          - paragraph [ref=e1264]: An AI business operating system for growing companies in Oman and the GCC. One Company Brain, seven AI directors, and every number traceable to a real source.
+          - paragraph [ref=e1265]: Oman & the GCC
+        - generic [ref=e1267]:
+          - generic [ref=e1268]:
+            - heading "Product" [level=3] [ref=e1269]
+            - list [ref=e1270]:
+              - listitem [ref=e1271]:
+                - link "The loop" [ref=e1272] [cursor=pointer]:
+                  - /url: "#loop"
+              - listitem [ref=e1273]:
+                - link "Company Brain" [ref=e1274] [cursor=pointer]:
+                  - /url: "#brain"
+              - listitem [ref=e1275]:
+                - link "AI directors" [ref=e1276] [cursor=pointer]:
+                  - /url: "#team"
+              - listitem [ref=e1277]:
+                - link "Capabilities" [ref=e1278] [cursor=pointer]:
+                  - /url: "#pillars"
+              - listitem [ref=e1279]:
+                - link "Pricing" [ref=e1280] [cursor=pointer]:
+                  - /url: "#pricing"
+          - generic [ref=e1281]:
+            - heading "Account" [level=3] [ref=e1282]
+            - list [ref=e1283]:
+              - listitem [ref=e1284]:
+                - link "Sign in" [ref=e1285] [cursor=pointer]:
+                  - /url: /login
+              - listitem [ref=e1286]:
+                - link "Create an account" [ref=e1287] [cursor=pointer]:
+                  - /url: /register
+          - generic [ref=e1288]:
+            - heading "Trust" [level=3] [ref=e1289]
+            - list [ref=e1290]:
+              - listitem [ref=e1291]:
+                - link "How grounding works" [ref=e1292] [cursor=pointer]:
+                  - /url: "#trust"
+      - generic [ref=e1293]:
+        - paragraph [ref=e1294]: © 2026 NEXUS OS. All rights reserved.
+        - paragraph [ref=e1295]: Product in active development. Figures shown in product illustrations are illustrative, not measured results.

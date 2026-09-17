@@ -1,5 +1,6 @@
 'use client'
 
+import { Tabs } from '@/components/ui/Tabs'
 import type { Section } from '@/lib/dashboard-client'
 
 /**
@@ -24,6 +25,19 @@ import type { Section } from '@/lib/dashboard-client'
  * Labels are served rather than derived — finding F13, where the same
  * department was `hr` in the API, "Hr" in a checkbox and "People" in the nav
  * because each surface title-cased the value itself.
+ *
+ * ## It is a tab list now, not a row of buttons
+ *
+ * The audit's finding: a row of buttons is not a tab list. Every tab was its
+ * own tab stop, so reaching the sixth took six presses; nothing announced that
+ * a selection controlled a panel, or which of six it was; and the arrow keys —
+ * which is how a tab list is actually driven — did nothing. It also could not
+ * survive 390px, where six pills with counts wrap onto three lines above the
+ * content they belong to.
+ *
+ * `Tabs` holds the WAI pattern (one tab stop, arrows within, `aria-selected`,
+ * `aria-controls`) and the horizontal overflow. This file keeps what is
+ * specific to a director: the order, the labels and what the count means.
  */
 export function SectionRail({
   sections,
@@ -35,33 +49,20 @@ export function SectionRail({
   onSelect: (key: string) => void
 }) {
   return (
-    <nav aria-label="Sections" className="flex flex-wrap gap-2 border-b border-ink-100 pb-4">
-      {sections.map((section) => {
-        const current = section.key === active
-        return (
-          <button
-            key={section.key}
-            type="button"
-            onClick={() => onSelect(section.key)}
-            aria-current={current ? 'page' : undefined}
-            className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-              current
-                ? 'bg-ink-800 text-bone-50'
-                : 'border border-ink-100 text-ink-600 hover:border-ink-300 hover:text-ink-900'
-            }`}
-          >
-            {section.label}
-            {/* The count is the honest version of a badge. It is how many
-                capabilities sit on this tab, not how many of them work — and
-                every one of them says which it is on its own card. */}
-            <span
-              className={`ml-2 font-mono text-2xs ${current ? 'text-bone-200' : 'text-ink-400'}`}
-            >
-              {section.blocks.length}
-            </span>
-          </button>
-        )
-      })}
-    </nav>
+    <div className="border-b border-ink-100 pb-3">
+      <Tabs
+        label="Sections"
+        active={active}
+        onChange={onSelect}
+        tabs={sections.map((section) => ({
+          key: section.key,
+          label: section.label,
+          // The count is the honest version of a badge. It is how many
+          // capabilities sit on this tab, not how many of them work — and every
+          // one of them says which it is on its own card.
+          count: section.blocks.length,
+        }))}
+      />
+    </div>
   )
 }

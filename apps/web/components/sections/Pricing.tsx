@@ -18,16 +18,28 @@ export function Pricing() {
           align="center"
         />
 
-        <RevealGroup className="mt-16 grid gap-5 lg:grid-cols-3" stagger={0.09}>
+        {/* **The featured tier is no longer offset vertically.**
+            It carried `lg:-mt-4 lg:mb-4`, which lifted the whole card 16px —
+            and with it the tier name, the price, the rule and every line of the
+            feature list. So nothing lined up across the row: three names at two
+            heights, `$49` sitting 16px below two `Let's talk`s, and three
+            feature lists starting on different baselines. A pricing table whose
+            rows do not align is a pricing table a reader cannot compare, which
+            is the only thing a pricing table is for.
+
+            It is still obviously the featured one. It is navy against white, it
+            carries the only badge, and it has the heaviest shadow — three
+            signals, none of which breaks the grid. */}
+        <RevealGroup className="mt-14 grid items-stretch gap-5 lg:grid-cols-3" stagger={0.07}>
           {pricing.tiers.map((t) => (
-            <RevealItem key={t.name} className={t.featured ? 'lg:-mt-4 lg:mb-4' : ''}>
+            <RevealItem key={t.name}>
               <motion.div
                 whileHover={{ y: -6 }}
                 transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
                 className={`relative flex h-full flex-col rounded-panel border p-8 ${
                   t.featured
-                    ? 'border-ink-700 bg-ink-800 shadow-paper-xl'
-                    : 'border-bone-300/70 bg-white shadow-paper'
+                    ? 'border-ink-700 bg-ink-800 shadow-e3'
+                    : 'border-bone-300/70 bg-white shadow-e1'
                 }`}
               >
                 {t.featured ? (
@@ -45,7 +57,11 @@ export function Pricing() {
                   {t.for}
                 </p>
 
-                <div className="mt-7 flex items-baseline gap-1.5">
+                {/* A fixed height on the price row. Two tiers say "Let's talk"
+                    and one says "$49 /month"; without it the rule underneath
+                    sat at two different heights, which is the same misalignment
+                    the offset used to cause, arriving from the copy instead. */}
+                <div className="mt-7 flex min-h-[3rem] items-baseline gap-1.5">
                   <span
                     className={`font-display text-4xl ${
                       t.featured ? 'text-bone-50' : 'text-ink-800'

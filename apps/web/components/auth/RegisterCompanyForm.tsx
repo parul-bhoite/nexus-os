@@ -270,7 +270,14 @@ export function RegisterCompanyForm() {
       <Button
         type="submit"
         size="lg"
-        disabled={busy || name.trim() === '' || websiteUrl.trim() === ''}
+        disabledReason={
+          name.trim() === ''
+            ? 'Name the company.'
+            : websiteUrl.trim() === ''
+              ? 'Add the website NEXUS should read first.'
+              : undefined
+        }
+        disabled={busy}
         icon={busy ? undefined : <ArrowRight />}
         className="mt-1 w-full"
       >

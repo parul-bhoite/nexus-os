@@ -179,7 +179,16 @@ export function RegisterForm() {
       <Button
         type="submit"
         size="lg"
-        disabled={busy || tooShort || email.trim() === '' || password === ''}
+        disabledReason={
+          email.trim() === ''
+            ? 'Enter your work email.'
+            : password === ''
+              ? 'Choose a password.'
+              : tooShort
+                ? `Your password needs at least ${MIN_PASSWORD_LENGTH} characters.`
+                : undefined
+        }
+        disabled={busy}
         icon={busy ? undefined : <ArrowRight />}
         className="mt-1 w-full"
       >

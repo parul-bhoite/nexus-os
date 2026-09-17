@@ -47,6 +47,26 @@ export function LoginForm() {
     event.preventDefault()
     if (busy) return
 
+    // **Validated here rather than by disabling the button.** The audit's
+    // finding: this page rendered its only call to action at `opacity-50`,
+    // disabled, before the reader had typed anything — the lowest-contrast
+    // thing on screen at the moment it is the most important, with no
+    // indication of what would enable it. A live button that explains what is
+    // missing when pressed is both more discoverable and more honest: it
+    // responds to the press rather than ignoring it.
+    if (email.trim() === '' || password === '') {
+      setState({
+        status: 'error',
+        message:
+          email.trim() === '' && password === ''
+            ? 'Enter your work email and password.'
+            : email.trim() === ''
+              ? 'Enter the work email you signed up with.'
+              : 'Enter your password.',
+      })
+      return
+    }
+
     setState({ status: 'submitting' })
     try {
       await login(email.trim(), password)
@@ -118,11 +138,13 @@ export function LoginForm() {
       <Button
         type="submit"
         size="lg"
-        disabled={busy || email.trim() === '' || password === ''}
-        icon={busy ? undefined : <ArrowRight />}
-        className="mt-1 w-full"
+        block
+        loading={busy}
+        loadingLabel={signInLabel}
+        icon={<ArrowRight />}
+        className="mt-1"
       >
-        {signInLabel}
+        Sign in
       </Button>
     </form>
   )

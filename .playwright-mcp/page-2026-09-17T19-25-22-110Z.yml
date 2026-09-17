@@ -1,0 +1,18 @@
+- generic [active] [ref=f16e1]:
+  - link "Skip to content" [ref=f16e2] [cursor=pointer]:
+    - /url: "#main"
+  - generic [ref=f16e3]:
+    - banner [ref=f16e4]:
+      - generic [ref=f16e5]:
+        - link "NEXUS OS dashboard" [ref=f16e6] [cursor=pointer]:
+          - /url: /dashboard
+          - generic [ref=f16e7]: NEXUSOS
+        - button "Account" [ref=f16e16] [cursor=pointer]:
+          - generic [ref=f16e17]: ··
+    - generic [ref=f16e18]:
+      - complementary "Primary" [ref=f16e19]
+      - main [ref=f16e36]:
+        - status [ref=f16e37]:
+          - paragraph [ref=f16e38]: Reading what changed…
+  - region "Notifications"
+  - alert [ref=f16e39]

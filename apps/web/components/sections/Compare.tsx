@@ -16,10 +16,10 @@ export function Compare() {
           align="center"
         />
 
-        <div className="mx-auto mt-14 max-w-4xl">
+        <div className="mx-auto mt-14 max-w-5xl">
           {/* Column headers */}
           <Reveal>
-            <div className="grid grid-cols-[1fr] gap-3 sm:grid-cols-[1.1fr_1fr_1fr]">
+            <div className="grid grid-cols-[1fr] gap-3 sm:grid-cols-[0.9fr_1fr_1fr]">
               <div className="hidden sm:block" />
               <div className="hidden rounded-t-2xl border border-b-0 border-bone-300/70 bg-bone-50 px-5 py-3.5 text-center sm:block">
                 <span className="font-mono text-2xs uppercase tracking-[0.16em] text-ink-400">
@@ -39,17 +39,26 @@ export function Compare() {
               const last = i === compare.rows.length - 1
               return (
                 <RevealItem key={r.dimension}>
-                  <motion.div
-                    className="grid grid-cols-1 gap-3 sm:grid-cols-[1.1fr_1fr_1fr]"
-                    whileHover={{ x: 3 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    <div className="flex items-center pt-5 sm:pt-0">
-                      <span className="font-display text-lg text-ink-800">{r.dimension}</span>
+                  {/* **No `whileHover={{ x: 3 }}`.** It translated the whole
+                      row — label and both value cells — three pixels right on
+                      hover, so the one thing a comparison table has to hold,
+                      its columns, came apart under the pointer. The row is
+                      still interactive-feeling; it just tints instead. */}
+                  <motion.div className="group grid grid-cols-1 gap-3 sm:grid-cols-[0.9fr_1fr_1fr]">
+                    {/* `items-start` and the same vertical padding as the cells
+                        beside it. The label used to be `items-center` while the
+                        values were `items-start`, so every row whose value
+                        wrapped to two lines pushed its label half a line down —
+                        a drift that reached 13px by the last row and read as
+                        the table being slightly, inexplicably broken. */}
+                    <div className="flex items-start pt-5 sm:pt-0 sm:py-4">
+                      <span className="font-display text-lg leading-relaxed text-ink-800">
+                        {r.dimension}
+                      </span>
                     </div>
 
                     <div
-                      className={`flex items-start gap-2.5 border-x border-b border-bone-300/70 bg-bone-50/60 px-5 py-4 ${
+                      className={`flex items-start gap-2.5 border-x border-b border-bone-300/70 bg-bone-50/60 px-5 py-4 transition-colors duration-base ease-out group-hover:bg-bone-100 ${
                         last ? 'rounded-b-2xl' : ''
                       } border-t sm:border-t-0`}
                     >
@@ -58,7 +67,7 @@ export function Compare() {
                     </div>
 
                     <div
-                      className={`flex items-start gap-2.5 border-x border-b border-ink-700 bg-ink-800 px-5 py-4 ${
+                      className={`flex items-start gap-2.5 border-x border-b border-ink-700 bg-ink-800 px-5 py-4 transition-colors duration-base ease-out group-hover:bg-ink-700 ${
                         last ? 'rounded-b-2xl' : ''
                       } border-t sm:border-t-0`}
                     >

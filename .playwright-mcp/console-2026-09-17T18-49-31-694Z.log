@@ -1,0 +1,438 @@
+[     610ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js:38559
+[ 1173096ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:186
+[ 1173779ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:186
+[ 1174018ms] [LOG] [Fast Refresh] done in 239ms @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:43
+[ 1174073ms] [LOG] [Fast Refresh] done in 293ms @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:43
+[ 1216029ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:186
+[ 1216450ms] [LOG] [Fast Refresh] done in 422ms @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:43
+[ 1280495ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:186
+[ 1280633ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:186
+[ 1280645ms] [LOG] [Fast Refresh] done in 11ms @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:43
+[ 1280731ms] [LOG] [Fast Refresh] done in 98ms @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:43
+[ 1339669ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:186
+[ 1340119ms] [ERROR] ./app/globals.css:139:5
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive.
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-index.js:32
+[ 1340119ms] [ERROR] ./app/globals.css
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive. (139:5)
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | 
+-- inner error --
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive. (139:5)
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | 
+Generated code for /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[12].use[2]!/Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[14].oneOf[12].use[3]!/Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css
+
+Import trace for requested module:
+./app/globals.css @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-index.js:32
+[ 1341147ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:186
+[ 1341691ms] [ERROR] ./app/globals.css:139:5
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive.
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-index.js:32
+[ 1341691ms] [ERROR] ./app/globals.css
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive. (139:5)
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | 
+-- inner error --
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive. (139:5)
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | 
+Generated code for /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[12].use[2]!/Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[14].oneOf[12].use[3]!/Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css
+
+Import trace for requested module:
+./app/globals.css @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-index.js:32
+[ 1342066ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3001/?_rsc=r3yhw:0
+[ 1342076ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3001/?_rsc=r3yhw:0
+[ 1342083ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3001/?_rsc=r3yhw:0
+[ 1342104ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3001/:0
+[ 1342254ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ webpack-internal:///./node_modules/react-dom/cjs/react-dom.development.js:29889
+[ 1342273ms] Error: Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive.
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | 
+
+    at getCssError (file:///Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/plugins/wellknown-errors-plugin/parseCss.js:24:16)
+    at getModuleBuildError (file:///Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/plugins/wellknown-errors-plugin/webpackModuleError.js:116:43)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async (file:///Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/plugins/wellknown-errors-plugin/index.js:29:49)
+    at async (file:///Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/plugins/wellknown-errors-plugin/index.js:27:21)
+[ 1342273ms] [LOG] [HMR] connected @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:38
+[ 1342274ms] [ERROR] ./app/globals.css:139:5
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive.
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:62
+[ 1342274ms] [ERROR] ./app/globals.css
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive. (139:5)
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | 
+-- inner error --
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive. (139:5)
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | 
+Generated code for /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[12].use[2]!/Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[14].oneOf[12].use[3]!/Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:62
+[ 1389909ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[ 1390383ms] [ERROR] ./app/globals.css:139:5
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive.
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:62
+[ 1390384ms] [ERROR] ./app/globals.css
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive. (139:5)
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | 
+-- inner error --
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive. (139:5)
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | 
+Generated code for /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[12].use[2]!/Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[14].oneOf[12].use[3]!/Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css
+
+Import trace for requested module:
+./app/globals.css @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:62
+[ 1857244ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[ 1857603ms] [ERROR] ./app/globals.css:121:5
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `text-label` class does not exist. If `text-label` is a custom class, make sure it is defined within a `@layer` directive.
+
+  119 |      both are forms, so both now use this. */
+  120 |   .field-label {
+> 121 |     @apply block text-label font-medium text-ink-700;
+      |     ^
+  122 |   }
+  123 | @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:62
+[ 1857604ms] [ERROR] ./app/globals.css
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive. (139:5)
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | 
+-- inner error --
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive. (139:5)
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | 
+Generated code for /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[12].use[2]!/Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[14].oneOf[12].use[3]!/Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css
+
+Import trace for requested module:
+./app/globals.css @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:62
+[ 1905412ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[ 1905647ms] [ERROR] ./app/globals.css:110:5
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `max-w-app` class does not exist. If `max-w-app` is a custom class, make sure it is defined within a `@layer` directive.
+
+  108 |      edge. See `--app-x`. */
+  109 |   .app-shell {
+> 110 |     @apply mx-auto w-full max-w-app px-[var(--app-x)];
+      |     ^
+  111 |   }
+  112 | @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:62
+[ 1905647ms] [ERROR] ./app/globals.css
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive. (139:5)
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | 
+-- inner error --
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive. (139:5)
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | 
+Generated code for /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[12].use[2]!/Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[14].oneOf[12].use[3]!/Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css
+
+Import trace for requested module:
+./app/globals.css @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:62
+[ 1905652ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[ 1905810ms] [ERROR] ./components/shell/AppShell.tsx:7:1
+Module not found: Can't resolve '@/components/shell/WorkspaceMenu'
+   5 | import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+   6 | import { NavPanel } from '@/components/shell/NavPanel'
+>  7 | import { WorkspaceMenu } from '@/components/shell/WorkspaceMenu'
+     | ^
+   8 | import { AccountMenu } from '@/components/shell/AccountMenu'
+   9 | import { Logo } from '@/components/ui/Logo'
+  10 | import { Sheet } from '@/components/ui/Overlay'
+
+https://nextjs.org/docs/messages/module-not-found @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:62
+[ 1905810ms] [ERROR] ./components/shell/AppShell.tsx:8:1
+Module not found: Can't resolve '@/components/shell/AccountMenu'
+   6 | import { NavPanel } from '@/components/shell/NavPanel'
+   7 | import { WorkspaceMenu } from '@/components/shell/WorkspaceMenu'
+>  8 | import { AccountMenu } from '@/components/shell/AccountMenu'
+     | ^
+   9 | import { Logo } from '@/components/ui/Logo'
+  10 | import { Sheet } from '@/components/ui/Overlay'
+  11 | import { ToastProvider } from '@/components/ui/Toast'
+
+https://nextjs.org/docs/messages/module-not-found @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:62
+[ 1945439ms] [ERROR] ./app/globals.css:110:5
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `max-w-app` class does not exist. If `max-w-app` is a custom class, make sure it is defined within a `@layer` directive.
+
+  108 |      edge. See `--app-x`. */
+  109 |   .app-shell {
+> 110 |     @apply mx-auto w-full max-w-app px-[var(--app-x)];
+      |     ^
+  111 |   }
+  112 | @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:62
+[ 1945439ms] [ERROR] ./app/globals.css
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive. (139:5)
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | 
+-- inner error --
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive. (139:5)
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | 
+Generated code for /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[12].use[2]!/Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[14].oneOf[12].use[3]!/Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css
+
+Import trace for requested module:
+./app/globals.css @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:62
+[ 1945535ms] [ERROR] ./app/globals.css:110:5
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `max-w-app` class does not exist. If `max-w-app` is a custom class, make sure it is defined within a `@layer` directive.
+
+  108 |      edge. See `--app-x`. */
+  109 |   .app-shell {
+> 110 |     @apply mx-auto w-full max-w-app px-[var(--app-x)];
+      |     ^
+  111 |   }
+  112 | @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:62
+[ 1945535ms] [ERROR] ./app/globals.css
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive. (139:5)
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | 
+-- inner error --
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive. (139:5)
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | 
+Generated code for /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[12].use[2]!/Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[14].oneOf[12].use[3]!/Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css
+
+Import trace for requested module:
+./app/globals.css @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:62
+[ 1945537ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[ 1945607ms] [ERROR] ./components/shell/AppShell.tsx:8:1
+Module not found: Can't resolve '@/components/shell/AccountMenu'
+   6 | import { NavPanel } from '@/components/shell/NavPanel'
+   7 | import { WorkspaceMenu } from '@/components/shell/WorkspaceMenu'
+>  8 | import { AccountMenu } from '@/components/shell/AccountMenu'
+     | ^
+   9 | import { Logo } from '@/components/ui/Logo'
+  10 | import { Sheet } from '@/components/ui/Overlay'
+  11 | import { ToastProvider } from '@/components/ui/Toast'
+
+https://nextjs.org/docs/messages/module-not-found @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:62
+[ 1992332ms] [ERROR] ./app/globals.css:110:5
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `max-w-app` class does not exist. If `max-w-app` is a custom class, make sure it is defined within a `@layer` directive.
+
+  108 |      edge. See `--app-x`. */
+  109 |   .app-shell {
+> 110 |     @apply mx-auto w-full max-w-app px-[var(--app-x)];
+      |     ^
+  111 |   }
+  112 | @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:62
+[ 1992332ms] [ERROR] ./app/globals.css
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive. (139:5)
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | 
+-- inner error --
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive. (139:5)
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | 
+Generated code for /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[12].use[2]!/Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[14].oneOf[12].use[3]!/Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css
+
+Import trace for requested module:
+./app/globals.css @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:62
+[ 1992410ms] [ERROR] ./app/globals.css:110:5
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `max-w-app` class does not exist. If `max-w-app` is a custom class, make sure it is defined within a `@layer` directive.
+
+  108 |      edge. See `--app-x`. */
+  109 |   .app-shell {
+> 110 |     @apply mx-auto w-full max-w-app px-[var(--app-x)];
+      |     ^
+  111 |   }
+  112 | @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:62
+[ 1992410ms] [ERROR] ./app/globals.css
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive. (139:5)
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | 
+-- inner error --
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive. (139:5)
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | 
+Generated code for /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[12].use[2]!/Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[14].oneOf[12].use[3]!/Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css
+
+Import trace for requested module:
+./app/globals.css @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:62
+[ 1992521ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3001/:0
+[ 1992617ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ webpack-internal:///./node_modules/react-dom/cjs/react-dom.development.js:29889
+[ 1992624ms] Error: Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `max-w-app` class does not exist. If `max-w-app` is a custom class, make sure it is defined within a `@layer` directive.
+
+  108 |      edge. See `--app-x`. */
+  109 |   .app-shell {
+> 110 |     @apply mx-auto w-full max-w-app px-[var(--app-x)];
+      |     ^
+  111 |   }
+  112 | 
+
+    at getCssError (file:///Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/plugins/wellknown-errors-plugin/parseCss.js:24:16)
+    at getModuleBuildError (file:///Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/plugins/wellknown-errors-plugin/webpackModuleError.js:116:43)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async (file:///Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/plugins/wellknown-errors-plugin/index.js:29:49)
+    at async (file:///Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/plugins/wellknown-errors-plugin/index.js:27:21)
+[ 1992625ms] [LOG] [HMR] connected @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:38
+[ 1992626ms] [ERROR] ./app/globals.css:110:5
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `max-w-app` class does not exist. If `max-w-app` is a custom class, make sure it is defined within a `@layer` directive.
+
+  108 |      edge. See `--app-x`. */
+  109 |   .app-shell {
+> 110 |     @apply mx-auto w-full max-w-app px-[var(--app-x)];
+      |     ^
+  111 |   }
+  112 | @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:62
+[ 1992626ms] [ERROR] ./app/globals.css
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive. (139:5)
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | 
+-- inner error --
+Syntax error: /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css The `shadow-e1` class does not exist. If `shadow-e1` is a custom class, make sure it is defined within a `@layer` directive. (139:5)
+
+  137 |      single value had to be wrong in one of them. */
+  138 |   .paper {
+> 139 |     @apply rounded-card border border-bone-300/70 bg-white shadow-e1;
+      |     ^
+  140 |   }
+  141 | 
+Generated code for /Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[12].use[2]!/Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[14].oneOf[12].use[3]!/Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/app/globals.css @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:62
+[ 2096114ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3001/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:63
+[ 2097118ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3001/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:63
+[ 2098121ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3001/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:63
+[ 2099035ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3001/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:63
+[ 2100040ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3001/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:63
+[ 2105044ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3001/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:63
+[ 2110047ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3001/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:63
+[ 2115053ms] [LOG] [HMR] connected @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:38
+[ 2118540ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[ 2120296ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:3001/_next/static/webpack/8c768299b6c54154.webpack.hot-update.json:0
+[ 2120296ms] [WARNING] [Fast Refresh] performing full reload because your application had an unrecoverable error @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:349
+[ 2120338ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[ 2121324ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:3001/_next/static/webpack/8c768299b6c54154.webpack.hot-update.json:0
+[ 2121324ms] [WARNING] [Fast Refresh] performing full reload because your application had an unrecoverable error @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:349
+[ 2121517ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js:38559

@@ -152,7 +152,7 @@ export function Hero() {
                   viewBox="0 0 340 18"
                   preserveAspectRatio="none"
                   aria-hidden="true"
-                  className="absolute -bottom-1 left-0 h-3 w-full text-gold-400"
+                  className="absolute -bottom-[0.12em] left-0 h-[0.16em] w-full text-gold-500"
                 >
                   <motion.path
                     d="M3 12C58 5 132 3 190 6c46 2 96 5 147 8"
@@ -194,7 +194,7 @@ export function Hero() {
               <Button href="/register" size="lg" icon={<ArrowRight />}>
                 {hero.primaryCta}
               </Button>
-              <Button href="#loop" size="lg" variant="ghost">
+              <Button href="#loop" size="lg" variant="secondary">
                 {hero.secondaryCta}
               </Button>
             </div>

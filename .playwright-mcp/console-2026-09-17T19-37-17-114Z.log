@@ -1,0 +1,56 @@
+[     201ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js:38559
+[  110334ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:186
+[  110796ms] [LOG] [Fast Refresh] done in 462ms @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:43
+[  143755ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:186
+[  143835ms] [ERROR] ./components/dashboard/MorningBrief.tsx
+Error: 
+  x Unexpected token `Section`. Expected jsx identifier
+     ,-[/Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/components/dashboard/MorningBrief.tsx:108:1]
+ 108 |   }
+ 109 | 
+ 110 |   return (
+ 111 |     <Section
+     :      ^^^^^^^
+ 112 |       title="Morning brief"
+ 113 |       {/* Found, never changed. Nothing re-crawls yet, so a heading with a date
+ 114 |           range would claim a comparison nobody made. */}
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./components/dashboard/MorningBrief.tsx
+./components/dashboard/DashboardLanding.tsx @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-index.js:32
+[  158316ms] [ERROR] ./components/dashboard/MorningBrief.tsx
+Error: 
+  x Unexpected token `Section`. Expected jsx identifier
+     ,-[/Users/parul.bhoite/Developer/NEXUSOS/nexus-os/apps/web/components/dashboard/MorningBrief.tsx:108:1]
+ 108 |   }
+ 109 | 
+ 110 |   return (
+ 111 |     <Section
+     :      ^^^^^^^
+ 112 |       title="Morning brief"
+ 113 |       {/* Found, never changed. Nothing re-crawls yet, so a heading with a date
+ 114 |           range would claim a comparison nobody made. */}
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./components/dashboard/MorningBrief.tsx
+./components/dashboard/DashboardLanding.tsx @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-index.js:32
+[  158316ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:186
+[  158552ms] [LOG] [Fast Refresh] done in 235ms @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:43
+[  218424ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:186
+[  218627ms] [LOG] [Fast Refresh] done in 203ms @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:43
+[  275288ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:186
+[  275427ms] [LOG] [Fast Refresh] done in 140ms @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:43
+[  334114ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:186
+[  334252ms] [LOG] [Fast Refresh] done in 139ms @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:43
+[  364578ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:186
+[  364932ms] [LOG] [Fast Refresh] done in 354ms @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:43
+[  400449ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:186
+[  400610ms] [LOG] [Fast Refresh] done in 160ms @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:43

@@ -11,6 +11,7 @@ import { EntitiesCard } from '@/components/settings/EntitiesCard'
 import { DomainVerificationCard } from '@/components/settings/DomainVerificationCard'
 import { InvitePeople } from '@/components/settings/InvitePeople'
 import { ReportingCard } from '@/components/settings/ReportingCard'
+import { Tabs } from '@/components/ui/Tabs'
 import { Button } from '@/components/ui/Button'
 import { AuthError } from '@/lib/auth-client'
 import { fetchState, type SpineState } from '@/lib/onboarding-client'
@@ -42,6 +43,8 @@ type State =
 
 export function SettingsPanel() {
   const [state, setState] = useState<State>({ status: 'loading' })
+  /** Which group of settings is on screen. See the note beside `groups`. */
+  const [group, setGroup] = useState('company')
 
   const load = useCallback(async () => {
     const company = await fetchCompany()
@@ -211,63 +214,117 @@ export function SettingsPanel() {
       </>
     )
 
+  /**
+   * Six groups, not ten panels in a column.
+   *
+   * The audit's finding: `/settings` was a 4,709-pixel scroll of ten unrelated
+   * concerns — the company, the domain check, invitations, one person's own
+   * preferences, a block per department, reporting assumptions, the department
+   * list, the brain, connected tools and the audit log — with no navigation of
+   * any kind. Changing a timezone meant scrolling past the DNS record; checking
+   * who had been invited meant knowing it was above reporting rather than below
+   * it.
+   *
+   * The grouping is by **whose setting it is and what it reaches**, which is
+   * the distinction this product already makes everywhere else:
+   *
+   * - *Company* is the entity and the two things that reach beyond your own
+   *   account, which is why the domain check gates them.
+   * - *You* is the one panel that can widen nothing for anybody.
+   * - *Reporting* is the assumptions every figure is cut against, and the
+   *   per-department thresholds belong with them because they are the same
+   *   kind of thing: a number's meaning rather than a number.
+   * - *Departments* decides which directors exist.
+   * - *Data and tools* is what NEXUS reads from.
+   * - *Activity* is the record of everything above.
+   *
+   * Every panel is still mounted and hidden rather than unmounted, so a
+   * half-filled invite survives a look at the audit log — and so the panels
+   * that fetch their own settings do it once per visit rather than once per
+   * tab.
+   */
+  const groups = [
+    { key: 'company', label: 'Company' },
+    { key: 'you', label: 'You' },
+    { key: 'reporting', label: 'Reporting' },
+    { key: 'departments', label: 'Departments' },
+    { key: 'data', label: 'Data and tools' },
+    { key: 'activity', label: 'Activity' },
+  ]
+
+  const show = (key: string) => (group === key ? 'flex flex-col gap-6' : 'hidden')
+
   return (
-    <div className="flex flex-col gap-8">
-      {/* Panel 4b, first — and now first in fact rather than second. It names
-          which company every panel below it is about, so it is the one panel
-          that should never be behind a spinner: somebody who does not know
-          which entity is active is reading eight panels about a company they
-          have not identified. It takes no props, so it no longer waits. */}
-      <EntitiesCard />
+    <div className="flex flex-col gap-6">
+      <div className="sticky top-[var(--app-header-h)] z-sticky -mx-[var(--app-x)] border-b border-ink-100 bg-bone-50/90 px-[var(--app-x)] py-2 backdrop-blur-md">
+        <Tabs label="Settings sections" active={group} onChange={setGroup} tabs={groups} />
+      </div>
 
-      {companyRegion}
+      <div className={show('company')}>
+        {/* Panel 4b, first — and now first in fact rather than second. It names
+            which company every panel below it is about, so it is the one panel
+            that should never be behind a spinner: somebody who does not know
+            which entity is active is reading eight panels about a company they
+            have not identified. It takes no props, so it no longer waits. */}
+        <EntitiesCard />
+        {companyRegion}
+      </div>
 
-      {/*
-        Reading its own settings rather than taking them from the two fetches
-        above. It is the only panel here that everybody in the workspace may
-        read — the domain card and the invite form are administrator surfaces —
-        so binding it to `company.may_administer` for *visibility* would hide
-        the assumptions a Contributor's own tiles are cited against. It asks the
-        API, which answers with `may_administer` for the write half only.
-      */}
-      {/* Panel 2: the one panel that is entirely this person's, and the only
-          one that needs no owner — nothing in it can widen what anybody sees. */}
-      <PreferencesCard />
+      <div className={show('you')}>
+        {/*
+          Reading its own settings rather than taking them from the two fetches
+          above. It is the only panel here that everybody in the workspace may
+          read — the domain card and the invite form are administrator surfaces —
+          so binding it to `company.may_administer` for *visibility* would hide
+          the assumptions a Contributor's own tiles are cited against. It asks the
+          API, which answers with `may_administer` for the write half only.
+        */}
+        {/* Panel 2: the one panel that is entirely this person's, and the only
+            one that needs no owner — nothing in it can widen what anybody sees. */}
+        <PreferencesCard />
+      </div>
 
-      {/* Panel 3, one per department this company runs. The block is served
-          with `may_answer` and `binds` on it, so a Contributor gets a
-          read-only view of the thresholds their own figures are measured
-          against rather than nothing at all. */}
-      {running.map((department) => (
-        <DepartmentBlockCard
-          key={department.value}
-          department={department.value}
-          label={department.label}
-        />
-      ))}
+      <div className={show('reporting')}>
+        <ReportingCard />
 
-      <ReportingCard />
+        {/* Panel 3, one per department this company runs. The block is served
+            with `may_answer` and `binds` on it, so a Contributor gets a
+            read-only view of the thresholds their own figures are measured
+            against rather than nothing at all. */}
+        {running.map((department) => (
+          <DepartmentBlockCard
+            key={department.value}
+            department={department.value}
+            label={department.label}
+          />
+        ))}
+      </div>
 
-      {/* Panel 7. The gap it closes: department selection happened once during
-          onboarding and never again, and the only writer was a route that
-          advances the spine. */}
-      <DepartmentsCard />
+      <div className={show('departments')}>
+        {/* Panel 7. The gap it closes: department selection happened once during
+            onboarding and never again, and the only writer was a route that
+            advances the spine. */}
+        <DepartmentsCard />
+      </div>
 
-      {/* Panel 10. Read-only: deleting an item has to fan out to its
-          passages, embeddings and derivations, and that is P21's. */}
-      <BrainCard />
+      <div className={show('data')}>
+        {/* Panel 10. Read-only: deleting an item has to fan out to its
+            passages, embeddings and derivations, and that is P21's. */}
+        <BrainCard />
 
-      {/* `doc/14` S9's tool ledger. Placed above the audit log for the same
-          reason the audit log is last: this is a thing to do, that is a record
-          of things done. Until now the connector API had no screen at all — the
-          OAuth round trip and sealed storage were built and unreachable. */}
-      <Connections />
+        {/* `doc/14` S9's tool ledger. Until now the connector API had no screen
+            at all — the OAuth round trip and sealed storage were built and
+            unreachable. */}
+        <Connections />
+      </div>
 
-      {/* Panel 12, last because it is a record of everything above it. It
-          renders nothing at all for a caller the API refuses — a red box
-          telling somebody they may not read something they never asked for is
-          worse than the panel not being there. */}
-      <AuditLogCard />
+      <div className={show('activity')}>
+        {/* Panel 12, and it is a record of everything above it. It renders
+            nothing at all for a caller the API refuses — a red box telling
+            somebody they may not read something they never asked for is worse
+            than the panel not being there. */}
+        <AuditLogCard />
+      </div>
     </div>
   )
 }

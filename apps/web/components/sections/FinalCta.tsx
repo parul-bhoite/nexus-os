@@ -27,12 +27,26 @@ function HorizonStrip() {
         <path d="M1010 194a26 14 0 0 1 52 0M1024 206a18 10 0 0 1 36 0" />
         <path d="M600 224a22 12 0 0 1 44 0" />
       </g>
-      {/* One small boat, still heading somewhere. */}
-      <g transform="translate(560 168) scale(1.1)" className="motion-safe:animate-sway" style={{ transformOrigin: '580px 200px' }}>
+      {/* One small boat, still heading somewhere.
+
+          **Two nested groups, and that is the fix rather than the style.** The
+          boat used to carry its `transform` attribute and `animate-sway` on the
+          same element. A CSS `transform` property *overrides* the SVG
+          `transform` presentation attribute outright — it does not compose with
+          it — so the moment the sway keyframe applied, `translate(560 168)
+          scale(1.1)` was discarded and the boat rendered at the viewBox origin.
+          It sat in the top-left corner of the panel, above the waterline,
+          visibly sailing through the sky.
+
+          The outer group owns the position and the inner one owns the
+          animation, so the CSS transform has nothing to overwrite. */}
+      <g transform="translate(560 168) scale(1.1)">
+      <g className="motion-safe:animate-sway" style={{ transformOrigin: '20px 32px' }}>
         <path d="M20 4v26" stroke="#84492A" strokeWidth="2" strokeLinecap="round" />
         <path d="M21 6c8 5 11 10 12 17H21z" fill="#F5F2EF" />
         <path d="M19 10c-6 4-8 8-9 13h9z" fill="#E9E4DE" />
         <path d="M4 30h32l-5 8c-.8 1.3-2.2 2-3.7 2H12.7c-1.5 0-2.9-.7-3.7-2z" fill="#A55D35" />
+      </g>
       </g>
     </svg>
   )

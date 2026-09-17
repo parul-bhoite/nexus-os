@@ -1,0 +1,171 @@
+- generic [active] [ref=f19e1]:
+  - link "Skip to content" [ref=f19e2] [cursor=pointer]:
+    - /url: "#main"
+  - generic [ref=f19e3]:
+    - banner [ref=f19e4]:
+      - generic [ref=f19e5]:
+        - link "NEXUS OS dashboard" [ref=f19e6] [cursor=pointer]:
+          - /url: /dashboard
+          - generic [ref=f19e7]: NEXUSOS
+        - generic "Perf 1789665795" [ref=f19e112]
+        - button "Account — founder+1789665795@perf-1789665795.om" [ref=f19e113] [cursor=pointer]: F1
+    - generic [ref=f19e18]:
+      - complementary "Primary" [ref=f19e19]:
+        - navigation "Sections" [ref=f19e114]:
+          - list [ref=f19e116]:
+            - listitem [ref=f19e117]:
+              - link "Today What needs you" [ref=f19e118] [cursor=pointer]:
+                - /url: /dashboard
+                - generic [ref=f19e119]:
+                  - generic [ref=f19e120]: Today
+                  - generic [ref=f19e121]: What needs you
+          - generic [ref=f19e122]:
+            - paragraph [ref=f19e123]: Directors
+            - list [ref=f19e124]:
+              - listitem [ref=f19e125]:
+                - link "Chief of Staff" [ref=f19e126] [cursor=pointer]:
+                  - /url: /dashboard/executive
+              - listitem [ref=f19e129]:
+                - link "Marketing 5 questions unanswered" [ref=f19e130] [cursor=pointer]:
+                  - /url: /dashboard/marketing
+                  - generic [ref=f19e131]: Marketing
+                  - generic [ref=f19e133]:
+                    - text: "5"
+                    - generic [ref=f19e134]: questions unanswered
+              - listitem [ref=f19e135]:
+                - link "Sales 5 questions unanswered" [ref=f19e136] [cursor=pointer]:
+                  - /url: /dashboard/sales
+                  - generic [ref=f19e137]: Sales
+                  - generic [ref=f19e139]:
+                    - text: "5"
+                    - generic [ref=f19e140]: questions unanswered
+              - listitem [ref=f19e141]:
+                - link "Finance 4 questions unanswered" [ref=f19e142] [cursor=pointer]:
+                  - /url: /dashboard/finance
+                  - generic [ref=f19e143]: Finance
+                  - generic [ref=f19e145]:
+                    - text: "4"
+                    - generic [ref=f19e146]: questions unanswered
+              - listitem [ref=f19e147]:
+                - link "Operations 5 questions unanswered" [ref=f19e148] [cursor=pointer]:
+                  - /url: /dashboard/operations
+                  - generic [ref=f19e149]: Operations
+                  - generic [ref=f19e151]:
+                    - text: "5"
+                    - generic [ref=f19e152]: questions unanswered
+              - listitem [ref=f19e153]:
+                - link "People 5 questions unanswered" [ref=f19e154] [cursor=pointer]:
+                  - /url: /dashboard/hr
+                  - generic [ref=f19e155]: People
+                  - generic [ref=f19e157]:
+                    - text: "5"
+                    - generic [ref=f19e158]: questions unanswered
+              - listitem [ref=f19e159]:
+                - link "Strategy 5 questions unanswered" [ref=f19e160] [cursor=pointer]:
+                  - /url: /dashboard/strategy
+                  - generic [ref=f19e161]: Strategy
+                  - generic [ref=f19e163]:
+                    - text: "5"
+                    - generic [ref=f19e164]: questions unanswered
+          - generic [ref=f19e165]:
+            - paragraph [ref=f19e166]: Your data
+            - list [ref=f19e167]:
+              - listitem [ref=f19e168]:
+                - link "Your work Projects and tasks" [ref=f19e169] [cursor=pointer]:
+                  - /url: /work
+                  - generic [ref=f19e170]:
+                    - generic [ref=f19e171]: Your work
+                    - generic [ref=f19e172]: Projects and tasks
+              - listitem [ref=f19e173]:
+                - link "Workspace setup" [ref=f19e174] [cursor=pointer]:
+                  - /url: /onboarding
+          - generic [ref=f19e177]:
+            - paragraph [ref=f19e178]: Settings
+            - list [ref=f19e179]:
+              - listitem [ref=f19e180]:
+                - link "Workspace" [ref=f19e181] [cursor=pointer]:
+                  - /url: /settings
+              - listitem [ref=f19e184]:
+                - link "Account" [ref=f19e185] [cursor=pointer]:
+                  - /url: /account
+      - main [ref=f19e36]:
+        - generic [ref=f19e188]:
+          - generic [ref=f19e189]:
+            - navigation "Breadcrumb" [ref=f19e190]:
+              - link "Today" [ref=f19e191] [cursor=pointer]:
+                - /url: /dashboard
+            - generic [ref=f19e195]:
+              - heading "AI Operations Director" [level=1] [ref=f19e196]
+              - paragraph [ref=f19e197]: The only system of record NEXUS owns. Everything here starts with your first project.
+          - complementary [ref=f19e198]:
+            - generic [ref=f19e199]:
+              - generic [ref=f19e200]: No composite yet
+              - generic [ref=f19e201]:
+                - strong [ref=f19e202]: "5"
+                - text: questions still unanswered here
+              - generic [ref=f19e203]:
+                - strong [ref=f19e204]: "4"
+                - text: capabilities produce a figure
+            - button "Why there is no single score for this department" [ref=f19e206] [cursor=pointer]
+          - generic [ref=f19e210]:
+            - tablist "Sections" [ref=f19e212]:
+              - tab "Overview3" [selected] [ref=f19e213] [cursor=pointer]
+              - tab "Dispatch board1" [ref=f19e215] [cursor=pointer]
+              - tab "Stock1" [ref=f19e216] [cursor=pointer]
+              - tab "Suppliers2" [ref=f19e217] [cursor=pointer]
+              - tab "Setup1" [ref=f19e218] [cursor=pointer]
+              - tab "Watchlist1" [ref=f19e219] [cursor=pointer]
+            - list [ref=f19e220]:
+              - listitem [ref=f19e221]:
+                - generic [ref=f19e222]:
+                  - generic [ref=f19e223]:
+                    - heading "Operations score and drivers" [level=3] [ref=f19e224]
+                    - paragraph [ref=f19e225]: The figures Operations is described by, each on its own
+                  - generic [ref=f19e226]: Live
+                - paragraph [ref=f19e227]: A figure with its delta, its sources, and the arithmetic behind it.
+                - paragraph [ref=f19e228]:
+                  - generic [ref=f19e229]: "6.1"
+                  - generic [ref=f19e230]: operations.score_drivers
+                  - generic [ref=f19e231]: metric
+              - listitem [ref=f19e232]:
+                - generic [ref=f19e233]:
+                  - generic [ref=f19e234]:
+                    - heading "Bottleneck analysis" [level=3] [ref=f19e235]
+                    - paragraph [ref=f19e236]: Where work consistently stalls
+                  - generic "Not built yet" [ref=f19e237]
+                - paragraph [ref=f19e239]: A named finding, carrying the inputs it was drawn from.
+                - paragraph [ref=f19e240]:
+                  - generic [ref=f19e241]: "6.6"
+                  - generic [ref=f19e242]: operations.bottleneck_diagnosis
+                  - generic [ref=f19e243]: panel
+              - listitem [ref=f19e244]:
+                - generic [ref=f19e245]:
+                  - generic [ref=f19e246]:
+                    - heading "On-time dispatch" [level=3] [ref=f19e247]
+                    - paragraph [ref=f19e248]: What went out on time against the promised lead time — and which did not
+                  - generic [ref=f19e249]: Live
+                - paragraph [ref=f19e250]:
+                  - generic [ref=f19e251]: —
+                  - generic [ref=f19e252]: Confirm on Your work that this is the whole list, and this becomes a percentage.
+                - paragraph [ref=f19e253]: 1 order has not gone out yet.
+                - paragraph [ref=f19e254]:
+                  - generic [ref=f19e255]: Dispatched on time.
+                  - text: Of the orders that actually went out, the share that left on or before the date you promised, allowing the grace you set. Orders still waiting are not in this figure at all — they are reported beside it, because dividing by work that has not happened would report a backlog as lateness.
+                - generic [ref=f19e256]:
+                  - paragraph [ref=f19e257]: Counted from what your workspace recorded, last updated 2026-09-17
+                  - paragraph [ref=f19e258]: 1 is recorded with no figure, so it is not in this share.
+                - button "+ why this number" [ref=f19e260] [cursor=pointer]
+                - paragraph [ref=f19e264]:
+                  - generic [ref=f19e265]: operations.on_time_dispatch
+                  - generic [ref=f19e266]: metric
+          - button "Also in this director’s remit — 8 more capabilities" [ref=f19e269] [cursor=pointer]
+          - complementary [ref=f19e273]:
+            - paragraph [ref=f19e274]: Ask the AI Operations Director
+            - list [ref=f19e275]:
+              - listitem [ref=f19e276]: “Why are we shipping late?”
+              - listitem [ref=f19e277]: “What is about to run out?”
+              - listitem [ref=f19e278]: “Which supplier is causing problems?”
+              - listitem [ref=f19e279]: “What is on the floor today?”
+            - paragraph [ref=f19e280]: Not available yet. When it is, every answer will cite what it was drawn from, and a question outside this department will be refused with the reason rather than answered thinly.
+  - region "Notifications"
+  - alert [ref=f19e110]

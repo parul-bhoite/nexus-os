@@ -1,0 +1,32 @@
+- generic [active] [ref=f21e1]:
+  - link "Skip to content" [ref=f21e2] [cursor=pointer]:
+    - /url: "#main"
+  - generic [ref=f21e3]:
+    - banner [ref=f21e4]:
+      - generic [ref=f21e5]:
+        - link "NEXUS OS dashboard" [ref=f21e6] [cursor=pointer]:
+          - /url: /dashboard
+          - generic [ref=f21e7]: NEXUSOS
+        - button "Account" [ref=f21e16] [cursor=pointer]:
+          - generic [ref=f21e17]: ··
+    - generic [ref=f21e18]:
+      - complementary "Primary" [ref=f21e19]
+      - main [ref=f21e36]:
+        - generic [ref=f21e39]:
+          - heading "Settings" [level=1] [ref=f21e40]
+          - paragraph [ref=f21e41]: Proving your domain, the people in your company, and the assumptions every figure on every dashboard is cut against.
+        - generic [ref=f21e43]:
+          - tablist "Settings sections" [ref=f21e45]:
+            - tab "Company" [selected] [ref=f21e46] [cursor=pointer]
+            - tab "You" [ref=f21e48] [cursor=pointer]
+            - tab "Reporting" [ref=f21e49] [cursor=pointer]
+            - tab "Departments" [ref=f21e50] [cursor=pointer]
+            - tab "Data and tools" [ref=f21e51] [cursor=pointer]
+            - tab "Activity" [ref=f21e52] [cursor=pointer]
+          - generic [ref=f21e53]:
+            - status [ref=f21e54]:
+              - paragraph [ref=f21e55]: Loading your companies…
+            - status [ref=f21e56]:
+              - paragraph [ref=f21e57]: Loading your company…
+  - region "Notifications"
+  - alert [ref=f21e58]

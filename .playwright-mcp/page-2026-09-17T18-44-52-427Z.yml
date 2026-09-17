@@ -1,0 +1,274 @@
+- generic [active] [ref=f4e1]:
+  - link "Skip to content" [ref=f4e2] [cursor=pointer]:
+    - /url: "#main"
+  - generic [ref=f4e3]:
+    - banner [ref=f4e4]:
+      - generic [ref=f4e5]:
+        - link "NEXUS OS dashboard" [ref=f4e6] [cursor=pointer]:
+          - /url: /dashboard
+          - generic [ref=f4e7]: NEXUSOS
+        - link "Account" [ref=f4e14] [cursor=pointer]:
+          - /url: /account
+    - generic [ref=f4e15]:
+      - complementary "Primary" [ref=f4e16]:
+        - navigation "Sections" [ref=f4e18]:
+          - list [ref=f4e20]:
+            - listitem [ref=f4e21]:
+              - link "Today What needs you" [ref=f4e22] [cursor=pointer]:
+                - /url: /dashboard
+                - text: Today
+                - generic [ref=f4e23]: What needs you
+          - generic [ref=f4e162]:
+            - paragraph [ref=f4e163]: Directors
+            - list [ref=f4e164]:
+              - listitem [ref=f4e165]:
+                - link "Chief of Staff" [ref=f4e166] [cursor=pointer]:
+                  - /url: /dashboard/executive
+              - listitem [ref=f4e167]:
+                - link "Marketing" [ref=f4e168] [cursor=pointer]:
+                  - /url: /dashboard/marketing
+              - listitem [ref=f4e169]:
+                - link "Sales" [ref=f4e170] [cursor=pointer]:
+                  - /url: /dashboard/sales
+              - listitem [ref=f4e171]:
+                - link "Finance" [ref=f4e172] [cursor=pointer]:
+                  - /url: /dashboard/finance
+              - listitem [ref=f4e173]:
+                - link "Operations" [ref=f4e174] [cursor=pointer]:
+                  - /url: /dashboard/operations
+              - listitem [ref=f4e175]:
+                - link "People" [ref=f4e176] [cursor=pointer]:
+                  - /url: /dashboard/hr
+              - listitem [ref=f4e177]:
+                - link "Strategy" [ref=f4e178] [cursor=pointer]:
+                  - /url: /dashboard/strategy
+          - generic [ref=f4e24]:
+            - paragraph [ref=f4e25]: Your data
+            - list [ref=f4e26]:
+              - listitem [ref=f4e27]:
+                - link "Your work Projects and tasks" [ref=f4e28] [cursor=pointer]:
+                  - /url: /work
+                  - text: Your work
+                  - generic [ref=f4e29]: Projects and tasks
+              - listitem [ref=f4e30]:
+                - link "Workspace setup" [ref=f4e31] [cursor=pointer]:
+                  - /url: /onboarding
+          - generic [ref=f4e32]:
+            - paragraph [ref=f4e33]: Settings
+            - list [ref=f4e34]:
+              - listitem [ref=f4e35]:
+                - link "Workspace" [ref=f4e36] [cursor=pointer]:
+                  - /url: /settings
+              - listitem [ref=f4e37]:
+                - link "Account" [ref=f4e38] [cursor=pointer]:
+                  - /url: /account
+      - main [ref=f4e39]:
+        - heading "Your work" [level=1] [ref=f4e40]
+        - paragraph [ref=f4e41]: Projects and tasks you record here are counted on the Operations tiles. NEXUS counts what is written down — it has no way of knowing what is not, so the figures say “recorded” rather than claiming to describe the whole company.
+        - generic [ref=f4e42]:
+          - generic [ref=f4e43]:
+            - heading "Projects" [level=2] [ref=f4e44]
+            - generic [ref=f4e45]:
+              - generic [ref=f4e46]:
+                - generic [ref=f4e47]: Name
+                - textbox "Name" [ref=f4e48]
+              - generic [ref=f4e49]:
+                - generic [ref=f4e50]: Status
+                - combobox "Status" [ref=f4e51]:
+                  - option "planned"
+                  - option "active" [selected]
+                  - option "blocked"
+                  - option "done"
+              - generic [ref=f4e52]:
+                - generic [ref=f4e53]: Client (optional)
+                - textbox "Client (optional)" [ref=f4e54]
+              - generic [ref=f4e55]:
+                - generic [ref=f4e56]: Due (optional)
+                - textbox "Due (optional)" [ref=f4e57]
+                - paragraph [ref=f4e58]: Left blank, it is never counted as overdue.
+              - button "Record project" [ref=f4e60] [cursor=pointer]
+            - generic [ref=f4e179]:
+              - paragraph [ref=f4e180]: Is this all of your projects? Until you say, NEXUS counts what is written down and will not work out any rate from it.
+              - button "Confirm this is all of your projects" [ref=f4e181] [cursor=pointer]: Yes — this is all of my projects
+            - list [ref=f4e182]:
+              - listitem [ref=f4e183]:
+                - generic [ref=f4e184]: P
+                - generic [ref=f4e185]: active
+                - generic [ref=f4e186]: no date
+                - button "Archive" [ref=f4e187] [cursor=pointer]
+          - generic [ref=f4e61]:
+            - heading "Tasks" [level=2] [ref=f4e62]
+            - generic [ref=f4e63]:
+              - generic [ref=f4e64]:
+                - generic [ref=f4e65]: Title
+                - textbox "Title" [ref=f4e66]
+              - generic [ref=f4e67]:
+                - generic [ref=f4e68]: Status
+                - combobox "Status" [ref=f4e69]:
+                  - option "todo" [selected]
+                  - option "doing"
+                  - option "done"
+              - generic [ref=f4e70]:
+                - generic [ref=f4e71]: Project (optional)
+                - combobox "Project (optional)" [ref=f4e72]:
+                  - option "No project" [selected]
+                  - option "P"
+              - generic [ref=f4e73]:
+                - generic [ref=f4e74]: Due (optional)
+                - textbox "Due (optional)" [ref=f4e75]
+              - button "Record task" [ref=f4e77] [cursor=pointer]
+            - generic [ref=f4e188]:
+              - paragraph [ref=f4e189]: Is this all of your tasks? Until you say, NEXUS counts what is written down and will not work out any rate from it.
+              - button "Confirm this is all of your tasks" [ref=f4e190] [cursor=pointer]: Yes — this is all of my tasks
+            - list [ref=f4e191]:
+              - listitem [ref=f4e192]:
+                - generic [ref=f4e193]: T
+                - generic [ref=f4e194]: todo
+                - generic [ref=f4e195]: 2026-09-15
+                - button "Archive" [ref=f4e196] [cursor=pointer]
+          - generic [ref=f4e78]:
+            - heading "Milestones" [level=2] [ref=f4e79]
+            - generic [ref=f4e197]:
+              - generic [ref=f4e198]:
+                - generic [ref=f4e199]: Title
+                - textbox "Title" [ref=f4e200]
+              - generic [ref=f4e201]:
+                - generic [ref=f4e202]: Project
+                - combobox "Project" [ref=f4e203]:
+                  - option "Choose a project" [selected]
+                  - option "P"
+              - generic [ref=f4e204]:
+                - generic [ref=f4e205]: Planned date
+                - textbox "Planned date" [ref=f4e206]
+                - paragraph [ref=f4e207]: A timeline cannot draw a milestone with no date.
+              - button "Record milestone" [ref=f4e209] [cursor=pointer]
+            - generic [ref=f4e210]:
+              - paragraph [ref=f4e211]: Is this all of your milestones? Until you say, NEXUS counts what is written down and will not work out any rate from it.
+              - button "Confirm this is all of your milestones" [ref=f4e212] [cursor=pointer]: Yes — this is all of my milestones
+            - list [ref=f4e213]:
+              - listitem [ref=f4e214]:
+                - generic [ref=f4e215]: M
+                - generic [ref=f4e216]: planned
+                - generic [ref=f4e217]: 2026-09-14
+                - button "Archive" [ref=f4e218] [cursor=pointer]
+          - generic [ref=f4e81]:
+            - heading "Issues and snags" [level=2] [ref=f4e82]
+            - generic [ref=f4e83]:
+              - generic [ref=f4e84]:
+                - generic [ref=f4e85]: What is the issue?
+                - textbox "What is the issue?" [ref=f4e86]
+              - generic [ref=f4e87]:
+                - generic [ref=f4e88]: Severity
+                - combobox "Severity" [ref=f4e89]:
+                  - option "high"
+                  - option "medium" [selected]
+                  - option "low"
+              - generic [ref=f4e90]:
+                - generic [ref=f4e91]: Project (optional)
+                - combobox "Project (optional)" [ref=f4e92]:
+                  - option "No project" [selected]
+                  - option "P"
+              - generic [ref=f4e93]:
+                - generic [ref=f4e94]: Due (optional)
+                - textbox "Due (optional)" [ref=f4e95]
+              - button "Record issue" [ref=f4e97] [cursor=pointer]
+            - generic [ref=f4e219]:
+              - paragraph [ref=f4e220]: Is this all of your issues? Until you say, NEXUS counts what is written down and will not work out any rate from it.
+              - button "Confirm this is all of your issues" [ref=f4e221] [cursor=pointer]: Yes — this is all of my issues
+            - list [ref=f4e222]:
+              - listitem [ref=f4e223]:
+                - generic [ref=f4e224]: I
+                - generic [ref=f4e225]: high
+                - generic [ref=f4e226]: open
+                - button "Archive" [ref=f4e227] [cursor=pointer]
+          - generic [ref=f4e98]:
+            - heading "Orders and dispatch" [level=2] [ref=f4e99]
+            - generic [ref=f4e100]:
+              - generic [ref=f4e101]:
+                - generic [ref=f4e102]: When is an order late?
+                - paragraph [ref=f4e103]: Until you say, NEXUS counts your orders but will not work out an on-time percentage.
+              - generic [ref=f4e104]:
+                - generic [ref=f4e105]: Days of grace
+                - spinbutton "When is an order late? Days of grace" [ref=f4e106]
+              - button "Save rule" [ref=f4e107] [cursor=pointer]
+            - generic [ref=f4e108]:
+              - generic [ref=f4e109]:
+                - generic [ref=f4e110]: Order reference
+                - textbox "Order reference" [ref=f4e111]
+              - generic [ref=f4e112]:
+                - generic [ref=f4e113]: Promised for
+                - textbox "Promised for" [ref=f4e114]
+              - generic [ref=f4e115]:
+                - generic [ref=f4e116]: Sent on (optional)
+                - textbox "Sent on (optional)" [ref=f4e117]
+                - paragraph [ref=f4e118]: Leave blank until it goes out. Orders still waiting are not counted in the on-time figure.
+              - button "Record order" [ref=f4e120] [cursor=pointer]
+            - generic [ref=f4e228]:
+              - paragraph [ref=f4e229]: Is this all of your orders? Until you say, NEXUS counts what is written down and will not work out any rate from it.
+              - button "Confirm this is all of your orders" [ref=f4e230] [cursor=pointer]: Yes — this is all of my orders
+            - list [ref=f4e231]:
+              - listitem [ref=f4e232]:
+                - generic [ref=f4e233]: D
+                - generic [ref=f4e234]: promised 2026-09-17
+                - generic [ref=f4e235]: not sent
+                - button "Archive" [ref=f4e236] [cursor=pointer]
+          - generic [ref=f4e121]:
+            - heading "Stock" [level=2] [ref=f4e122]
+            - paragraph [ref=f4e123]: The minimum is yours. NEXUS says which lines are under it and by how much, and never what to order — that needs lead times and consumption nobody has given it.
+            - generic [ref=f4e124]:
+              - generic [ref=f4e125]:
+                - generic [ref=f4e126]: Item
+                - textbox "Item" [ref=f4e127]
+              - generic [ref=f4e128]:
+                - generic [ref=f4e129]: On hand
+                - spinbutton "On hand" [ref=f4e130]
+              - generic [ref=f4e131]:
+                - generic [ref=f4e132]: Minimum
+                - spinbutton "Minimum" [ref=f4e133]
+              - button "Record stock line" [ref=f4e135] [cursor=pointer]
+            - generic [ref=f4e237]:
+              - paragraph [ref=f4e238]: Is this all of your stock lines? Until you say, NEXUS counts what is written down and will not work out any rate from it.
+              - button "Confirm this is all of your stock lines" [ref=f4e239] [cursor=pointer]: Yes — this is all of my stock lines
+            - list [ref=f4e240]:
+              - listitem [ref=f4e241]:
+                - generic [ref=f4e242]: S
+                - generic [ref=f4e243]: 1 on hand, minimum 9
+                - generic [ref=f4e244]: short 8
+                - button "Archive" [ref=f4e245] [cursor=pointer]
+          - generic [ref=f4e136]:
+            - heading "Suppliers" [level=2] [ref=f4e137]
+            - paragraph [ref=f4e138]: Enter what you spend with each one and NEXUS works out how exposed you are to the largest. Leave the amount blank if you do not have it — that supplier is counted, and left out of the share.
+            - generic [ref=f4e139]:
+              - generic [ref=f4e140]:
+                - generic [ref=f4e141]: Supplier
+                - textbox "Supplier" [ref=f4e142]
+              - generic [ref=f4e143]:
+                - generic [ref=f4e144]: Spend (optional)
+                - spinbutton "Spend (optional)" [ref=f4e145]
+              - button "Record supplier" [ref=f4e147] [cursor=pointer]
+            - generic [ref=f4e246]:
+              - paragraph [ref=f4e247]: Is this all of your suppliers? Until you say, NEXUS counts what is written down and will not work out any rate from it.
+              - button "Confirm this is all of your suppliers" [ref=f4e248] [cursor=pointer]: Yes — this is all of my suppliers
+            - list [ref=f4e249]:
+              - listitem [ref=f4e250]:
+                - generic [ref=f4e251]: V
+                - generic [ref=f4e252]: "1"
+                - button "Archive" [ref=f4e253] [cursor=pointer]
+          - generic [ref=f4e148]:
+            - heading "Deals" [level=2] [ref=f4e149]
+            - paragraph [ref=f4e150]: For tracking deals without a CRM. They are counted separately from anything a connected CRM reports, and the tile says they are your own records.
+            - generic [ref=f4e151]:
+              - generic [ref=f4e152]:
+                - generic [ref=f4e153]: Deal
+                - textbox "Deal" [ref=f4e154]
+              - generic [ref=f4e155]:
+                - generic [ref=f4e156]: Amount (optional)
+                - spinbutton "Amount (optional)" [ref=f4e157]
+                - paragraph [ref=f4e158]: Left blank, it is counted and not added to the total.
+              - button "Record deal" [ref=f4e160] [cursor=pointer]
+            - list [ref=f4e254]:
+              - listitem [ref=f4e255]:
+                - generic [ref=f4e256]: Deal
+                - generic [ref=f4e257]: OMR 10
+                - button "Remove" [ref=f4e258] [cursor=pointer]
+  - alert [ref=f4e161]

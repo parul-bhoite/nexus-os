@@ -129,7 +129,7 @@ function Decide() {
         className="rounded-2xl border border-bone-200 bg-white p-5 shadow-paper"
       >
         <div className="flex items-center justify-between">
-          <span className="rounded-full bg-gold-200 px-2.5 py-1 font-mono text-2xs uppercase tracking-[0.14em] text-gold-600">
+          <span className="rounded-full bg-gold-200 px-2.5 py-1 font-mono text-2xs uppercase tracking-[0.14em] text-gold-700">
             Decision required
           </span>
           <span className="font-mono text-2xs text-ink-400">Risk: low</span>

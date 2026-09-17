@@ -1,0 +1,319 @@
+- generic [active] [ref=f5e1]:
+  - link "Skip to content" [ref=f5e2] [cursor=pointer]:
+    - /url: "#main"
+  - generic [ref=f5e3]:
+    - banner [ref=f5e4]:
+      - generic [ref=f5e5]:
+        - link "NEXUS OS dashboard" [ref=f5e6] [cursor=pointer]:
+          - /url: /dashboard
+          - generic [ref=f5e7]: NEXUSOS
+        - link "Account" [ref=f5e14] [cursor=pointer]:
+          - /url: /account
+    - generic [ref=f5e15]:
+      - complementary "Primary" [ref=f5e16]:
+        - navigation "Sections" [ref=f5e18]:
+          - list [ref=f5e20]:
+            - listitem [ref=f5e21]:
+              - link "Today What needs you" [ref=f5e22] [cursor=pointer]:
+                - /url: /dashboard
+                - text: Today
+                - generic [ref=f5e23]: What needs you
+          - generic [ref=f5e67]:
+            - paragraph [ref=f5e68]: Directors
+            - list [ref=f5e69]:
+              - listitem [ref=f5e70]:
+                - link "Chief of Staff" [ref=f5e71] [cursor=pointer]:
+                  - /url: /dashboard/executive
+              - listitem [ref=f5e72]:
+                - link "Marketing" [ref=f5e73] [cursor=pointer]:
+                  - /url: /dashboard/marketing
+              - listitem [ref=f5e74]:
+                - link "Sales" [ref=f5e75] [cursor=pointer]:
+                  - /url: /dashboard/sales
+              - listitem [ref=f5e76]:
+                - link "Finance" [ref=f5e77] [cursor=pointer]:
+                  - /url: /dashboard/finance
+              - listitem [ref=f5e78]:
+                - link "Operations" [ref=f5e79] [cursor=pointer]:
+                  - /url: /dashboard/operations
+              - listitem [ref=f5e80]:
+                - link "People" [ref=f5e81] [cursor=pointer]:
+                  - /url: /dashboard/hr
+              - listitem [ref=f5e82]:
+                - link "Strategy" [ref=f5e83] [cursor=pointer]:
+                  - /url: /dashboard/strategy
+          - generic [ref=f5e24]:
+            - paragraph [ref=f5e25]: Your data
+            - list [ref=f5e26]:
+              - listitem [ref=f5e27]:
+                - link "Your work Projects and tasks" [ref=f5e28] [cursor=pointer]:
+                  - /url: /work
+                  - text: Your work
+                  - generic [ref=f5e29]: Projects and tasks
+              - listitem [ref=f5e30]:
+                - link "Workspace setup" [ref=f5e31] [cursor=pointer]:
+                  - /url: /onboarding
+          - generic [ref=f5e32]:
+            - paragraph [ref=f5e33]: Settings
+            - list [ref=f5e34]:
+              - listitem [ref=f5e35]:
+                - link "Workspace" [ref=f5e36] [cursor=pointer]:
+                  - /url: /settings
+              - listitem [ref=f5e37]:
+                - link "Account" [ref=f5e38] [cursor=pointer]:
+                  - /url: /account
+      - main [ref=f5e39]:
+        - heading "Settings" [level=1] [ref=f5e40]
+        - paragraph [ref=f5e41]: Proving your domain, the people in your company, and the assumptions every figure on every dashboard is cut against. The first two reach beyond your own account, which is why the domain check gates them; the third decides what your numbers mean.
+        - generic [ref=f5e43]:
+          - generic [ref=f5e84]:
+            - generic [ref=f5e85]:
+              - heading "Your company" [level=2] [ref=f5e86]
+              - paragraph [ref=f5e87]: Everything on this screen belongs to it.
+            - list [ref=f5e88]:
+              - listitem [ref=f5e89]:
+                - generic [ref=f5e90]:
+                  - text: Perf 1789665795
+                  - generic [ref=f5e91]: You are owner here · active
+            - paragraph [ref=f5e92]: One login can hold several companies, each with its own Brain, tools and dashboards. An invitation names one of them — holding a second is not something a role grants.
+          - status [ref=f5e46]:
+            - paragraph [ref=f5e47]: Loading your company…
+            - paragraph [ref=f5e93]: Taking longer than usual. Nothing has failed; it is worth waiting rather than retrying.
+          - generic [ref=f5e94]:
+            - generic [ref=f5e95]:
+              - heading "How NEXUS talks to you" [level=2] [ref=f5e96]
+              - paragraph [ref=f5e97]:
+                - text: Yours alone, and they change how much you are told —
+                - strong [ref=f5e98]: never what you are allowed to know
+                - text: . None of these can widen what you see, which is why they are the only settings here that do not need an owner.
+            - generic [ref=f5e99]:
+              - generic [ref=f5e100]:
+                - text: Language
+                - combobox "Language" [ref=f5e101]:
+                  - option "English" [selected]
+                  - option "العربية — Arabic"
+              - generic [ref=f5e102]:
+                - text: Your timezone
+                - combobox "Your timezone" [ref=f5e103]:
+                  - option "Asia/Muscat" [selected]
+                  - option "Asia/Dubai"
+                  - option "Asia/Riyadh"
+                  - option "Asia/Qatar"
+                  - option "Asia/Kuwait"
+                  - option "UTC"
+                - paragraph [ref=f5e104]:
+                  - text: Where you read from. Where reports are
+                  - emphasis [ref=f5e105]: cut
+                  - text: is the company’s, under Reporting.
+              - generic [ref=f5e106]:
+                - text: Detail level
+                - combobox "Detail level" [ref=f5e107]:
+                  - option "Brief — the answer, then stop"
+                  - option "Standard" [selected]
+                  - option "Thorough — show me the working"
+              - generic [ref=f5e108]:
+                - text: Opens on
+                - combobox "Opens on" [ref=f5e109]:
+                  - option "Wherever my role lands me" [selected]
+                  - option "Chief of Staff"
+                  - option "Marketing"
+                  - option "Sales"
+                  - option "Finance"
+                  - option "Operations"
+                  - option "People"
+                  - option "Strategy"
+                - paragraph [ref=f5e110]: Only a department you hold. Your role decides what you can reach.
+            - button "Save preferences" [ref=f5e112] [cursor=pointer]
+          - generic [ref=f5e114]:
+            - generic [ref=f5e115]:
+              - heading "Reporting" [level=2] [ref=f5e116]
+              - paragraph [ref=f5e117]: Every figure on every dashboard is cut against these. Each tile states its own window in its working, and this is what that window is measured from — so a change here restates numbers rather than restyling them.
+            - generic [ref=f5e118]:
+              - generic [ref=f5e119]:
+                - generic [ref=f5e120]:
+                  - text: You report in
+                  - combobox "You report in" [ref=f5e121]:
+                    - option "OMR — Omani rial" [selected]
+                    - option "AED — UAE dirham"
+                    - option "SAR — Saudi riyal"
+                    - option "QAR — Qatari riyal"
+                    - option "KWD — Kuwaiti dinar"
+                    - option "BHD — Bahraini dinar"
+                    - option "USD — US dollar"
+                    - option "EUR — Euro"
+                  - paragraph [ref=f5e122]:
+                    - text: The label on every figure in the product. It changes what a number means, not what it is — and it was asked for nowhere until now, so every workspace has been assuming Omani rials.
+                    - generic [ref=f5e123]: Relabels every figure in the product. Nothing is recomputed.
+                - generic [ref=f5e124]:
+                  - text: Country
+                  - combobox "Country" [ref=f5e125]:
+                    - option "Oman" [selected]
+                    - option "United Arab Emirates"
+                    - option "Saudi Arabia"
+                    - option "Qatar"
+                    - option "Kuwait"
+                    - option "Bahrain"
+                  - paragraph [ref=f5e126]: Where the company is. Registration stopped asking for it.
+              - generic [ref=f5e127]:
+                - text: Financial year starts
+                - combobox "Financial year starts" [ref=f5e128]:
+                  - option "January" [selected]
+                  - option "February"
+                  - option "March"
+                  - option "April"
+                  - option "May"
+                  - option "June"
+                  - option "July"
+                  - option "August"
+                  - option "September"
+                  - option "October"
+                  - option "November"
+                  - option "December"
+                - paragraph [ref=f5e129]:
+                  - text: Every year-to-date figure and every period comparison. Changing it re-derives this year's figures and marks the previous derivation superseded rather than editing it.
+                  - generic [ref=f5e130]: Moves 4 tiles across Chief of Staff.
+              - generic [ref=f5e131]:
+                - text: Reporting week starts
+                - combobox "Reporting week starts" [ref=f5e132]:
+                  - option "Sunday" [selected]
+                  - option "Monday"
+                  - option "Tuesday"
+                  - option "Wednesday"
+                  - option "Thursday"
+                  - option "Friday"
+                  - option "Saturday"
+                - paragraph [ref=f5e133]:
+                  - text: Where every weekly figure is cut. A week that starts on the wrong day splits a working week across two rows.
+                  - generic [ref=f5e134]: Moves 5 tiles across Chief of Staff.
+              - generic [ref=f5e135]:
+                - text: Reports are cut in
+                - combobox "Reports are cut in" [ref=f5e136]:
+                  - option "Asia/Muscat" [selected]
+                  - option "Asia/Dubai"
+                  - option "Asia/Riyadh"
+                  - option "Asia/Qatar"
+                  - option "Asia/Kuwait"
+                  - option "UTC"
+                - paragraph [ref=f5e137]:
+                  - text: Where a day ends. An order dispatched at eleven at night belongs to one day or the next depending on this, and nothing else decides it.
+                  - generic [ref=f5e138]: Moves 2 tiles across Chief of Staff.
+              - generic [ref=f5e139]:
+                - generic [ref=f5e140]:
+                  - text: Large figures shown as
+                  - combobox "Large figures shown as" [ref=f5e141]:
+                    - option "In full — 184,600"
+                    - option "Thousands — 184.6K" [selected]
+                    - option "Millions — 0.2M"
+                - generic [ref=f5e142]:
+                  - text: Decimal places
+                  - combobox "Decimal places" [ref=f5e143]:
+                    - option "0"
+                    - option "1" [selected]
+                    - option "2"
+              - paragraph [ref=f5e144]:
+                - text: "How a figure is written, never what it is. `184.6K` and `184,600` are the same number."
+                - generic [ref=f5e145]: Changes how figures are written, not what they are.
+            - button "Save reporting settings" [ref=f5e147] [cursor=pointer]
+            - paragraph [ref=f5e149]: Never changed since you registered — these are the defaults for a business in Oman.
+          - generic [ref=f5e150]:
+            - generic [ref=f5e151]:
+              - heading "Departments" [level=2] [ref=f5e152]
+              - paragraph [ref=f5e153]: Each department you run gets a director and a dashboard. The Chief of Staff reads the others and is always there, which is why it is not on this list.
+            - list [ref=f5e154]:
+              - listitem [ref=f5e155]:
+                - generic [ref=f5e156] [cursor=pointer]:
+                  - checkbox "Finance 12 capabilities · 4 questions unanswered" [ref=f5e157]
+                  - generic [ref=f5e158]:
+                    - text: Finance
+                    - generic [ref=f5e159]: 12 capabilities · 4 questions unanswered
+              - listitem [ref=f5e160]:
+                - generic [ref=f5e161] [cursor=pointer]:
+                  - checkbox "People 12 capabilities · 5 questions unanswered" [ref=f5e162]
+                  - generic [ref=f5e163]:
+                    - text: People
+                    - generic [ref=f5e164]: 12 capabilities · 5 questions unanswered
+              - listitem [ref=f5e165]:
+                - generic [ref=f5e166] [cursor=pointer]:
+                  - checkbox "Marketing 14 capabilities · 5 questions unanswered" [ref=f5e167]
+                  - generic [ref=f5e168]:
+                    - text: Marketing
+                    - generic [ref=f5e169]: 14 capabilities · 5 questions unanswered
+              - listitem [ref=f5e170]:
+                - generic [ref=f5e171] [cursor=pointer]:
+                  - checkbox "Operations 17 capabilities · 5 questions unanswered" [ref=f5e172]
+                  - generic [ref=f5e173]:
+                    - text: Operations
+                    - generic [ref=f5e174]: 17 capabilities · 5 questions unanswered
+              - listitem [ref=f5e175]:
+                - generic [ref=f5e176] [cursor=pointer]:
+                  - checkbox "Sales 15 capabilities · 5 questions unanswered" [ref=f5e177]
+                  - generic [ref=f5e178]:
+                    - text: Sales
+                    - generic [ref=f5e179]: 15 capabilities · 5 questions unanswered
+              - listitem [ref=f5e180]:
+                - generic [ref=f5e181] [cursor=pointer]:
+                  - checkbox "Strategy 10 capabilities · 5 questions unanswered" [ref=f5e182]
+                  - generic [ref=f5e183]:
+                    - text: Strategy
+                    - generic [ref=f5e184]: 10 capabilities · 5 questions unanswered
+            - generic [ref=f5e185]:
+              - button "Save departments" [disabled]
+              - generic [ref=f5e186]: Keep at least one. With none chosen there is nothing for the Chief of Staff to read.
+          - generic [ref=f5e187]:
+            - heading "Company Brain" [level=2] [ref=f5e188]
+            - paragraph [ref=f5e189]: "Not assembled: Nothing has been answered yet. The brain is built from your own answers, so it stays empty until onboarding has something in it. Nothing is filled in with a guess in the meantime."
+          - region [ref=f5e56]:
+            - heading "Connected tools" [level=2] [ref=f5e57]
+            - paragraph [ref=f5e58]: What NEXUS reads from. Connecting one grants a read of the whole company’s data in that system, which is why it is an Owner or Executive decision.
+            - list [ref=f5e190]:
+              - listitem [ref=f5e191]:
+                - generic [ref=f5e192]:
+                  - text: HubSpot
+                  - generic [ref=f5e193]: Not available on this deployment — no credentials are configured for it.
+          - generic [ref=f5e59]:
+            - generic [ref=f5e60]:
+              - heading "Audit log" [level=2] [ref=f5e61]
+              - paragraph [ref=f5e62]:
+                - text: What happened in this workspace, newest first.
+                - strong [ref=f5e63]: Refusals are recorded as well as successes
+                - text: — a log that records only what worked cannot tell you that somebody probed.
+            - table [ref=f5e195]:
+              - rowgroup [ref=f5e196]:
+                - row [ref=f5e197]:
+                  - columnheader "When" [ref=f5e198]
+                  - columnheader "What" [ref=f5e199]
+                  - columnheader "Object" [ref=f5e200]
+                  - columnheader "Why" [ref=f5e201]
+              - rowgroup [ref=f5e202]:
+                - row [ref=f5e203]:
+                  - cell "9/18/2026, 12:08:03 AM" [ref=f5e204]
+                  - cell "login" [ref=f5e205]
+                  - cell [ref=f5e206]: —
+                  - cell [ref=f5e207]: —
+                - row [ref=f5e208]:
+                  - cell "9/17/2026, 11:02:51 PM" [ref=f5e209]
+                  - cell "login" [ref=f5e210]
+                  - cell [ref=f5e211]: —
+                  - cell [ref=f5e212]: —
+                - row [ref=f5e213]:
+                  - cell "9/17/2026, 10:56:48 PM" [ref=f5e214]
+                  - cell "login" [ref=f5e215]
+                  - cell [ref=f5e216]: —
+                  - cell [ref=f5e217]: —
+                - row [ref=f5e218]:
+                  - cell "9/17/2026, 10:55:19 PM" [ref=f5e219]
+                  - cell "login" [ref=f5e220]
+                  - cell [ref=f5e221]: —
+                  - cell [ref=f5e222]: —
+                - row [ref=f5e223]:
+                  - cell "9/17/2026, 10:53:39 PM" [ref=f5e224]
+                  - cell "login" [ref=f5e225]
+                  - cell [ref=f5e226]: —
+                  - cell [ref=f5e227]: —
+                - row [ref=f5e228]:
+                  - cell "9/17/2026, 10:53:31 PM" [ref=f5e229]
+                  - cell "workspace created" [ref=f5e230]
+                  - cell "workspace:4539f972-2bae-4543-8" [ref=f5e231]
+                  - cell "registered perf-1789665795.om, unverified" [ref=f5e233]
+            - paragraph [ref=f5e234]: The fifty most recent. Who did each one is stored and not shown here yet — the log holds an account id, and turning that into a name needs a join this endpoint does not make.
+  - alert [ref=f5e66]

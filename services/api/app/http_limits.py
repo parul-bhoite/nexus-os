@@ -90,6 +90,30 @@ allowance for no reason.
 """
 
 
+def _readable(limit: int) -> str:
+    """The limit in the unit a person would use for a number that size.
+
+    **Neither unit works for both endpoints this middleware guards**, which is
+    how it has been wrong twice. It said `{limit // 1024} KB`, rendering the
+    25 MB document cap as "26112 KB" — a number nobody recognises as the limit
+    they were told about. Changing it to megabytes fixed that and broke the
+    other one, rendering the ~200 KB JSON ceiling as "0.2 MB", which is worse
+    than what it replaced.
+
+    So the unit follows the magnitude, as it would if a person were writing the
+    sentence. One decimal on megabytes so a 25.5 MB cap does not round to the
+    25 MB a founder just tried and had refused; none on kilobytes, where the
+    fraction is noise.
+
+    This is the "Upload failed" class of message the module docstring rules out,
+    met twice from opposite directions: a refusal has to name a number the
+    reader can act on.
+    """
+    if limit >= 1024 * 1024:
+        return f"{limit / 1024 / 1024:.1f} MB"
+    return f"{limit // 1024} KB"
+
+
 class BodySizeLimit:
     """Refuse a request body over the ceiling for its route."""
 
@@ -190,16 +214,8 @@ class BodySizeLimit:
             {
                 "detail": {
                     "error": "request_too_large",
-                    # **Megabytes, because a person reads this.** It said
-                    # `{limit // 1024} KB`, which renders a 25 MB cap as
-                    # "26112 KB" — a number nobody recognises as the limit they
-                    # were told about, and the "Upload failed" class of message
-                    # this module's own docstring exists to rule out. One
-                    # decimal so 25.5 MB does not round to the 25 MB a founder
-                    # just tried and had refused.
                     "message": (
-                        f"That request body is over the {limit / 1024 / 1024:.1f} MB "
-                        "limit for this endpoint."
+                        f"That request body is over the {_readable(limit)} limit for this endpoint."
                     ),
                 }
             }

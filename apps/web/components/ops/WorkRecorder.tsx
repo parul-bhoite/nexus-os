@@ -1,6 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Button } from '@/components/ui/Button'
+import { Tabs } from '@/components/ui/Tabs'
 import {
   ISSUE_STATUSES,
   MILESTONE_STATUSES,
@@ -51,9 +53,21 @@ import {
 
 type Feedback = { kind: 'error' | 'done'; text: string } | null
 
-const FIELD =
-  'w-full rounded-lg border border-ink-200 px-3 py-2 text-sm text-ink-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-steel-500'
-const LABEL = 'block text-sm font-medium text-ink-700'
+/**
+ * The page's controls, in two constants.
+ *
+ * Every input, select and date field here reads `FIELD` and every label reads
+ * `LABEL`, which is why the audit's finding about this page — that its controls
+ * were the browser's defaults beside a product with a 14px radius and a warm
+ * border — is fixable in two lines rather than twenty-five call sites.
+ *
+ * `.control` and `.field-label` are the same classes the rest of the product's
+ * forms use, so `/work` and `/settings` stopped being two conventions by
+ * pointing at one. `.control` handles the native select's arrow and the date
+ * picker's indicator; see `globals.css`.
+ */
+const FIELD = 'control'
+const LABEL = 'field-label'
 
 function messageOf(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback
@@ -88,36 +102,70 @@ function Completeness({
   onConfirm: () => void
 }) {
   return (
-    <div className="max-w-2xl rounded-xl border border-ink-100 bg-bone-50 px-4 py-3">
+    <div className="flex max-w-2xl flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-data border border-ink-100 bg-bone-50 px-4 py-2.5">
       {confirmed ? (
-        <p className="text-sm text-ink-600">
+        <p className="text-meta text-ink-500">
           You confirmed this is all of your {noun}, as of {confirmed.complete_as_of}.
         </p>
       ) : (
-        <p className="text-sm text-ink-700">
+        <p className="max-w-read text-meta text-ink-600">
           Is this all of your {noun}? Until you say, NEXUS counts what is written down and
           will not work out any rate from it.
         </p>
       )}
 
-      <button
-        type="button"
-        disabled={busy}
+      <Button
+        size="sm"
+        variant="secondary"
         onClick={onConfirm}
+        loading={busy}
+        loadingLabel="Recording…"
         aria-label={`Confirm this is all of your ${noun}`}
-        className="mt-2 rounded-lg border border-ink-200 px-3 py-1.5 text-sm font-medium text-ink-700 hover:border-ink-300 hover:text-ink-900 disabled:opacity-60"
+        className="shrink-0"
       >
-        {busy
-          ? 'Recording…'
-          : confirmed
-            ? `Still all of them, as of today`
-            : `Yes — this is all of my ${noun}`}
-      </button>
+        {confirmed ? 'Still all of them' : `Yes — this is all of my ${noun}`}
+      </Button>
     </div>
   )
 }
 
+/**
+ * The eight things a founder can record, as one rail.
+ *
+ * `count` is how many of that kind exist, and it is a length rather than a
+ * computed figure — I1 is about numbers *derived* from records, and "how many
+ * rows are in this list" is the list. Everything a founder reads as a
+ * measurement still comes from `calculators/ops.py` via the Operations tiles.
+ */
+const TABS = [
+  { key: 'projects', label: 'Projects' },
+  { key: 'tasks', label: 'Tasks' },
+  { key: 'milestones', label: 'Milestones' },
+  { key: 'issues', label: 'Issues' },
+  { key: 'dispatch', label: 'Orders' },
+  { key: 'stock', label: 'Stock' },
+  { key: 'suppliers', label: 'Suppliers' },
+  { key: 'deals', label: 'Deals' },
+] as const
+
 export function WorkRecorder() {
+  /**
+   * Which kind of record is on screen.
+   *
+   * The audit's finding about this page was that it rendered all eight forms,
+   * expanded, in one 4,063-pixel scroll — so recording a supplier meant
+   * scrolling past six forms for other things, and each form was followed by a
+   * near-identical "Is this all of your X?" card, eight times. The page read as
+   * a blank input sheet rather than as a workspace with content in it.
+   *
+   * Every section stays **mounted** and is hidden with `display: none` rather
+   * than unmounted. That is deliberate: a half-typed project must survive a
+   * glance at the task list, and unmounting would discard it silently. The cost
+   * is that all eight forms exist in the DOM, which is what they did before
+   * anyway — the change is that seven of them are no longer between the reader
+   * and the eighth.
+   */
+  const [tab, setTab] = useState<string>('projects')
   const [ops, setOps] = useState<Ops | null>(null)
   const [loadError, setLoadError] = useState('')
   // **One flag per form, not one for the page.** Shared, pressing "Record
@@ -441,6 +489,36 @@ export function WorkRecorder() {
     stock.length === 0 &&
     suppliers.length === 0 &&
     deals.length === 0
+  /**
+   * How many of each kind exist, for the rail.
+   *
+   * A length, not a measurement. I1 forbids the browser *deriving* a figure —
+   * "8 of 12 done" would be arithmetic nobody computed server-side — and the
+   * number of rows in a list the browser is already holding is not that. It is
+   * also the one thing that makes a rail better than a scroll: you can see
+   * where your records are without opening each tab to find out.
+   *
+   * `undefined` rather than `0` while `ops` is null, so the rail shows no count
+   * rather than claiming an empty list during the load (I10). `Tabs` renders
+   * nothing for a count it is not given.
+   */
+  const counts = useMemo<Record<string, number | undefined>>(
+    () =>
+      ops === null
+        ? {}
+        : {
+            projects: projects.length,
+            tasks: tasks.length,
+            milestones: milestones.length,
+            issues: issues.length,
+            dispatch: dispatches.length,
+            stock: stock.length,
+            suppliers: suppliers.length,
+            deals: deals.length,
+          },
+    [ops, projects, tasks, milestones, issues, dispatches, stock, suppliers, deals],
+  )
+
   const confirmedFor = (entity: string) =>
     (ops?.completeness ?? []).find((entry) => entry.entity === entity) ?? null
 
@@ -465,14 +543,29 @@ export function WorkRecorder() {
         /* The state the Operations tiles render as `locked`. Said here in the
            same words the tile uses, so somebody who arrived from it recognises
            where they landed. */
-        <p className="max-w-prose rounded-xl border border-ink-100 bg-bone-50 px-4 py-3 text-sm text-ink-600">
+        <p className="max-w-prose rounded-data border border-ink-100 bg-bone-50 px-4 py-3 text-body text-ink-600">
           Nothing recorded yet. Your first project turns on the Operations tiles — there is no
           tool to connect for this one, because the records are your own.
         </p>
       ) : null}
 
-      <section className="flex flex-col gap-4">
-        <h2 className="font-display text-lg text-ink-900">Projects</h2>
+      <div className="sticky top-[var(--app-header-h)] z-sticky -mx-[var(--app-x)] border-b border-ink-100 bg-bone-50/90 px-[var(--app-x)] py-2 backdrop-blur-md">
+        <Tabs
+          label="What to record"
+          active={tab}
+          onChange={setTab}
+          tabs={TABS.map((entry) => ({
+            key: entry.key,
+            label: entry.label,
+            count: counts[entry.key],
+          }))}
+        />
+      </div>
+
+      <section
+        aria-label="Projects"
+        className={tab === 'projects' ? 'flex flex-col gap-4' : 'hidden'}
+      >
 
         <form onSubmit={submitProject} className="grid max-w-2xl gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
@@ -582,8 +675,10 @@ export function WorkRecorder() {
         ) : null}
       </section>
 
-      <section className="flex flex-col gap-4">
-        <h2 className="font-display text-lg text-ink-900">Tasks</h2>
+      <section
+        aria-label="Tasks"
+        className={tab === 'tasks' ? 'flex flex-col gap-4' : 'hidden'}
+      >
 
         <form onSubmit={submitTask} className="grid max-w-2xl gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
@@ -693,8 +788,10 @@ export function WorkRecorder() {
         ) : null}
       </section>
 
-      <section className="flex flex-col gap-4">
-        <h2 className="font-display text-lg text-ink-900">Milestones</h2>
+      <section
+        aria-label="Milestones"
+        className={tab === 'milestones' ? 'flex flex-col gap-4' : 'hidden'}
+      >
 
         {projects.length === 0 ? (
           /* A milestone belongs to a project — it is a point in that project's
@@ -801,8 +898,10 @@ export function WorkRecorder() {
         ) : null}
       </section>
 
-      <section className="flex flex-col gap-4">
-        <h2 className="font-display text-lg text-ink-900">Issues and snags</h2>
+      <section
+        aria-label="Issues and snags"
+        className={tab === 'issues' ? 'flex flex-col gap-4' : 'hidden'}
+      >
 
         <form onSubmit={submitIssue} className="grid max-w-2xl gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
@@ -914,8 +1013,10 @@ export function WorkRecorder() {
         ) : null}
       </section>
 
-      <section className="flex flex-col gap-4">
-        <h2 className="font-display text-lg text-ink-900">Orders and dispatch</h2>
+      <section
+        aria-label="Orders and dispatch"
+        className={tab === 'dispatch' ? 'flex flex-col gap-4' : 'hidden'}
+      >
 
         {/* **The rule the on-time figure is computed under — D32.**
             Asked as a number rather than read from the onboarding answer, which
@@ -1051,8 +1152,10 @@ export function WorkRecorder() {
         ) : null}
       </section>
 
-      <section className="flex flex-col gap-4">
-        <h2 className="font-display text-lg text-ink-900">Stock</h2>
+      <section
+        aria-label="Stock"
+        className={tab === 'stock' ? 'flex flex-col gap-4' : 'hidden'}
+      >
         {/* Recording one of these is what answers "do you hold stock, or order
             per job?" — asked at onboarding as prose that nothing reads. The
             record is the answer. */}
@@ -1150,8 +1253,10 @@ export function WorkRecorder() {
         ) : null}
       </section>
 
-      <section className="flex flex-col gap-4">
-        <h2 className="font-display text-lg text-ink-900">Suppliers</h2>
+      <section
+        aria-label="Suppliers"
+        className={tab === 'suppliers' ? 'flex flex-col gap-4' : 'hidden'}
+      >
         {/* The founder enters what they spend. The share is what NEXUS works
             out — asking for a percentage would be a self-reported figure
             wearing a computed one's clothes. */}
@@ -1233,8 +1338,10 @@ export function WorkRecorder() {
         ) : null}
       </section>
 
-      <section className="flex flex-col gap-4">
-        <h2 className="font-display text-lg text-ink-900">Deals</h2>
+      <section
+        aria-label="Deals"
+        className={tab === 'deals' ? 'flex flex-col gap-4' : 'hidden'}
+      >
         {/* These are counted on their own Sales tile and never mixed with a
             connected CRM's — `retrieval/deals.py` partitions the table by
             provenance (ADR 0038). */}

@@ -1,8 +1,7 @@
 'use client'
 
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Coverage } from '@/components/dashboard/Coverage'
 import { BlockCard } from '@/components/dashboard/BlockCard'
 import { CompanyBrain } from '@/components/dashboard/CompanyBrain'
@@ -11,9 +10,11 @@ import { MorningBrief } from '@/components/dashboard/MorningBrief'
 import { OpenOnYourSide } from '@/components/dashboard/OpenOnYourSide'
 import { useDashboards } from '@/components/shell/AppShell'
 import { Button } from '@/components/ui/Button'
+import { PageBody, PageHeader, Section } from '@/components/ui/Page'
+import { BlockGridSkeleton, Bone, Loading, PageHeadSkeleton } from '@/components/ui/Skeleton'
+import { Failed } from '@/components/ui/States'
 import { AuthError } from '@/lib/auth-client'
 import { fetchSurface, type DirectorBlock, type Surface } from '@/lib/dashboard-client'
-import { Waiting } from '@/components/ui/Waiting'
 
 /**
  * Today — the common surface, and where signing in now lands.
@@ -30,6 +31,34 @@ import { Waiting } from '@/components/ui/Waiting'
  * director to send them to and inventing one would mean putting them in a
  * department nobody assigned. They get the brief — which is scope-composed and
  * will simply be thin — and the explanation below it.
+ *
+ * ## What the 2026-09 audit changed
+ *
+ * **The wait has a shape.** `/dashboards/surface` takes twelve to sixteen
+ * seconds against Neon, and for all of it this page rendered two lines of plain
+ * text on an empty canvas — "Reading what changed…", then "Taking longer than
+ * usual". The sentences are good and they are kept; what was missing is any
+ * indication of what was coming or how much of it, so the page had no layout to
+ * settle into and everything arrived at once by pushing everything else down.
+ * It now renders the page's own structure in skeleton, at the sizes the real
+ * content will occupy.
+ *
+ * **A failure can be retried.** The error state was a red box containing the
+ * server's sentence and nothing clickable. Retrying meant reloading a page that
+ * refetches twenty-five other things.
+ *
+ * **The order puts the business before the product.** *Where the product is,
+ * for you* — the band reporting that 66 of 89 capabilities are not built yet —
+ * was the second thing on the page, above every figure. It is honest and it
+ * belongs here, but it is a statement about NEXUS rather than about the
+ * reader's company, and a dashboard that leads with its own roadmap has told
+ * the reader what matters. It moves below the figures, still immediately above
+ * the open questions for the reason the original comment gives: its "not built
+ * yet" band is what makes "23 more are waiting on us" legible a moment later.
+ *
+ * **One h1, and one heading step below it.** The page title and every section
+ * heading were the same size, so five headings competed and none named the
+ * page. `PageHeader` and `Section` own that now.
  */
 
 type State =
@@ -40,9 +69,12 @@ type State =
 export function DashboardLanding() {
   const router = useRouter()
   const [state, setState] = useState<State>({ status: 'loading' })
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     let live = true
+    setState({ status: 'loading' })
+
     fetchSurface()
       .then((surface) => {
         if (live) setState({ status: 'ready', surface })
@@ -68,53 +100,77 @@ export function DashboardLanding() {
     return () => {
       live = false
     }
-  }, [router])
+  }, [router, attempt])
 
-  if (state.status === 'loading') {
-    return <Waiting>Reading what changed…</Waiting>
-  }
+  const retry = useCallback(() => setAttempt((n) => n + 1), [])
+
+  if (state.status === 'loading') return <TodaySkeleton />
 
   if (state.status === 'error') {
     return (
-      <div
-        role="alert"
-        className="rounded-xl border border-clay-300 bg-clay-100 px-4 py-3 text-sm text-clay-600"
-      >
+      <Failed title="Today did not load" retry={retry} secondary={{ label: 'Your work', href: '/work' }}>
         {state.message}
-      </div>
+      </Failed>
     )
   }
 
   return (
-    <div className="flex flex-col gap-10">
+    <PageBody>
       {/* The page's one h1. It was lost when this route stopped redirecting into
           a director page — that page had `<h1>{director.title}</h1>` and the
           common surface inherited six h2s and no top-level heading, which
           leaves a screen reader with no name for where it is. "Today" rather
           than a greeting, because a greeting needs the reader's name and that
           is another request for a word. */}
-      <header>
-        <h1 className="font-display text-title font-medium text-ink-900">Today</h1>
-        <p className="mt-1 text-sm text-ink-500">
-          {/* "where each number came from", not "what it was read from": not every
-              figure here was read from anywhere. A count comes from rows this
-              workspace typed (ADR 0034). */}
-          What needs you, and where each number came from.
-        </p>
-      </header>
+      <PageHeader
+        title="Today"
+        // "where each number came from", not "what it was read from": not every
+        // figure here was read from anywhere. A count comes from rows this
+        // workspace typed (ADR 0034).
+        lede="What needs you, and where each number came from."
+      />
 
       <MorningBrief brief={state.surface.brief} />
-      {/* Coverage before the questions, deliberately: its "not built yet" band
-          is what makes "28 more are waiting on us" legible a moment later. The
-          reverse order reads as a list of chores with the reason arriving too
-          late. */}
-      <Coverage bands={state.surface.coverage} />
       <Measured blocks={state.surface.measured} />
+      {/* Still immediately above the questions — the "not built yet" band is
+          what makes "23 more are waiting on us" legible a moment later — but
+          now below the figures rather than above them. */}
+      <Coverage bands={state.surface.coverage} />
       <OpenOnYourSide questions={state.surface.questions} />
       <DirectorRows rows={state.surface.directors} />
       <CompanyBrain />
       <NoDepartment />
-    </div>
+    </PageBody>
+  )
+}
+
+/**
+ * The page's own shape, at the sizes it will occupy.
+ *
+ * Not a generic placeholder: the heading block, one wide card for the brief and
+ * a two-column grid of six tiles, because that is what arrives. A skeleton that
+ * does not predict the layout is a spinner drawn as rectangles — it neither
+ * tells the reader what is coming nor stops the page reflowing when it does.
+ */
+function TodaySkeleton() {
+  return (
+    <Loading label="Reading what changed. The database is in another region, so this can take a few seconds.">
+      <div className="flex flex-col gap-stack">
+        <PageHeadSkeleton />
+        <div className="flex flex-col gap-4">
+          <Bone className="h-4 w-36" />
+          <div className="surface flex flex-col gap-3 px-5 py-5">
+            <Bone className="h-4 w-48" />
+            <Bone className="h-3 w-full" />
+            <Bone className="h-3 w-4/5" />
+          </div>
+        </div>
+        <div className="flex flex-col gap-4">
+          <Bone className="h-4 w-40" />
+          <BlockGridSkeleton count={6} />
+        </div>
+      </div>
+    </Loading>
   )
 }
 
@@ -129,34 +185,30 @@ export function DashboardLanding() {
  * The department passed to each card is the capability's own namespace, because
  * that is where its narration POST has to go: the API refuses a capability id
  * that does not belong to the department in the path.
+ *
+ * `items-start` on the grid rather than the default stretch. Tiles carry very
+ * different amounts — a priorities list against a single count — and stretching
+ * them to a shared height left the short ones with a hundred pixels of empty
+ * card below their last line. A card is as tall as what is in it.
  */
 function Measured({ blocks }: { blocks: DirectorBlock[] }) {
   if (blocks.length === 0) return null
 
   return (
-    <section aria-labelledby="measured-heading">
-      <h2 id="measured-heading" className="font-display text-title font-medium text-ink-900">
-        Measured today
-      </h2>
-      <p className="mt-1 max-w-prose text-sm text-ink-500">
-        {/* **Was "Each with its denominator, the page it was read from."** True of a
-            scored audit and of nothing else: a pipeline has no denominator (ADR
-            0033) and a count of your own records has neither a denominator nor a
-            page anybody fetched (ADR 0034). A standfirst promising provenance the
-            tiles beneath it do not carry is the exact failure the tiles are
-            careful about, arriving one line above them. */}
-        Each says what it counted, what it left out, and where the number came from.
-      </p>
-      <ul className="mt-4 grid gap-4 lg:grid-cols-2">
+    <Section
+      title="Measured today"
+      // **Was "Each with its denominator, the page it was read from."** True of
+      // a scored audit and of nothing else: a pipeline has no denominator (ADR
+      // 0033) and a count of your own records has neither a denominator nor a
+      // page anybody fetched (ADR 0034).
+      lede="Each says what it counted, what it left out, and where the number came from."
+    >
+      <ul className="grid items-start gap-4 lg:grid-cols-2">
         {blocks.map((block) => (
-          <BlockCard
-            key={block.key}
-            block={block}
-            department={block.key.split('.')[0]}
-          />
+          <BlockCard key={block.key} block={block} department={block.key.split('.')[0]} />
         ))}
       </ul>
-    </section>
+    </Section>
   )
 }
 
@@ -175,33 +227,26 @@ function NoDepartment() {
   if (all === null || all.directors.length > 0) return null
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="rounded-2xl border border-gold-300 bg-gold-100 px-5 py-5">
-        <p className="font-mono text-2xs uppercase tracking-[0.12em] text-clay-600">
-          No department dashboard for you
-        </p>
-        <p className="mt-2 max-w-prose text-[0.95rem] leading-relaxed text-ink-800">
+    <Section title="No department dashboard for you">
+      <div className="flex flex-col gap-4 rounded-data border border-ink-100 bg-white px-5 py-5">
+        <p className="max-w-read text-body leading-relaxed text-ink-700">
           Each director&rsquo;s page belongs to a department, and your account is not in
           one. That is the normal state for a viewer — you can see company-wide material
           and nothing that belongs to a single department.
         </p>
-        <p className="mt-3 max-w-prose text-[0.95rem] leading-relaxed text-ink-700">
+        <p className="max-w-read text-body leading-relaxed text-ink-500">
           If you expected a dashboard, an owner sets which department an account is in
           when they invite it.
         </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button href="/account" size="sm">
+            Your account
+          </Button>
+          <Button href="/onboarding" size="sm" variant="ghost">
+            Workspace setup
+          </Button>
+        </div>
       </div>
-
-      <div className="flex flex-wrap gap-3">
-        <Button href="/account" size="lg">
-          Your account
-        </Button>
-        <Link
-          href="/onboarding"
-          className="self-center text-sm font-medium text-steel-600 underline decoration-steel-300 underline-offset-2 hover:text-steel-700"
-        >
-          Workspace setup
-        </Link>
-      </div>
-    </div>
+    </Section>
   )
 }

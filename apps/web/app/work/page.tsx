@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { WorkRecorder } from '@/components/ops/WorkRecorder'
+import { PageHeader } from '@/components/ui/Page'
 
 export const metadata: Metadata = {
   title: 'Your work',
@@ -25,12 +26,10 @@ export const metadata: Metadata = {
 export default function WorkPage() {
   return (
     <>
-      <h1 className="font-display text-2xl text-ink-900">Your work</h1>
-      <p className="mt-2 max-w-prose text-sm leading-relaxed text-ink-600">
-        Projects and tasks you record here are counted on the Operations tiles. NEXUS counts
-        what is written down — it has no way of knowing what is not, so the figures say
-        &ldquo;recorded&rdquo; rather than claiming to describe the whole company.
-      </p>
+      <PageHeader
+        title="Your work"
+        lede="Projects and tasks you record here are counted on the Operations tiles. NEXUS counts what is written down — it has no way of knowing what is not, so the figures say “recorded” rather than claiming to describe the whole company."
+      />
       <WorkRecorder />
     </>
   )

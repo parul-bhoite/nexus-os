@@ -2,6 +2,11 @@
  * Wordmark. The glyph is three stacked paper layers forming a peak — the same
  * cut-paper language as the hero illustration, and a nod to "one brain, many
  * layers of context".
+ *
+ * The hex values live here rather than in a token file because they are the
+ * mark's own ink and are passed as SVG `fill` attributes, which Tailwind cannot
+ * reach. `muted` was `#5C8098` and measured 4.20:1 against white at 21px —
+ * under AA, on the product's own name. It is `steel-600` now, which clears it.
  */
 export function Logo({
   className = '',
@@ -11,7 +16,7 @@ export function Logo({
   tone?: 'light' | 'dark'
 }) {
   const ink = tone === 'dark' ? '#FBFAF8' : '#091F46'
-  const muted = tone === 'dark' ? '#7699AE' : '#5C8098'
+  const muted = tone === 'dark' ? '#7699AE' : '#2C5C80'
 
   return (
     <span className={`inline-flex items-center gap-2.5 ${className}`}>

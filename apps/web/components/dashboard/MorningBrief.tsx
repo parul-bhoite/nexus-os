@@ -1,5 +1,7 @@
 'use client'
 
+import { Section } from '@/components/ui/Page'
+import { Empty } from '@/components/ui/States'
 import type { Brief, BriefItem } from '@/lib/dashboard-client'
 
 /**
@@ -15,6 +17,18 @@ import type { Brief, BriefItem } from '@/lib/dashboard-client'
  * that disappeared would let an audit that never ran look like an audit that
  * found nothing (I10). `not_measured` is a different sentence from `all_held`,
  * not a quieter version of it.
+ *
+ * ## The empty state carries its own way out
+ *
+ * `not_measured` is the first thing a new workspace sees on its dashboard, and
+ * it used to be a card that named its own precondition — "the audit runs once a
+ * website is added and crawled" — with nothing to press. The reader then had to
+ * go and find where a website is added, which is the single thing the empty
+ * state existed to prevent. The server's sentence is unchanged; it now arrives
+ * with the control it describes.
+ *
+ * `all_held` deliberately gets no action. Nothing is wrong, so offering
+ * something to do would manufacture a task out of a good result.
  *
  * ## Two tiers, because the data has two
  *
@@ -71,18 +85,33 @@ export function MorningBrief({ brief }: { brief: Brief }) {
   const lead = brief.items.filter((item) => item.kind === 'unmeasured' || item.cost === heaviest)
   const tail = failures.filter((item) => item.cost < heaviest)
 
-  return (
-    <section aria-labelledby="brief-heading">
-      <h2 id="brief-heading" className="font-display text-title font-medium text-ink-900">
-        Morning brief
-      </h2>
-      <p className="mt-1 max-w-prose text-sm text-ink-500">
-        {/* Found, never changed. Nothing re-crawls yet, so a heading with a
-            date range would claim a comparison nobody made. */}
-        What was found, ranked by what it cost.
-      </p>
+  // Not a findings list and not a clean sweep: no audit has run. That is an
+  // empty state, so it renders as one, with the step that ends it.
+  if (brief.state === 'not_measured') {
+    return (
+      <Section
+        title="Morning brief"
+        lede="What was found, ranked by what it cost."
+      >
+        <Empty
+          title="No audit has run yet"
+          // The server's words. A reason-to-sentence map here is the failure
+          // `unlock` already avoids: one wording change would have to be made in
+          // as many places as there are clients.
+          action={{ label: 'Add your website', href: '/onboarding' }}
+          secondary={{ label: 'Connected tools', href: '/settings' }}
+        >
+          {brief.message}
+        </Empty>
+      </Section>
+    )
+  }
 
-      <div className="mt-4 rounded-2xl border border-ink-100 bg-white px-5 py-5 shadow-paper">
+  return (
+    // "Found", never "changed". Nothing re-crawls yet, so a heading with a date
+    // range would claim a comparison nobody made.
+    <Section title="Morning brief" lede="What was found, ranked by what it cost.">
+      <div className="rounded-data border border-ink-100 bg-white px-5 py-5 shadow-e1">
         {brief.state === 'findings' ? (
           <>
             <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-ink-100 pb-3">
@@ -164,6 +193,6 @@ export function MorningBrief({ brief }: { brief: Brief }) {
           </>
         )}
       </div>
-    </section>
+    </Section>
   )
 }

@@ -1,0 +1,49 @@
+- generic [active] [ref=f20e1]:
+  - link "Skip to content" [ref=f20e2] [cursor=pointer]:
+    - /url: "#main"
+  - generic [ref=f20e3]:
+    - banner [ref=f20e4]:
+      - generic [ref=f20e5]:
+        - link "NEXUS OS dashboard" [ref=f20e6] [cursor=pointer]:
+          - /url: /dashboard
+          - generic [ref=f20e7]: NEXUSOS
+        - button "Account" [ref=f20e16] [cursor=pointer]:
+          - generic [ref=f20e17]: ··
+    - generic [ref=f20e18]:
+      - complementary "Primary" [ref=f20e19]
+      - main [ref=f20e36]:
+        - generic [ref=f20e39]:
+          - heading "Your work" [level=1] [ref=f20e40]
+          - paragraph [ref=f20e41]: Projects and tasks you record here are counted on the Operations tiles. NEXUS counts what is written down — it has no way of knowing what is not, so the figures say “recorded” rather than claiming to describe the whole company.
+        - generic [ref=f20e42]:
+          - tablist "What to record" [ref=f20e44]:
+            - tab "Projects" [selected] [ref=f20e45] [cursor=pointer]
+            - tab "Tasks" [ref=f20e47] [cursor=pointer]
+            - tab "Milestones" [ref=f20e48] [cursor=pointer]
+            - tab "Issues" [ref=f20e49] [cursor=pointer]
+            - tab "Orders" [ref=f20e50] [cursor=pointer]
+            - tab "Stock" [ref=f20e51] [cursor=pointer]
+            - tab "Suppliers" [ref=f20e52] [cursor=pointer]
+            - tab "Deals" [ref=f20e53] [cursor=pointer]
+          - region "Projects" [ref=f20e54]:
+            - generic [ref=f20e55]:
+              - generic [ref=f20e56]:
+                - generic [ref=f20e57]: Name
+                - textbox "Name" [ref=f20e58]
+              - generic [ref=f20e59]:
+                - generic [ref=f20e60]: Status
+                - combobox "Status" [ref=f20e61] [cursor=pointer]:
+                  - option "planned"
+                  - option "active" [selected]
+                  - option "blocked"
+                  - option "done"
+              - generic [ref=f20e62]:
+                - generic [ref=f20e63]: Client (optional)
+                - textbox "Client (optional)" [ref=f20e64]
+              - generic [ref=f20e65]:
+                - generic [ref=f20e66]: Due (optional)
+                - textbox "Due (optional)" [ref=f20e67]
+                - paragraph [ref=f20e68]: Left blank, it is never counted as overdue.
+              - button "Record project" [ref=f20e70] [cursor=pointer]
+  - region "Notifications"
+  - alert [ref=f20e71]

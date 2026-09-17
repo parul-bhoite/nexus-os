@@ -1,13 +1,17 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
-import { EntitySwitcher } from '@/components/dashboard/EntitySwitcher'
 import { NavPanel } from '@/components/shell/NavPanel'
+import { WorkspaceMenu } from '@/components/shell/WorkspaceMenu'
+import { AccountMenu } from '@/components/shell/AccountMenu'
 import { Logo } from '@/components/ui/Logo'
+import { Sheet } from '@/components/ui/Overlay'
+import { ToastProvider } from '@/components/ui/Toast'
 import { AuthError } from '@/lib/auth-client'
 import { fetchDashboards, type Dashboards } from '@/lib/dashboard-client'
+import { fetchWorkspaces, type WorkspaceChoice } from '@/lib/settings-client'
 
 /**
  * The chrome every signed-in surface renders inside: a thin header, a left
@@ -28,9 +32,39 @@ import { fetchDashboards, type Dashboards } from '@/lib/dashboard-client'
  * in *with the page they wanted* so they come back to it. That was written per
  * page; now the shell does it for every page inside it.
  *
- * **The header carries only who and where you are.** The entity switcher (ADR
- * 0026) and the account link. Not a second navigation — if a third control
- * ever lands here, it belongs in the panel.
+ * **The header carries only who and where you are.** The workspace, the entity
+ * switcher (ADR 0026) and the account menu. Not a second navigation.
+ *
+ * ## What the 2026-09 audit changed
+ *
+ * **The header and the body now share one container.** They did not. The header
+ * was full-width with `px-4 sm:px-6`; the body was `max-w-shell mx-auto` with
+ * the same padding. At 1440 that put the logo at x=28 and the first nav row at
+ * x=120 — two left edges, 92px apart, on the same screen. Both now use
+ * `.app-shell`, so there is one.
+ *
+ * **The workspace is named in the header.** `EntitySwitcher` renders nothing for
+ * a single-entity login, which is almost everybody, so the product never said
+ * which company you were in. Given that ADR 0026 calls reading one company's
+ * figures under another's name the worst failure this product can have, the
+ * name belongs on screen at all times — not only when a switcher happens to be
+ * there. `WorkspaceMenu` shows it always and becomes a switcher when there is
+ * something to switch to.
+ *
+ * **`/api/auth/workspaces` is fetched here, once.** The audit's network trace
+ * showed it four times per page load at six to twelve seconds each. It was
+ * called by `EntitySwitcher`, which mounted in the header, and again by
+ * `AccountPanel`. It is read once here for the same reason `/api/dashboards`
+ * is.
+ *
+ * **Account is a menu, not a link.** It was a bare underlined text link beside
+ * the logo, duplicating the sidebar's own Account row, with no sign-out except
+ * on the page it led to.
+ *
+ * **The mobile drawer is a real dialog.** It was `open ? <div/> : null`: no
+ * transition, no close button, no focus trap, no Escape, and a scrim so faint
+ * the page behind stayed fully legible. It is now a `Sheet`, which owns all six
+ * of those obligations in one place.
  *
  * ## What the shell does not do
  *
@@ -40,6 +74,7 @@ import { fetchDashboards, type Dashboards } from '@/lib/dashboard-client'
  */
 
 const DashboardsContext = createContext<Dashboards | null>(null)
+const WorkspacesContext = createContext<WorkspaceChoice[] | null>(null)
 
 /**
  * The director list the shell already fetched.
@@ -52,107 +87,146 @@ export function useDashboards(): Dashboards | null {
   return useContext(DashboardsContext)
 }
 
+/** The companies this login holds. `null` while unknown, for the same reason. */
+export function useWorkspaces(): WorkspaceChoice[] | null {
+  return useContext(WorkspacesContext)
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter()
+  const pathname = usePathname()
   const [all, setAll] = useState<Dashboards | null>(null)
+  const [workspaces, setWorkspaces] = useState<WorkspaceChoice[] | null>(null)
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
     let live = true
+
+    function expired(caught: unknown): boolean {
+      if (caught instanceof AuthError && caught.status === 401) {
+        const wanted = `${window.location.pathname}${window.location.search}`
+        router.replace(`/login?next=${encodeURIComponent(wanted)}`)
+        return true
+      }
+      return false
+    }
+
     fetchDashboards()
       .then((dashboards) => {
         if (live) setAll(dashboards)
       })
       .catch((caught: unknown) => {
-        if (!live) return
-        if (caught instanceof AuthError && caught.status === 401) {
-          const wanted = `${window.location.pathname}${window.location.search}`
-          router.replace(`/login?next=${encodeURIComponent(wanted)}`)
-          return
-        }
+        if (!live || expired(caught)) return
         // Anything else is left to the page. The shell drawing an error over a
         // surface that may have loaded perfectly well would hide working
         // content behind a failure to draw a sidebar.
       })
+
+    fetchWorkspaces()
+      .then((page) => {
+        if (live) setWorkspaces(page.workspaces)
+      })
+      .catch((caught: unknown) => {
+        if (!live || expired(caught)) return
+        // An empty array is *known to be empty*, which is wrong here — the
+        // request failed, so we do not know. `WorkspaceMenu` renders the
+        // unknown case as a quiet fallback rather than as "no companies".
+      })
+
     return () => {
       live = false
     }
   }, [router])
 
+  // Close the drawer when the route changes. Without this, tapping a director
+  // on a phone leaves the panel sitting over the page it just navigated to.
+  useEffect(() => setOpen(false), [pathname])
+
   const close = useCallback(() => setOpen(false), [])
 
   return (
-    <DashboardsContext.Provider value={all}>
-      <div className="min-h-screen bg-bone-50">
-        <header className="sticky top-0 z-30 border-b border-ink-100 bg-bone-50/95 backdrop-blur">
-          <div className="flex items-center gap-3 px-4 py-3 sm:px-6">
-            <button
-              type="button"
-              onClick={() => setOpen((was) => !was)}
-              aria-expanded={open}
-              aria-controls="shell-nav"
-              className="rounded-lg border border-ink-200 px-3 py-1.5 font-mono text-2xs uppercase tracking-[0.08em] text-ink-600 hover:border-ink-300 hover:text-ink-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-steel-500 lg:hidden"
-            >
-              Menu
-            </button>
+    <ToastProvider>
+      <DashboardsContext.Provider value={all}>
+        <WorkspacesContext.Provider value={workspaces}>
+          <div className="on-bone min-h-screen bg-bone-50">
+            <header className="sticky top-0 z-header border-b border-ink-100 bg-bone-50/90 backdrop-blur-md">
+              <div className="app-shell flex h-[var(--app-header-h)] items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setOpen(true)}
+                  aria-expanded={open}
+                  aria-haspopup="dialog"
+                  aria-label="Open navigation"
+                  // An icon at 44×44, not a 56×30 box labelled "MENU". The old
+                  // one was under the touch minimum on both axes and spelled a
+                  // word every other app draws.
+                  className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-600 transition-colors duration-micro ease-out hover:bg-bone-200 hover:text-ink-900 lg:hidden"
+                >
+                  <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className="h-5 w-5">
+                    <path
+                      d="M3 5.5h14M3 10h14M3 14.5h14"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </button>
 
-            <Link
-              href="/dashboard"
-              className="inline-flex rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gold-500"
-              aria-label="NEXUS OS dashboard"
-            >
-              <Logo />
-            </Link>
+                <Link
+                  href="/dashboard"
+                  className="inline-flex shrink-0 rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steel-500 focus-visible:ring-offset-4 focus-visible:ring-offset-bone-50"
+                  aria-label="NEXUS OS dashboard"
+                >
+                  <Logo />
+                </Link>
 
-            <div className="ml-auto flex items-center gap-4">
-              {/* ADR 0026: a control once a login holds more than one entity,
-                  and nothing at all for the almost-everybody who holds one. */}
-              <EntitySwitcher />
-              <Link
-                href="/account"
-                className="text-sm font-medium text-steel-600 underline decoration-steel-300 underline-offset-2 hover:text-steel-700"
-              >
-                Account
-              </Link>
-            </div>
-          </div>
-        </header>
+                {/* Which company you are in. Always, not only when there are
+                    two — see the note above about ADR 0026. */}
+                <WorkspaceMenu workspaces={workspaces} className="hidden min-w-0 sm:flex" />
 
-        <div className="mx-auto flex w-full max-w-shell gap-8 px-4 sm:px-6">
-          {/* Two renderings of one panel rather than one that moves: a single
-              element repositioned by breakpoint would have to be either a
-              dialog on desktop or a static list on mobile, and both are wrong
-              in the other place. `hidden` keeps the desktop copy out of the
-              accessibility tree on small screens. */}
-          <aside
-            id="shell-nav"
-            className="hidden w-56 shrink-0 py-8 lg:block"
-            aria-label="Primary"
-          >
-            <div className="sticky top-20">
-              <NavPanel all={all} />
-            </div>
-          </aside>
-
-          {open ? (
-            <div className="fixed inset-0 z-40 lg:hidden">
-              <button
-                type="button"
-                aria-label="Close menu"
-                onClick={close}
-                className="absolute inset-0 bg-ink-900/30"
-              />
-              <div className="relative h-full w-64 overflow-y-auto border-r border-ink-100 bg-bone-50 p-4">
-                <NavPanel all={all} onNavigate={close} />
+                <div className="ml-auto flex shrink-0 items-center gap-1">
+                  <AccountMenu />
+                </div>
               </div>
-            </div>
-          ) : null}
+            </header>
 
-          <main id="main" className="min-w-0 flex-1 py-8">
-            {children}
-          </main>
-        </div>
-      </div>
-    </DashboardsContext.Provider>
+            <div className="app-shell flex w-full gap-8">
+              <aside
+                className="hidden w-[var(--app-nav-w)] shrink-0 py-7 lg:block"
+                aria-label="Primary"
+              >
+                <div className="sticky top-[calc(var(--app-header-h)+1.25rem)]">
+                  <NavPanel all={all} />
+                </div>
+              </aside>
+
+              <main id="main" className="min-w-0 flex-1 py-7">
+                {children}
+              </main>
+            </div>
+
+            {/* One panel, rendered once. The old shell rendered two copies —
+                a static aside and a conditional dialog — because a single
+                element repositioned by breakpoint is wrong in one of the two
+                places. That is true, and the fix is one *component* used twice,
+                not one element moved: `NavPanel` is a list, and only this
+                wrapper is a dialog. */}
+            <Sheet
+              open={open}
+              onClose={close}
+              side="left"
+              width="max-w-[17rem]"
+              title="Go to"
+              description={workspaces?.find((w) => w.active)?.name}
+            >
+              <NavPanel all={all} onNavigate={close} />
+              <div className="mt-6 border-t border-ink-100 pt-4 sm:hidden">
+                <WorkspaceMenu workspaces={workspaces} />
+              </div>
+            </Sheet>
+          </div>
+        </WorkspacesContext.Provider>
+      </DashboardsContext.Provider>
+    </ToastProvider>
   )
 }

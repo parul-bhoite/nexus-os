@@ -1,0 +1,136 @@
+- generic [active] [ref=f20e1]:
+  - link "Skip to content" [ref=f20e2] [cursor=pointer]:
+    - /url: "#main"
+  - generic [ref=f20e3]:
+    - banner [ref=f20e4]:
+      - generic [ref=f20e5]:
+        - link "NEXUS OS dashboard" [ref=f20e6] [cursor=pointer]:
+          - /url: /dashboard
+          - generic [ref=f20e7]: NEXUSOS
+        - generic "Perf 1789665795" [ref=f20e73]
+        - button "Account — founder+1789665795@perf-1789665795.om" [ref=f20e74] [cursor=pointer]: F1
+    - generic [ref=f20e18]:
+      - complementary "Primary" [ref=f20e19]:
+        - navigation "Sections" [ref=f20e75]:
+          - list [ref=f20e77]:
+            - listitem [ref=f20e78]:
+              - link "Today What needs you" [ref=f20e79] [cursor=pointer]:
+                - /url: /dashboard
+                - generic [ref=f20e80]:
+                  - generic [ref=f20e81]: Today
+                  - generic [ref=f20e82]: What needs you
+          - generic [ref=f20e83]:
+            - paragraph [ref=f20e84]: Directors
+            - list [ref=f20e85]:
+              - listitem [ref=f20e86]:
+                - link "Chief of Staff" [ref=f20e87] [cursor=pointer]:
+                  - /url: /dashboard/executive
+              - listitem [ref=f20e90]:
+                - link "Marketing 5 questions unanswered" [ref=f20e91] [cursor=pointer]:
+                  - /url: /dashboard/marketing
+                  - generic [ref=f20e92]: Marketing
+                  - generic [ref=f20e94]:
+                    - text: "5"
+                    - generic [ref=f20e95]: questions unanswered
+              - listitem [ref=f20e96]:
+                - link "Sales 5 questions unanswered" [ref=f20e97] [cursor=pointer]:
+                  - /url: /dashboard/sales
+                  - generic [ref=f20e98]: Sales
+                  - generic [ref=f20e100]:
+                    - text: "5"
+                    - generic [ref=f20e101]: questions unanswered
+              - listitem [ref=f20e102]:
+                - link "Finance 4 questions unanswered" [ref=f20e103] [cursor=pointer]:
+                  - /url: /dashboard/finance
+                  - generic [ref=f20e104]: Finance
+                  - generic [ref=f20e106]:
+                    - text: "4"
+                    - generic [ref=f20e107]: questions unanswered
+              - listitem [ref=f20e108]:
+                - link "Operations 5 questions unanswered" [ref=f20e109] [cursor=pointer]:
+                  - /url: /dashboard/operations
+                  - generic [ref=f20e110]: Operations
+                  - generic [ref=f20e112]:
+                    - text: "5"
+                    - generic [ref=f20e113]: questions unanswered
+              - listitem [ref=f20e114]:
+                - link "People 5 questions unanswered" [ref=f20e115] [cursor=pointer]:
+                  - /url: /dashboard/hr
+                  - generic [ref=f20e116]: People
+                  - generic [ref=f20e118]:
+                    - text: "5"
+                    - generic [ref=f20e119]: questions unanswered
+              - listitem [ref=f20e120]:
+                - link "Strategy 5 questions unanswered" [ref=f20e121] [cursor=pointer]:
+                  - /url: /dashboard/strategy
+                  - generic [ref=f20e122]: Strategy
+                  - generic [ref=f20e124]:
+                    - text: "5"
+                    - generic [ref=f20e125]: questions unanswered
+          - generic [ref=f20e126]:
+            - paragraph [ref=f20e127]: Your data
+            - list [ref=f20e128]:
+              - listitem [ref=f20e129]:
+                - link "Your work Projects and tasks" [ref=f20e130] [cursor=pointer]:
+                  - /url: /work
+                  - generic [ref=f20e131]:
+                    - generic [ref=f20e132]: Your work
+                    - generic [ref=f20e133]: Projects and tasks
+              - listitem [ref=f20e134]:
+                - link "Workspace setup" [ref=f20e135] [cursor=pointer]:
+                  - /url: /onboarding
+          - generic [ref=f20e138]:
+            - paragraph [ref=f20e139]: Settings
+            - list [ref=f20e140]:
+              - listitem [ref=f20e141]:
+                - link "Workspace" [ref=f20e142] [cursor=pointer]:
+                  - /url: /settings
+              - listitem [ref=f20e145]:
+                - link "Account" [ref=f20e146] [cursor=pointer]:
+                  - /url: /account
+      - main [ref=f20e36]:
+        - generic [ref=f20e39]:
+          - heading "Your work" [level=1] [ref=f20e40]
+          - paragraph [ref=f20e41]: Projects and tasks you record here are counted on the Operations tiles. NEXUS counts what is written down — it has no way of knowing what is not, so the figures say “recorded” rather than claiming to describe the whole company.
+        - generic [ref=f20e42]:
+          - tablist "What to record" [ref=f20e44]:
+            - tab "Projects1" [selected] [ref=f20e149] [cursor=pointer]
+            - tab "Tasks1" [ref=f20e150] [cursor=pointer]
+            - tab "Milestones1" [ref=f20e151] [cursor=pointer]
+            - tab "Issues1" [ref=f20e152] [cursor=pointer]
+            - tab "Orders1" [ref=f20e153] [cursor=pointer]
+            - tab "Stock1" [ref=f20e154] [cursor=pointer]
+            - tab "Suppliers1" [ref=f20e155] [cursor=pointer]
+            - tab "Deals1" [ref=f20e156] [cursor=pointer]
+          - region "Projects" [ref=f20e54]:
+            - generic [ref=f20e55]:
+              - generic [ref=f20e56]:
+                - generic [ref=f20e57]: Name
+                - textbox "Name" [ref=f20e58]
+              - generic [ref=f20e59]:
+                - generic [ref=f20e60]: Status
+                - combobox "Status" [ref=f20e61] [cursor=pointer]:
+                  - option "planned"
+                  - option "active" [selected]
+                  - option "blocked"
+                  - option "done"
+              - generic [ref=f20e62]:
+                - generic [ref=f20e63]: Client (optional)
+                - textbox "Client (optional)" [ref=f20e64]
+              - generic [ref=f20e65]:
+                - generic [ref=f20e66]: Due (optional)
+                - textbox "Due (optional)" [ref=f20e67]
+                - paragraph [ref=f20e68]: Left blank, it is never counted as overdue.
+              - button "Record project" [ref=f20e70] [cursor=pointer]
+            - generic [ref=f20e157]:
+              - paragraph [ref=f20e158]: Is this all of your projects? Until you say, NEXUS counts what is written down and will not work out any rate from it.
+              - button "Confirm this is all of your projects" [ref=f20e159] [cursor=pointer]:
+                - generic [ref=f20e160]: Yes — this is all of my projects
+            - list [ref=f20e161]:
+              - listitem [ref=f20e162]:
+                - generic [ref=f20e163]: P
+                - generic [ref=f20e164]: active
+                - generic [ref=f20e165]: no date
+                - button "Archive" [ref=f20e166] [cursor=pointer]
+  - region "Notifications"
+  - alert [ref=f20e71]

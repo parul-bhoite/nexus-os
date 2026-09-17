@@ -9,6 +9,16 @@ import type { Section } from '@/lib/dashboard-client'
  * `doc/13` §4. Both are decided server-side, so what this asserts is that the
  * browser does not undo either — the failure mode is a component that "helpfully"
  * sorts, which would put Approvals before Cash on the Finance page.
+ *
+ * ## The controls are `tab`, not `button`
+ *
+ * These queries named `button` until the rail became a real tab list. A set of
+ * controls that switches panels is `tablist`/`tab` in the WAI pattern, and an
+ * explicit `role="tab"` replaces the implicit `button` role — so the role these
+ * assertions name changed while everything they assert did not. The behaviour
+ * pinned here is unchanged: one control per served section, in the order
+ * served, exactly one current, the key reported rather than acted on, and a
+ * count of what is on the tab.
  */
 
 function section(key: string, label: string, count: number): Section {
@@ -41,7 +51,7 @@ describe('SectionRail', () => {
   it('renders the tabs in the order they were served', () => {
     render(<SectionRail sections={FINANCE} active="overview" onSelect={() => {}} />)
 
-    const labels = screen.getAllByRole('button').map((button) => button.textContent ?? '')
+    const labels = screen.getAllByRole('tab').map((button) => button.textContent ?? '')
 
     expect(labels[0]).toContain('Overview')
     expect(labels[1]).toContain('Cash & runway')
@@ -52,9 +62,13 @@ describe('SectionRail', () => {
   it('marks exactly one tab as current', () => {
     render(<SectionRail sections={FINANCE} active="cash" onSelect={() => {}} />)
 
+    // `aria-selected`, not `aria-current="page"`. A tab inside a page is not a
+    // page, and the nav panel uses `aria-current="page"` for the destinations
+    // that really are — keeping the two attributes distinct is what stops a
+    // screen reader announcing two different "current" things at once.
     const current = screen
-      .getAllByRole('button')
-      .filter((button) => button.getAttribute('aria-current') === 'page')
+      .getAllByRole('tab')
+      .filter((tab) => tab.getAttribute('aria-selected') === 'true')
 
     expect(current).toHaveLength(1)
     expect(current[0].textContent).toContain('Cash & runway')
@@ -68,7 +82,7 @@ describe('SectionRail', () => {
     const onSelect = vi.fn()
     render(<SectionRail sections={FINANCE} active="overview" onSelect={onSelect} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /receivables/i }))
+    fireEvent.click(screen.getByRole('tab', { name: /receivables/i }))
 
     expect(onSelect).toHaveBeenCalledWith('receivables')
   })
@@ -79,7 +93,7 @@ describe('SectionRail', () => {
     // live would be the one number on this page that is invented.
     render(<SectionRail sections={FINANCE} active="overview" onSelect={() => {}} />)
 
-    expect(screen.getByRole('button', { name: /overview/i }).textContent).toContain('2')
+    expect(screen.getByRole('tab', { name: /overview/i }).textContent).toContain('2')
   })
 
   it('renders nothing at all when there are no sections', () => {

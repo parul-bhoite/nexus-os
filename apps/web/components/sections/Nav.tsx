@@ -56,7 +56,11 @@ export function Nav() {
                   <a
                     key={item.href}
                     href={item.href}
-                    className={`relative rounded-full px-3.5 py-2 text-sm transition-colors duration-300 ${
+                    // The indicator was purely visual: `aria-current` did not
+                    // appear anywhere on this page, so the section a reader is
+                    // in was information only sighted readers had.
+                    aria-current={isActive ? 'true' : undefined}
+                    className={`relative rounded-full px-3.5 py-2 text-sm transition-colors duration-base ease-out ${
                       isActive ? 'text-ink-800' : 'text-ink-500 hover:text-ink-800'
                     }`}
                   >
@@ -128,6 +132,7 @@ export function Nav() {
                     key={item.href}
                     href={item.href}
                     onClick={() => setOpen(false)}
+                    aria-current={active === item.href ? 'true' : undefined}
                     initial={{ opacity: 0, y: 18 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.06 + i * 0.05, ease: [0.16, 1, 0.3, 1] }}
