@@ -9,12 +9,14 @@ import {
   TASK_STATUSES,
   archiveDispatch,
   archiveStockItem,
+  deleteDeal,
   archiveSupplier,
   archiveIssue,
   archiveMilestone,
   archiveProject,
   archiveTask,
   confirmComplete,
+  createDeal,
   createDispatch,
   createStockItem,
   createSupplier,
@@ -153,6 +155,10 @@ export function WorkRecorder() {
   const [stockOnHand, setStockOnHand] = useState('')
   const [stockMinimum, setStockMinimum] = useState('')
   const [savingStock, setSavingStock] = useState(false)
+
+  const [dealName, setDealName] = useState('')
+  const [dealAmount, setDealAmount] = useState('')
+  const [savingDeal, setSavingDeal] = useState(false)
 
   const [supplierName, setSupplierName] = useState('')
   const [supplierSpend, setSupplierSpend] = useState('')
@@ -353,6 +359,30 @@ export function WorkRecorder() {
     }
   }
 
+  async function submitDeal(event: React.FormEvent) {
+    event.preventDefault()
+    setSavingDeal(true)
+    setFeedback(null)
+    try {
+      await createDeal({
+        name: dealName,
+        // Together or neither — an amount with no currency is a number with no
+        // unit, and the table's CHECK says the same.
+        amount_minor: dealAmount ? Math.round(Number(dealAmount) * 100) : null,
+        currency: dealAmount ? 'OMR' : null,
+        stage: null,
+      })
+      setDealName('')
+      setDealAmount('')
+      setFeedback({ kind: 'done', text: 'Deal recorded.' })
+      await reload()
+    } catch (error) {
+      setFeedback({ kind: 'error', text: messageOf(error, 'Could not record that deal.') })
+    } finally {
+      setSavingDeal(false)
+    }
+  }
+
   const ARCHIVERS = {
     project: archiveProject,
     task: archiveTask,
@@ -361,6 +391,7 @@ export function WorkRecorder() {
     dispatch: archiveDispatch,
     stock: archiveStockItem,
     supplier: archiveSupplier,
+    deal: deleteDeal,
   } as const
 
   async function archive(kind: keyof typeof ARCHIVERS, id: string) {
@@ -399,6 +430,7 @@ export function WorkRecorder() {
   const dispatches = ops?.dispatches ?? []
   const stock = ops?.stock ?? []
   const suppliers = ops?.suppliers ?? []
+  const deals = ops?.deals ?? []
   const nothingYet =
     ops !== null &&
     projects.length === 0 &&
@@ -407,7 +439,8 @@ export function WorkRecorder() {
     issues.length === 0 &&
     dispatches.length === 0 &&
     stock.length === 0 &&
-    suppliers.length === 0
+    suppliers.length === 0 &&
+    deals.length === 0
   const confirmedFor = (entity: string) =>
     (ops?.completeness ?? []).find((entry) => entry.entity === entity) ?? null
 
@@ -1193,6 +1226,82 @@ export function WorkRecorder() {
                   className="text-2xs text-ink-500 underline hover:text-ink-800 disabled:opacity-60"
                 >
                   Archive
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="font-display text-lg text-ink-900">Deals</h2>
+        {/* These are counted on their own Sales tile and never mixed with a
+            connected CRM's — `retrieval/deals.py` partitions the table by
+            provenance (ADR 0038). */}
+        <p className="max-w-prose text-sm text-ink-600">
+          For tracking deals without a CRM. They are counted separately from anything a
+          connected CRM reports, and the tile says they are your own records.
+        </p>
+
+        <form onSubmit={submitDeal} className="grid max-w-2xl gap-3 sm:grid-cols-3">
+          <div className="sm:col-span-2">
+            <label className={LABEL} htmlFor="deal-name">
+              Deal
+            </label>
+            <input
+              id="deal-name"
+              required
+              maxLength={300}
+              value={dealName}
+              onChange={(event) => setDealName(event.target.value)}
+              className={`mt-1 ${FIELD}`}
+            />
+          </div>
+          <div>
+            <label className={LABEL} htmlFor="deal-amount">
+              Amount <span className="font-normal text-ink-400">(optional)</span>
+            </label>
+            <input
+              id="deal-amount"
+              type="number"
+              min={0}
+              step="0.01"
+              value={dealAmount}
+              onChange={(event) => setDealAmount(event.target.value)}
+              className={`mt-1 ${FIELD}`}
+            />
+            <p className="mt-1 text-2xs text-ink-400">
+              Left blank, it is counted and not added to the total.
+            </p>
+          </div>
+          <div className="sm:col-span-3">
+            <button
+              type="submit"
+              disabled={savingDeal}
+              className="rounded-lg bg-ink-800 px-4 py-2 text-sm font-medium text-bone-50 disabled:opacity-60"
+            >
+              {savingDeal ? 'Recording…' : 'Record deal'}
+            </button>
+          </div>
+        </form>
+
+        {deals.length > 0 ? (
+          <ul className="max-w-2xl divide-y divide-ink-100 rounded-xl border border-ink-100">
+            {deals.map((deal) => (
+              <li key={deal.id} className="flex flex-wrap items-baseline gap-x-3 px-4 py-3">
+                <span className="min-w-0 grow text-sm text-ink-800">{deal.name}</span>
+                <span className="text-2xs text-ink-400">
+                  {deal.amount_minor === null
+                    ? 'no amount'
+                    : `${deal.currency} ${(deal.amount_minor / 100).toLocaleString()}`}
+                </span>
+                <button
+                  type="button"
+                  disabled={archiving}
+                  onClick={() => void archive('deal', deal.id)}
+                  className="text-2xs text-ink-500 underline hover:text-ink-800 disabled:opacity-60"
+                >
+                  Remove
                 </button>
               </li>
             ))}

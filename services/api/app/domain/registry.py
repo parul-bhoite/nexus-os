@@ -497,6 +497,9 @@ _IMPLEMENTED: Final[frozenset[str]] = frozenset(
         # and stands behind D29's gate as the on-time figure does.
         "operations.stock_levels",
         "operations.supplier_risk",
+        # `doc/15` S10.6. Same calculator as `sales.pipeline_board` over a
+        # different population — `crm_deal` partitioned by `provider` (ADR 0038).
+        "sales.deals_lite",
     }
 )
 
@@ -534,6 +537,7 @@ _REACHABLE: Final[frozenset[str]] = _setup_and_watchlist_ids() | frozenset(
         "operations.on_time_dispatch",
         "operations.stock_levels",
         "operations.supplier_risk",
+        "sales.deals_lite",
     }
 )
 """**The capabilities a person can actually open.**

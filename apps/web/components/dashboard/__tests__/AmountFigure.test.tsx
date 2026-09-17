@@ -30,6 +30,7 @@ function amount(overrides: Partial<AmountFigure> = {}): AmountFigure {
     currency: 'OMR',
     uncounted: 3,
     uncounted_label: 'unpriced',
+    self_reported: false,
     source: 'CRM',
     measured_at: '2026-09-17',
     method: 'calculators.pipeline.compute_pipeline',
@@ -50,6 +51,25 @@ function block(figure: AmountFigure | null = amount()): DirectorBlock {
     figure,
   }
 }
+
+describe('where the number came from', () => {
+  it('says a provider read it when a provider did', () => {
+    render(<BlockCard block={block()} department="sales" />)
+
+    expect(screen.getByText(/Read 2026-09-17 from your CRM/)).toBeTruthy()
+  })
+
+  it('never claims a provider read what somebody typed', () => {
+    /** ADR 0038. Once totalled, a synced pipeline and a hand-typed one look
+     *  identical — the sentence underneath is the only thing that differs. */
+    render(
+      <BlockCard block={block(amount({ self_reported: true }))} department="sales" />,
+    )
+
+    expect(screen.getByText(/Counted from what you recorded/)).toBeTruthy()
+    expect(screen.queryByText(/from your CRM/)).toBeNull()
+  })
+})
 
 describe('what an amount figure shows', () => {
   it('leads with the money and says how many deals it came from', () => {

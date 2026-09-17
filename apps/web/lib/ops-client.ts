@@ -53,6 +53,15 @@ export type Issue = {
   due_on: string | null
 }
 
+export type DealRecord = {
+  id: string
+  name: string | null
+  amount_minor: number | null
+  currency: string | null
+  stage: string | null
+  closes_on: string | null
+}
+
 export type StockItem = {
   id: string
   name: string
@@ -113,6 +122,8 @@ export type Ops = {
   milestones: Milestone[]
   issues: Issue[]
   dispatches: DispatchRecord[]
+  /** Deals typed here — never a CRM's, which belong to the Sales tiles. */
+  deals: DealRecord[]
   stock: StockItem[]
   suppliers: SupplierRecord[]
   /** Days past the promise before an order is late, or `null` if nobody has
@@ -207,6 +218,29 @@ export function createIssue(body: {
     '/ops/issues',
     { method: 'POST', body: JSON.stringify(body) },
     'Could not record that issue.',
+  )
+}
+
+/** Recorded as `provider = 'nexus'`, which is what keeps it out of the CRM
+ *  pipeline figure (ADR 0038). */
+export function createDeal(body: {
+  name: string
+  amount_minor: number | null
+  currency: string | null
+  stage: string | null
+}): Promise<DealRecord> {
+  return send<DealRecord>(
+    '/ops/deals',
+    { method: 'POST', body: JSON.stringify(body) },
+    'Could not record that deal.',
+  )
+}
+
+export function deleteDeal(id: string): Promise<void> {
+  return send<void>(
+    `/ops/deals/${encodeURIComponent(id)}`,
+    { method: 'DELETE' },
+    'Could not remove that deal.',
   )
 }
 

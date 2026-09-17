@@ -130,6 +130,15 @@ export type AmountFigure = {
   uncounted: number
   /** What `uncounted` means here, in the calculator's words. */
   uncounted_label: string
+  /**
+   * Whether somebody typed these rather than a system reporting them (ADR 0038).
+   *
+   * **The kind is the same and the standing is not.** A pipeline synced from a
+   * CRM and one a founder wrote down are both amounts; what differs is whether
+   * anything outside NEXUS agrees. Not the widget state, which renders quoted
+   * text and no figure — that would blank a tile whose job is a total.
+   */
+  self_reported: boolean
   /** Where it was read from — a provider, because a CRM record has no page to
    *  open. The scored figure's `source_url` is its equivalent. */
   source: string

@@ -267,7 +267,36 @@ where the same field counts lines under a level. They now carry `RateParts` and 
 
 Asserted by `scripts/ops_walkthrough.py`: 83 checks, green.
 
-### S10.6 — Deals-lite, per D30
+### S10.6 — Deals-lite, per D30 ✅ *shipped 17 September 2026*
+
+**D30 decided: reuse `crm_deal`, partitioned by provenance (ADR 0038).** Hand-typed deals
+are `provider = 'nexus'` rows. **No migration** — the column exists, carries no CHECK, and
+the unique key already includes it — and `calculators/pipeline.py` is untouched, which was
+the whole argument for reuse.
+
+**The partition is what makes reuse safe, and it is the part that was easy to skip.**
+`current_deals` previously selected *every* `crm_deal` row and labelled it `provider="crm"`.
+Adding typed rows without touching that query would have fed somebody's own typing into
+`sales.pipeline_board` as though a CRM had reported it — silently, with no symptom. So
+`current_deals` reads `provider <> 'nexus'` and `current_typed_deals` reads the rest.
+
+**The kind is the same and the standing differs.** Both figures are amounts;
+`AmountFigureOut.self_reported` decides whether the tile says "Read from your CRM" or
+"Counted from what you recorded". Splitting the union again would spend its one mechanism
+on something that is not a new kind.
+
+Asserted by `scripts/ops_walkthrough.py`: 91 checks, green, including that the CRM tile
+does not see the typed deals at all.
+
+**⚠️ This slice tipped `/dashboards/surface` past the BFF's 30-second timeout on the
+development machine.** Measured directly against the API: **31–37 s** for the surface and
+**13 s** for `/ops`. The cause is round-trip count, not any one query — the surface now
+makes roughly fourteen sequential statements, nine of them `current_ops`, against a Neon
+instance this machine reaches in ~2 s per statement. S10.5 rendered; S10.6 added one read
+and crossed the line. Co-located with the database this would be well under a second, but
+fourteen sequential round trips for one page is a design problem regardless of where the
+database sits. **Fixing it is the next piece of work**, and until then the Today page
+cannot be loaded here.
 
 ### S10.7 — The composites, per D31
 `operations.score_drivers` and `executive.todays_priorities`. Last, because a ranking

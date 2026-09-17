@@ -226,8 +226,13 @@ function AmountFigureBody({ figure }: { figure: AmountFigure }) {
         </p>
       ) : null}
 
+      {/* **What this number's standing is** (ADR 0038). "Read from your CRM"
+          about somebody's own typing is the specific thing this tile could get
+          wrong, and the two populations look identical once totalled. */}
       <p className="mt-2 text-sm text-ink-400">
-        Read {figure.measured_at} from your {figure.source}
+        {figure.self_reported
+          ? `Counted from what you recorded, last updated ${figure.measured_at}`
+          : `Read ${figure.measured_at} from your ${figure.source}`}
       </p>
     </>
   )

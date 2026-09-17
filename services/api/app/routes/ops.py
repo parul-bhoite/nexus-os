@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 from typing import Annotated, Final
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -45,7 +45,8 @@ from app.calculators.completeness import ENTITIES
 from app.deps import CurrentScope
 from app.domain.scopes import Role
 from app.logging import get_logger
-from app.retrieval.ops import current_ops
+from app.retrieval.deals import TYPED, typed_deal_records
+from app.retrieval.ops import OpsSnapshot, current_ops
 from app.retrieval.scoped import scoped_connection
 
 router = APIRouter(prefix="/ops", tags=["ops"])
@@ -115,6 +116,32 @@ class IssueOut(BaseModel):
     severity: str
     owner_id: UUID | None
     due_on: date | None
+
+
+class DealIn(BaseModel):
+    """A deal somebody is tracking without a CRM — `doc/15` S10.6.
+
+    No `external_id`: there is no external system for it to have an id in, and
+    one is generated so the table's unique key keeps working (ADR 0038).
+    """
+
+    name: Annotated[str, Field(min_length=1, max_length=300)]
+    amount_minor: Annotated[int | None, Field(ge=0)] = None
+    currency: Annotated[str | None, Field(min_length=3, max_length=3)] = None
+    """Together or neither — `ck_crm_deal_amount_currency` enforces the pair, and
+    an amount with no currency is a number with no unit."""
+
+    stage: Annotated[str | None, Field(max_length=100)] = None
+    closes_on: date | None = None
+
+
+class DealOut(BaseModel):
+    id: UUID
+    name: str | None
+    amount_minor: int | None
+    currency: str | None
+    stage: str | None
+    closes_on: date | None
 
 
 class StockItemIn(BaseModel):
@@ -227,6 +254,11 @@ class OpsOut(BaseModel):
     milestones: list[MilestoneOut]
     issues: list[IssueOut]
     dispatches: list[DispatchOut]
+    deals: list[DealOut]
+    """Deals recorded by hand — `provider = 'nexus'` rows of `crm_deal`, never a
+    provider's (ADR 0038). Served here because this is the surface that wrote
+    them; the CRM's own deals belong to the Sales tiles and not to this page."""
+
     stock: list[StockItemOut]
     suppliers: list[SupplierOut]
     grace_days: int | None
@@ -328,20 +360,30 @@ async def read_ops(scope: CurrentScope) -> OpsOut:
     """Everything this workspace has recorded."""
     async with scoped_connection(scope) as db:
         snapshot = await current_ops(db, scope)
+        typed_deals = await typed_deal_records(db, scope)
 
-    if snapshot is None:
+    # Deals live in `crm_deal` rather than in the ops tables, so a workspace can
+    # have typed a deal and recorded nothing else. `current_ops` returning `None`
+    # is about the ops layer alone and must not hide them.
+    if snapshot is None and not typed_deals:
         return OpsOut(
             projects=[],
             tasks=[],
             milestones=[],
             issues=[],
             dispatches=[],
+            deals=[],
             stock=[],
             suppliers=[],
             grace_days=None,
             completeness=[],
             recorded_at="",
         )
+
+    # A workspace can have typed a deal and recorded nothing else, in which case
+    # there is no ops snapshot and the deals still have to be served. An empty
+    # one rather than a branch per field: `OpsSnapshot` defaults every list.
+    snapshot = snapshot or OpsSnapshot(projects=[], tasks=[])
 
     return OpsOut(
         projects=[
@@ -379,6 +421,17 @@ async def read_ops(scope: CurrentScope) -> OpsOut:
                 dispatched_on=d.dispatched_on,
             )
             for d in snapshot.dispatches
+        ],
+        deals=[
+            DealOut(
+                id=d.id,
+                name=d.name,
+                amount_minor=d.amount_minor,
+                currency=d.currency,
+                stage=d.stage,
+                closes_on=d.closes_on,
+            )
+            for d in typed_deals
         ],
         stock=[
             StockItemOut(id=i.id, name=i.name, unit=i.unit, on_hand=i.on_hand, minimum=i.minimum)
@@ -929,3 +982,91 @@ async def archive_stock_item(item_id: UUID, scope: CurrentScope) -> None:
 )
 async def archive_supplier(supplier_id: UUID, scope: CurrentScope) -> None:
     await _archive(scope, "ops_supplier", supplier_id)
+
+
+@router.post(
+    "/deals",
+    response_model=DealOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_csrf)],
+)
+async def create_deal(body: DealIn, scope: CurrentScope) -> DealOut:
+    """Record a deal by hand — `doc/15` S10.6, ADR 0038 (D30).
+
+    **Written into `crm_deal` with `provider = 'nexus'`**, which is what keeps it
+    out of `sales.pipeline_board`: `retrieval/deals.py` partitions the table on
+    that column, and without the partition a typed deal would be reported as
+    though a CRM had said so.
+
+    `external_id` is generated. It is `NOT NULL` and part of the unique key, and
+    a hand-typed deal has no external system to have an id in — so this is our
+    own identifier for the row rather than a pretend one from somewhere else.
+    """
+    _may_write(scope)
+    if (body.amount_minor is None) != (body.currency is None):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "amount_minor and currency go together — an amount with no currency "
+            "is a number with no unit.",
+        )
+
+    async with scoped_connection(scope) as db:
+        row = (
+            await db.execute(
+                sa.text(
+                    "INSERT INTO crm_deal"
+                    " (workspace_id, provider, external_id, name, amount_minor,"
+                    "  currency, stage, closes_on)"
+                    " VALUES (:w, :provider, :external, :name, :amount, :currency,"
+                    "         :stage, :closes)"
+                    " RETURNING id, name, amount_minor, currency, stage, closes_on"
+                ),
+                {
+                    "w": str(scope.workspace_id),
+                    "provider": TYPED,
+                    "external": str(uuid4()),
+                    "name": body.name.strip(),
+                    "amount": body.amount_minor,
+                    "currency": body.currency.upper() if body.currency else None,
+                    "stage": body.stage.strip() if body.stage else None,
+                    "closes": body.closes_on,
+                },
+            )
+        ).one()
+        await db.commit()
+
+    log.info("ops.deal_created", priced=body.amount_minor is not None)
+    return DealOut(
+        id=row.id,
+        name=row.name,
+        amount_minor=row.amount_minor,
+        currency=row.currency,
+        stage=row.stage,
+        closes_on=row.closes_on,
+    )
+
+
+@router.delete(
+    "/deals/{deal_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_csrf)],
+)
+async def delete_deal(deal_id: UUID, scope: CurrentScope) -> None:
+    """**A real `DELETE`, and the only one in this file.**
+
+    `crm_deal` has no `archived_at`: it is a sync target, and a provider that
+    stops reporting a deal means the row goes. A typed deal in the same table
+    inherits that shape, so "archive" would be a column added for one provider's
+    rows and ignored by every read. Deleting one loses nothing a sync would have
+    kept.
+    """
+    _may_write(scope)
+
+    async with scoped_connection(scope) as db:
+        await db.execute(
+            sa.text(
+                "DELETE FROM crm_deal WHERE id = :id AND workspace_id = :w AND provider = :provider"
+            ),
+            {"id": str(deal_id), "w": str(scope.workspace_id), "provider": TYPED},
+        )
+        await db.commit()

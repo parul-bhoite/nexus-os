@@ -97,7 +97,7 @@ from app.grounding.context import CompanyContext, assemble
 from app.grounding.pipeline import Outcome, UnavailableReason
 from app.logging import get_logger
 from app.retrieval.crawl import CrawlSnapshot, current_page_signals
-from app.retrieval.deals import DealSnapshot, current_deals
+from app.retrieval.deals import DealSnapshot, current_deals, current_typed_deals
 from app.retrieval.narration import current_narrations
 from app.retrieval.ops import OpsSnapshot, current_ops
 from app.retrieval.scoped import apply_workspace_scope, scoped_connection
@@ -130,6 +130,13 @@ class Observed:
     completed onboarding with no signals, which is exactly the case a tile must
     render as `locked`.
     """
+
+    typed_deals: DealSnapshot | None = None
+    """The deals somebody recorded by hand, or `None` if nobody has (ADR 0038).
+
+    Separate from `deals` rather than merged, because the two populations feed
+    different tiles and the whole point of reusing `crm_deal` was that nothing
+    blends them."""
 
     deals: DealSnapshot | None = None
     """This workspace's CRM deals, or `None` if none have ever been read.
@@ -241,6 +248,7 @@ async def observed_sources(scope: CurrentScope) -> Observed:
         return Observed(
             crawl=await current_page_signals(db, scope),
             deals=await current_deals(db, scope),
+            typed_deals=await current_typed_deals(db, scope),
             ops=await current_ops(db, scope),
             narrations=await current_narrations(db, scope),
         )
@@ -442,7 +450,21 @@ class AmountFigureOut(BaseModel):
     """What `uncounted` means here, in the calculator's words. "unpriced" for a
     pipeline; another kind of absence for another capability."""
 
-    source: str
+    self_reported: bool = False
+    """Whether somebody typed these rather than a system reporting them — ADR
+    0038.
+
+    **The kind is the same and the standing is not.** A pipeline synced from a
+    CRM and one a founder wrote down are both amounts: a total, a count behind
+    it, no denominator. What differs is whether anything outside NEXUS agrees,
+    so the provenance is a field rather than a fifth arm on the union.
+
+    Not `WidgetState.SELF_REPORTED`, for ADR 0035's reason: that state renders
+    quoted text and no figure at all, which would blank a tile whose whole job
+    is a total.
+    """
+
+    source: str = ""
     """Where it was read from — a provider name rather than a URL, because a
     CRM record has no page a founder can open. The scored figure's
     `source_url` is its equivalent."""
@@ -1178,13 +1200,24 @@ def count_figure_out(capability: Capability, ops: OpsSnapshot | None) -> CountFi
     )
 
 
-def amount_figure_out(capability: Capability, deals: DealSnapshot | None) -> AmountFigureOut | None:
+def amount_figure_out(
+    capability: Capability,
+    deals: DealSnapshot | None,
+    typed: DealSnapshot | None = None,
+) -> AmountFigureOut | None:
     """The counted figure for one capability, or `None` when nothing tallies it.
 
     Module level and shared, exactly as `figure_out` is — two renderings of one
     number is the disagreement the grounding layer exists to prevent, and it
     would be no less true for a second kind.
+
+    **Two populations, chosen here** (ADR 0038). `sales.deals_lite` reads the
+    deals somebody typed; everything else reads what a provider reported. The
+    two never mix: `retrieval/deals.py` partitions `crm_deal` by `provider`, and
+    picking the wrong half here would undo that partition at the last step.
     """
+    hand_typed = capability.id == "sales.deals_lite"
+    deals = typed if hand_typed else deals
     if deals is None:
         return None
 
@@ -1205,6 +1238,7 @@ def amount_figure_out(capability: Capability, deals: DealSnapshot | None) -> Amo
         total_minor=computation.pipeline.total_minor,
         currency=computation.pipeline.currency,
         uncounted=computation.pipeline.unpriced,
+        self_reported=hand_typed,
         uncounted_label=computation.uncounted_label,
         source=computation.source,
         measured_at=computation.measured_at.date().isoformat(),
@@ -1273,7 +1307,7 @@ def _measured_block(
         unlock=unlock_for_sources(capability.required_sources, connected=connected),
         needs=[source.value for source in capability.required_sources],
         figure=figure_out(capability, snapshot)
-        or amount_figure_out(capability, observed.deals)
+        or amount_figure_out(capability, observed.deals, observed.typed_deals)
         or count_figure_out(capability, observed.ops)
         or rate_figure_out(capability, observed.ops),
         narration=narration_out(capability, snapshot, observed.narrations),

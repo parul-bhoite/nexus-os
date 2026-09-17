@@ -408,7 +408,37 @@ check("vouching for suppliers did not vouch for stock",
       (tiles.get("operations.stock_levels", {}).get("figure") or {}).get("complete_as_of") == "",
       str(tiles.get("operations.stock_levels"))[:200])
 
-print("\n\033[1m8. Another workspace sees none of it\033[0m")
+print("\n\033[1m8. Deals-lite — D30, one table partitioned by provenance\033[0m")
+for name, amount in (("Villa fit-out", 50_000), ("Retail unit", 25_000), ("No price yet", None)):
+    r = a.post(
+        "/ops/deals",
+        json={"name": name, "amount_minor": amount, "currency": "OMR" if amount else None},
+        headers=token(a),
+    )
+check("POST /ops/deals -> 201", r.status_code == 201, r.text[:300])
+
+r = a.post("/ops/deals", json={"name": "Half", "amount_minor": 100}, headers=token(a))
+check("an amount with no currency is refused", r.status_code == 422, str(r.status_code))
+
+tiles = {x["key"]: x for x in a.get("/dashboards/surface").json().get("measured", [])}
+lite = tiles.get("sales.deals_lite", {}).get("figure") or {}
+check("sales.deals_lite carries a figure", bool(lite), str(list(tiles)))
+check("it is an amount, the same kind the CRM tile serves",
+      lite.get("kind") == "amount", str(lite)[:200])
+check("three deals counted, the unpriced one among them", lite.get("count") == 3,
+      str(lite)[:250])
+check("and it is totalled from the two that have a price",
+      lite.get("total_minor") == 75_000 and lite.get("uncounted") == 1, str(lite)[:250])
+check("**it declares itself self-reported**", lite.get("self_reported") is True,
+      str(lite)[:250])
+
+# **The partition.** These deals are `provider = 'nexus'` rows of `crm_deal`, and
+# the CRM tile reads the same table. Without the `provider <> 'nexus'` clause it
+# would report somebody's own typing as though a provider had said so.
+check("and the CRM pipeline tile does not see them at all",
+      "sales.pipeline_board" not in tiles, str(list(tiles)))
+
+print("\n\033[1m9. Another workspace sees none of it\033[0m")
 b = founder("b")
 r = b.get("/ops")
 check(
@@ -423,7 +453,7 @@ if project_id:
     still = a.get("/ops").json()["projects"]
     check("the project is still there for its owner", len(still) == 1, str(still)[:200])
 
-print("\n\033[1m9. Archive stops it counting without deleting it\033[0m")
+print("\n\033[1m10. Archive stops it counting without deleting it\033[0m")
 if project_id:
     r = a.delete(f"/ops/projects/{project_id}", headers=token(a))
     check("DELETE /ops/projects/{id} -> 204", r.status_code == 204, str(r.status_code))

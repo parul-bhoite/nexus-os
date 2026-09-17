@@ -169,8 +169,27 @@ PIPELINE_TALLIES: Final[dict[str, Tally]] = {
         uncounted_label="unpriced",
         method="calculators.pipeline.compute_pipeline",
     ),
+    "sales.deals_lite": Tally(
+        calculator=compute_pipeline,
+        label="Deals you have recorded",
+        measures=(
+            "Every deal you have written down here that is not closed, counted, with "
+            "the priced ones totalled. These are your own records rather than a CRM's "
+            "— nothing has been checked against another system — and they are counted "
+            "separately from anything a connected CRM reports."
+        ),
+        uncounted_label="unpriced",
+        method="calculators.pipeline.compute_pipeline",
+    ),
 }
-"""The second dispatch. Guarded against the registry in both directions by
+"""The second dispatch — **two capabilities, one calculator, two populations.**
+
+`sales.pipeline_board` counts what a provider reported and `sales.deals_lite`
+counts what somebody typed; `retrieval/deals.py` partitions the one table by
+`provider` (ADR 0038). The arithmetic is identical, which is why reuse was worth
+it, and the provenance is not, which is why the figures differ.
+
+Guarded against the registry in both directions by
 `test_grounding_compute.py`, which iterates every dispatch rather than naming
 one — this docstring claimed that guard for a slice before it was true."""
 
