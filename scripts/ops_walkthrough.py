@@ -71,7 +71,7 @@ def founder(tag: str) -> httpx.Client:
     """Register, verify, log in and create a company. Returns a live client."""
     stamp = f"{int(time.time())}{tag}"
     mail = f"founder+{stamp}@ops-{stamp}.om"
-    client = httpx.Client(base_url=API, timeout=30.0)
+    client = httpx.Client(base_url=API, timeout=180.0)
 
     t0 = time.time()
     client.post("/auth/register", json={"email": mail, "password": PW, "full_name": "Ops Walk"})

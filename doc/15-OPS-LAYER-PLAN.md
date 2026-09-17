@@ -295,8 +295,10 @@ makes roughly fourteen sequential statements, nine of them `current_ops`, agains
 instance this machine reaches in ~2 s per statement. S10.5 rendered; S10.6 added one read
 and crossed the line. Co-located with the database this would be well under a second, but
 fourteen sequential round trips for one page is a design problem regardless of where the
-database sits. **Fixing it is the next piece of work**, and until then the Today page
-cannot be loaded here.
+database sits. **Fixed immediately after, in ADR 0039**: `current_ops` is now one statement with nine
+`json_agg` subqueries instead of nine statements, which brought the surface to 17–20 s and
+`/ops` to 7–9 s — under the timeout, and still not fast. Five round trips remain on the
+surface and the same argument applies to them.
 
 ### S10.7 — The composites, per D31
 `operations.score_drivers` and `executive.todays_priorities`. Last, because a ranking
