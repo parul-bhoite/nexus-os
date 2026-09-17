@@ -1,10 +1,10 @@
 # ADR 0033 — A figure that is not a score
 
-**Status** Proposed — needs Parul. Recorded as **D28** in `DECISIONS-REQUIRED.md`.
+**Status** Accepted
 **Date** 17 September 2026
-**Decided by** Nobody yet. Surfaced by `doc/14` step 9: the pipeline calculator is written,
-tested and cannot be rendered, and widening the figure model quietly is the wrong way to
-fix that.
+**Decided by** Parul, answering D28 — *"go with C for D28"*. Surfaced by `doc/14` step 9:
+the pipeline calculator was written, tested and unrenderable, and widening the figure model
+quietly would have been the wrong way to fix that.
 
 ## Context
 
@@ -60,9 +60,10 @@ Discriminated by which is present.
 **D — Generalise to "a value with provenance".** One shape: a value, a unit, an optional
 denominator, and working. Everything becomes an instance of it.
 
-## Recommendation
+## Decision
 
-**C.**
+**C — a discriminated union**, `figure: ScoreFigureOut | AmountFigureOut`, tagged
+`kind: "score" | "amount"`.
 
 ### Reasoning
 

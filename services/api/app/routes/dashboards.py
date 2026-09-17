@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Annotated, Final
+from typing import Annotated, Final, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -82,11 +82,18 @@ from app.domain.sections import (
     sections_for,
 )
 from app.grounding.answer import NARRATOR, narrate
-from app.grounding.compute import CRAWL_AUDITS, compute_from_crawl, computes
+from app.grounding.compute import (
+    AMOUNT_CAPABILITIES,
+    CRAWL_AUDITS,
+    compute_from_crawl,
+    compute_from_deals,
+    computes,
+)
 from app.grounding.context import CompanyContext, assemble
 from app.grounding.pipeline import Outcome, UnavailableReason
 from app.logging import get_logger
 from app.retrieval.crawl import CrawlSnapshot, current_page_signals
+from app.retrieval.deals import DealSnapshot, current_deals
 from app.retrieval.narration import current_narrations
 from app.retrieval.scoped import apply_workspace_scope, scoped_connection
 
@@ -117,6 +124,17 @@ class Observed:
     from onboarding having finished — a crawl that found nothing readable is a
     completed onboarding with no signals, which is exactly the case a tile must
     render as `locked`.
+    """
+
+    deals: DealSnapshot | None = None
+    """This workspace's CRM deals, or `None` if none have ever been read.
+
+    Defaulted so the hermetic permission tests that build an `Observed` with no
+    database keep compiling — the same reason `narrations` is.
+
+    **`None` is not an empty list.** No rows means no sync has happened and the
+    tile is `locked`; an empty list means a connected CRM with no open deals,
+    which is a real pipeline of zero (I10).
     """
 
     narrations: dict[str, StoredNarration] = field(default_factory=dict)
@@ -192,6 +210,7 @@ async def observed_sources(scope: CurrentScope) -> Observed:
         # `us-east-2` repeated for one answer.
         return Observed(
             crawl=await current_page_signals(db, scope),
+            deals=await current_deals(db, scope),
             narrations=await current_narrations(db, scope),
         )
 
@@ -292,8 +311,13 @@ class CheckOut(BaseModel):
     evidence: str
 
 
-class FigureOut(BaseModel):
-    """A computed figure, its denominator, and its working.
+class ScoreFigureOut(BaseModel):
+    """A scored audit: a figure, its denominator, and its working.
+
+    **Tagged, and one of two** — ADR 0033. `kind` is a literal rather than a
+    thing a client infers from which fields are present: TypeScript narrows on
+    it exhaustively, so a third kind fails to compile at every consumer instead
+    of falling silently through a rendering branch.
 
     **The denominator travels with the number** — `ShellOut`'s rule for
     `ShellOut`'s reason. A score on its own is a claim the reader cannot check;
@@ -305,6 +329,8 @@ class FigureOut(BaseModel):
     makes it checkable — `label` and `measures` included, because what a number
     measures is a property of the calculation and not of the tile drawing it.
     """
+
+    kind: Literal["score"] = "score"
 
     label: str
     """What was measured, from the calculator — **not** the capability's name.
@@ -340,6 +366,65 @@ class FigureOut(BaseModel):
     method: str
 
 
+class AmountFigureOut(BaseModel):
+    """A counted, totalled figure — money and how many things it came from.
+
+    ADR 0033's second kind. **There is no denominator and none is invented.** A
+    pipeline is not a fraction of anything: a target to divide by would be a
+    number the customer never gave us, which is I1's prohibition arriving as a
+    helpful-looking percentage.
+
+    So this carries what was actually counted, and what could not be.
+    """
+
+    kind: Literal["amount"] = "amount"
+
+    label: str
+    measures: str
+    """What was counted **and what was not** — the same field, for the same
+    reason, as the scored figure. A correct number under a headline that
+    promises more is the one dishonest thing either shape can ship."""
+
+    count: int
+    """How many things are in the figure. The denominator's honest replacement:
+    not something to divide by, but the population the total came from."""
+
+    total_minor: int | None
+    """Minor units — fils, cents — against `currency`. An integer because money
+    in a float stops adding up.
+
+    **`None` is not zero.** It means nothing could be totalled: no priced items,
+    or more than one currency, and adding those would need a rate whose source
+    and date nobody can see. Zero would say the pipeline is worth nothing (I10).
+    """
+
+    currency: str | None
+    """The provider's own, never assumed to be the workspace's reporting
+    currency. `None` exactly when `total_minor` is."""
+
+    uncounted: int
+    """Items in `count` that the total leaves out — an unpriced deal, say. Part
+    of the figure rather than a footnote: a total that did not say what it
+    omitted is a total presented as complete."""
+
+    uncounted_label: str
+    """What `uncounted` means here, in the calculator's words. "unpriced" for a
+    pipeline; another kind of absence for another capability."""
+
+    source: str
+    """Where it was read from — a provider name rather than a URL, because a
+    CRM record has no page a founder can open. The scored figure's
+    `source_url` is its equivalent."""
+
+    measured_at: str
+    method: str
+
+
+Figure = ScoreFigureOut | AmountFigureOut
+"""One tile carries one kind. The union cannot express both or neither, which is
+the whole argument for it over two sibling fields (ADR 0033)."""
+
+
 class BlockOut(BaseModel):
     """One capability, as the rail renders it.
 
@@ -361,7 +446,7 @@ class BlockOut(BaseModel):
     narration: NarrationOut | None = None
     """The stored sentence, when one still describes the figure above it.
 
-    **A sibling of `figure`, not a field on it.** `FigureOut`'s own docstring
+    **A sibling of `figure`, not a field on it.** The figure's own docstring
     says every field there is either the calculator's output or the provenance
     that makes it checkable; prose is neither — it is a model's output *about*
     that output, and nesting it would make the figure object partly generated,
@@ -379,7 +464,7 @@ class BlockOut(BaseModel):
     yesterday's "budget exhausted" on every page load.
     """
 
-    figure: FigureOut | None = None
+    figure: Figure | None = None
     """The computed number, when there is one.
 
     `None` for every capability nothing computes, which is still most of them.
@@ -755,7 +840,7 @@ class SurfaceOut(BaseModel):
     surface changes where a founder reads a number, never what it says."""
 
 
-def figure_out(capability: Capability, snapshot: CrawlSnapshot | None) -> FigureOut | None:
+def figure_out(capability: Capability, snapshot: CrawlSnapshot | None) -> ScoreFigureOut | None:
     """The computed figure for one capability, or `None` when nothing scores it.
 
     **Module level, and shared by every route that serves a tile.** This was
@@ -770,7 +855,7 @@ def figure_out(capability: Capability, snapshot: CrawlSnapshot | None) -> Figure
     computation = compute_from_crawl(capability.id, snapshot)
     if computation is None:
         return None
-    return FigureOut(
+    return ScoreFigureOut(
         label=computation.label,
         measures=computation.measures,
         score=computation.score.score,
@@ -788,6 +873,40 @@ def figure_out(capability: Capability, snapshot: CrawlSnapshot | None) -> Figure
         ],
         checks_passed=computation.checks_passed,
         source_url=computation.source_url,
+        measured_at=computation.measured_at.date().isoformat(),
+        method=str(computation.trace["method"]),
+    )
+
+
+def amount_figure_out(capability: Capability, deals: DealSnapshot | None) -> AmountFigureOut | None:
+    """The counted figure for one capability, or `None` when nothing tallies it.
+
+    Module level and shared, exactly as `figure_out` is — two renderings of one
+    number is the disagreement the grounding layer exists to prevent, and it
+    would be no less true for a second kind.
+    """
+    if deals is None:
+        return None
+
+    computation = compute_from_deals(
+        capability.id,
+        deals.deals,
+        today=datetime.now(UTC).date(),
+        source=deals.provider,
+        fetched_at=deals.fetched_at,
+    )
+    if computation is None:
+        return None
+
+    return AmountFigureOut(
+        label=computation.label,
+        measures=computation.measures,
+        count=computation.pipeline.open_deals,
+        total_minor=computation.pipeline.total_minor,
+        currency=computation.pipeline.currency,
+        uncounted=computation.pipeline.unpriced,
+        uncounted_label=computation.uncounted_label,
+        source=computation.source,
         measured_at=computation.measured_at.date().isoformat(),
         method=str(computation.trace["method"]),
     )
@@ -853,7 +972,7 @@ def _measured_block(
         ).value,
         unlock=unlock_for_sources(capability.required_sources, connected=connected),
         needs=[source.value for source in capability.required_sources],
-        figure=figure_out(capability, snapshot),
+        figure=figure_out(capability, snapshot) or amount_figure_out(capability, observed.deals),
         narration=narration_out(capability, snapshot, observed.narrations),
     )
 
@@ -1379,7 +1498,8 @@ async def director_dashboard(
             state=state.value,
             unlock=unlock_for_sources(capability.required_sources, connected=connected),
             needs=[source.value for source in capability.required_sources],
-            figure=figure_out(capability, snapshot),
+            figure=figure_out(capability, snapshot)
+            or amount_figure_out(capability, observed.deals),
             narration=narration_out(capability, snapshot, observed.narrations),
         )
 
@@ -1471,6 +1591,20 @@ def _narratable(key: str, director: Director) -> Capability:
     # account for a figure that does not exist is how a plausible one gets
     # written.
     if not computes(capability.id) or not capability.reachable:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+
+    # **An amount figure cannot be narrated yet, and is refused rather than
+    # attempted** (ADR 0033). `narrate-metric`'s `SKILL.md` speaks in numerator,
+    # denominator and percentage; a pipeline has none of those, so a sentence
+    # grounded in those keys would be grounded in nothing — and
+    # `domain.narration.describes` would then compare five fields that do not
+    # exist and never mark it stale, leaving prose about last week's pipeline
+    # beside this week's.
+    #
+    # A 404 rather than a silent skip: the button is served by the same payload
+    # that says a tile has a figure, so a capability the client can see and
+    # cannot narrate is a state the API should name.
+    if capability.id in AMOUNT_CAPABILITIES:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
 
     # **There is deliberately no check on `consumes_facts` here**, and the

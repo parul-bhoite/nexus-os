@@ -4,9 +4,11 @@ import { useState } from 'react'
 import {
   STATE_LABEL,
   narrateBlock,
+  type AmountFigure,
   type BlockKind,
   type DirectorBlock,
   type Narration,
+  type ScoreFigure,
   type WidgetState,
 } from '@/lib/dashboard-client'
 
@@ -127,13 +129,27 @@ function hasFigure(state: WidgetState): boolean {
   return state === 'live' || state === 'partial' || state === 'stale'
 }
 
-/** The score, its denominator, and how many checks stand behind it. */
-function Figure({ block }: { block: DirectorBlock }) {
-  const figure = block.figure
-  if (!figure) return null
+/**
+ * The money a figure carries, formatted once and in one place.
+ *
+ * `Intl.NumberFormat` with the currency the API served, from minor units. The
+ * API serves `percentage` rather than letting clients divide, for the reason
+ * `FigureOut` gives — two clients must not round differently — and money has
+ * more ways to differ than a percentage does, so the same discipline applies:
+ * one function, not a template literal at each call site.
+ */
+function money(totalMinor: number, currency: string): string {
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 0,
+  }).format(totalMinor / 100)
+}
 
+/** A scored audit: the figure, its denominator, and how many checks stand behind it. */
+function ScoreFigureBody({ figure }: { figure: ScoreFigure }) {
   return (
-    <div className="mt-4">
+    <>
       <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <span className="font-display text-3xl leading-none text-ink-900">
           {figure.score}
@@ -161,6 +177,72 @@ function Figure({ block }: { block: DirectorBlock }) {
           {figure.source_url}
         </a>
       </p>
+    </>
+  )
+}
+
+/**
+ * A counted, totalled figure — ADR 0033's second kind.
+ *
+ * **No denominator, and none drawn.** The scored body reads `30 / 65`; this one
+ * cannot, because a pipeline is not a fraction of anything. Borrowing that
+ * layout and putting the count where a denominator goes would read as one, which
+ * is the whole reason the two are separate components rather than one with
+ * optional fields.
+ *
+ * **`total_minor === null` is not zero.** It means nothing could be totalled —
+ * no priced items, or two currencies — and the count is still true, so the count
+ * leads and the absence is stated rather than rendered as a figure of zero (I10).
+ */
+function AmountFigureBody({ figure }: { figure: AmountFigure }) {
+  const totalled = figure.total_minor !== null && figure.currency !== null
+
+  return (
+    <>
+      <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span className="font-display text-3xl leading-none text-ink-900">
+          {totalled ? money(figure.total_minor as number, figure.currency as string) : figure.count}
+        </span>
+        <span className="text-sm text-ink-500">
+          {totalled
+            ? `across ${figure.count} ${figure.count === 1 ? 'deal' : 'deals'}`
+            : `${figure.count === 1 ? 'deal' : 'deals'} — no total, because nothing here could be added up`}
+        </span>
+      </p>
+
+      <p className="mt-2 max-w-prose text-sm leading-relaxed text-ink-600">
+        <span className="font-medium text-ink-700">{figure.label}.</span> {figure.measures}
+      </p>
+
+      {figure.uncounted > 0 ? (
+        /* Part of the figure, not a footnote: a total that did not say what it
+           left out is a total presented as complete. */
+        <p className="mt-2 text-sm text-clay-600">
+          {figure.uncounted} of these {figure.uncounted === 1 ? 'is' : 'are'}{' '}
+          {figure.uncounted_label}, so {figure.uncounted === 1 ? 'it is' : 'they are'} counted
+          and not added.
+        </p>
+      ) : null}
+
+      <p className="mt-2 text-sm text-ink-400">
+        Read {figure.measured_at} from your {figure.source}
+      </p>
+    </>
+  )
+}
+
+/** Whichever kind this tile carries. */
+function Figure({ block }: { block: DirectorBlock }) {
+  const figure = block.figure
+  if (!figure) return null
+
+  return (
+    <div className="mt-4">
+      {figure.kind === 'score' ? (
+        <ScoreFigureBody figure={figure} />
+      ) : (
+        <AmountFigureBody figure={figure} />
+      )}
     </div>
   )
 }
@@ -197,8 +279,27 @@ function Working({
 
       {open ? (
         <div className="mt-3 overflow-hidden rounded-xl border border-ink-100">
+          {/* A scored audit's working is its checks. An amount figure has none —
+              a pipeline is a sum of rows, not nine weighted observations — and
+              inventing a checklist to fill the space would be the drawer showing
+              working that never happened. It gets the counts it was built from
+              and the method, which is the whole of its arithmetic. */}
           <ul className="divide-y divide-ink-100">
-            {figure.checks.map((check) => (
+            {figure.kind === 'amount' ? (
+              <li className="flex flex-wrap gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
+                <span className="min-w-0 grow">
+                  <span className="text-ink-800">
+                    {figure.count} counted, {figure.count - figure.uncounted} added
+                  </span>
+                  <span className="mt-0.5 block text-ink-500">
+                    {figure.uncounted > 0
+                      ? `${figure.uncounted} ${figure.uncounted_label}, so counted and not added.`
+                      : `Every one of them is priced, so all ${figure.count} are in the total.`}
+                  </span>
+                </span>
+              </li>
+            ) : null}
+            {(figure.kind === 'score' ? figure.checks : []).map((check) => (
               <li key={check.id} className="flex flex-wrap gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
                 <span
                   className={`shrink-0 font-mono text-2xs uppercase tracking-[0.08em] ${
@@ -462,7 +563,13 @@ export function BlockCard({
       {/* Between the figure and the consequence: a gloss on the number belongs
           on the number's side of that line. Both conditions again, for the same
           reason the drawer gives below. */}
-      {hasFigure(block.state) && block.figure ? (
+      {/* **Scored figures only** (ADR 0033). `narrate-metric` speaks in
+          numerator and denominator, so a pipeline sentence grounded in those
+          keys would be grounded in nothing — and the API refuses the capability
+          with a 404. A button that is there to press and cannot work is worse
+          than an absent one, which is the same argument `NOTHING_TO_RETRY`
+          already makes about a disabled control. */}
+      {hasFigure(block.state) && block.figure?.kind === 'score' ? (
         <Explanation
           block={block}
           department={department}

@@ -473,6 +473,10 @@ _IMPLEMENTED: Final[frozenset[str]] = frozenset(
         # page's HTML long enough to feed them.
         "marketing.seo_gaps",
         "marketing.brand_intelligence",
+        # `calculators/pipeline.py` counts and totals it, from `crm_deal` rows a
+        # connector landed. The first capability outside Marketing to carry a
+        # figure, and the first to carry one that is **not a score** — ADR 0033.
+        "sales.pipeline_board",
     }
 )
 
@@ -487,6 +491,10 @@ _REACHABLE: Final[frozenset[str]] = _setup_and_watchlist_ids() | frozenset(
         # analysis its `shows` promises, which `score_brand` does not do.
         "marketing.seo_gaps",
         "marketing.brand_intelligence",
+        # Pinned to `locked` until a CRM is connected, and to `partial`
+        # afterwards — `state_from_sources` decides that from `required_sources`
+        # against what is connected, so this set does not have to.
+        "sales.pipeline_board",
     }
 )
 """**The capabilities a person can actually open.**

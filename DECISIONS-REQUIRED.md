@@ -321,7 +321,7 @@ so it is written and tested rather than remembered later.
 
 ---
 
-### D28 — How does the dashboard carry a figure that is not a score? *(blocks `sales.pipeline_board`)*
+### ~~D28 — How does the dashboard carry a figure that is not a score?~~ — **answered: C, a discriminated union**, 17 September 2026
 
 `calculators/pipeline.py` is written and tested and **cannot be rendered**.
 `FigureOut` is an audit's shape — `score`, `max_score`, `percentage`, weighted
@@ -338,14 +338,18 @@ Four options, argued in full in ADR 0033:
 - **C. A discriminated union**, tagged `kind: "score" | "amount"`.
 - **D. Generalise to "a value with provenance."** One shape for everything.
 
-**My recommendation: C.** It cannot express the illegal state, TypeScript
-narrows on the tag exhaustively so a third kind fails to compile rather than
-falling through a branch, and it forces `describes()` (ADR 0028's narration
-staleness rule) to be written per kind — which A and B would let run its
-five-field comparison against an amount figure and quietly never fire.
+**Answered: C.** It cannot express the illegal state, TypeScript narrows on the
+tag exhaustively so a third kind fails to compile rather than falling through a
+branch, and it forces `describes()` (ADR 0028's narration staleness rule) to be
+written per kind — which A and B would let run its five-field comparison against
+an amount figure and quietly never fire.
 
-**Not urgent, and not trivial.** Nothing regresses while it is open; the cost of
-answering is that every consumer of `figure` branches once.
+**Shipped** in `routes/dashboards.py` (`ScoreFigureOut` / `AmountFigureOut`),
+`lib/dashboard-client.ts` and `BlockCard`. Amount figures are deliberately **not
+narratable yet**: `narrate-metric`'s `SKILL.md` speaks in numerator and
+denominator, so a pipeline sentence grounded in those keys would be grounded in
+nothing. Refused explicitly rather than left to compare fields that do not
+exist. See ADR 0033.
 
 ---
 

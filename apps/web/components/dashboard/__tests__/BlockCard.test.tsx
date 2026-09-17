@@ -5,6 +5,7 @@ import {
   STATE_LABEL,
   type BlockKind,
   type DirectorBlock,
+  type ScoreFigure,
   type WidgetState,
 } from '@/lib/dashboard-client'
 
@@ -44,8 +45,12 @@ const ALL_KINDS: BlockKind[] = [
   'studio',
 ]
 
-function figure(overrides: Partial<NonNullable<DirectorBlock['figure']>> = {}) {
+function figure(overrides: Partial<ScoreFigure> = {}): ScoreFigure {
   return {
+    // The tag the union narrows on (ADR 0033). Explicit in the fixture rather
+    // than defaulted: a double that can omit it is a double the real payload
+    // cannot be substituted for.
+    kind: 'score' as const,
     label: 'Technical SEO',
     measures:
       'Nine checks on the one page we fetched. Not keyword volumes, difficulty or rankings.',

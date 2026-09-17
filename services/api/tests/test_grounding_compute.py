@@ -272,7 +272,12 @@ def test_every_reachable_tile_either_computes_or_has_its_own_endpoint() -> None:
             continue
         if capability.id.endswith((".setup", ".watchlist")):
             continue
-        assert capability.id in CRAWL_AUDITS, (
+        # `computes()` rather than `CRAWL_AUDITS`, because there are two
+        # dispatches now (ADR 0033) and the question this asks is whether
+        # *anything* computes the tile. Asserted against the crawl dict alone,
+        # it failed the day a capability computed an amount — correctly by its
+        # own wording and wrongly by its intent.
+        assert computes(capability.id), (
             f"{capability.id} is reachable but nothing computes it — it will render a "
             f"figure state with no figure. Add a calculator, or take it out of _REACHABLE."
         )

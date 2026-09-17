@@ -153,7 +153,7 @@ def test_every_openable_capability_either_reads_answers_or_computes_a_figure() -
     once — `dashboards.DELIVERED`, `Capability.delivered` and
     `marketing.DELIVERED_MARKETING` — and they disagreed. One flag now.
     """
-    from app.grounding.compute import CRAWL_AUDITS
+    from app.grounding.compute import computes
 
     openable = {c.id for c in REGISTRY if c.reachable}
 
@@ -161,7 +161,9 @@ def test_every_openable_capability_either_reads_answers_or_computes_a_figure() -
     unexplained = {
         capability
         for capability in openable
-        if not capability.endswith((".setup", ".watchlist")) and capability not in CRAWL_AUDITS
+        # `computes()` covers both dispatches — a scored audit and a counted
+        # amount (ADR 0033) — where `CRAWL_AUDITS` covers only the first.
+        if not capability.endswith((".setup", ".watchlist")) and not computes(capability)
     }
     assert not unexplained, (
         f"{sorted(unexplained)} are reachable with nothing behind them — they will "

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BlockCard } from '@/components/dashboard/BlockCard'
-import type { DirectorBlock, NarrationResult } from '@/lib/dashboard-client'
+import type { DirectorBlock, NarrationResult, ScoreFigure } from '@/lib/dashboard-client'
 
 /**
  * The sentence on a tile: where it sits, what asks for it, and what happens
@@ -26,8 +26,12 @@ const NARRATION = {
   prompt_version: '1',
 }
 
-function figure(overrides: Record<string, unknown> = {}) {
+function figure(overrides: Partial<ScoreFigure> = {}): ScoreFigure {
   return {
+    // The tag the union narrows on (ADR 0033). Explicit in the fixture rather
+    // than defaulted: a double that can omit it is a double the real payload
+    // cannot be substituted for.
+    kind: 'score' as const,
     label: 'Technical SEO',
     measures: 'Nine checks on the one page we fetched.',
     score: 45,

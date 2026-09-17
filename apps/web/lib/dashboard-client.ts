@@ -79,7 +79,10 @@ export type FigureCheck = {
  * the number says, so `measures` is rendered next to it — the guard against a
  * correctly-computed figure sitting under a headline that misdescribes it.
  */
-export type Figure = {
+export type ScoreFigure = {
+  /** The tag. Narrowed on exhaustively (ADR 0033), so a third kind fails to
+   *  compile at every consumer rather than falling silently through a branch. */
+  kind: 'score'
   label: string
   /** What was counted, and what was not. Rendered, not stored for later. */
   measures: string
@@ -96,6 +99,46 @@ export type Figure = {
   measured_at: string
   method: string
 }
+
+/**
+ * A counted, totalled figure — ADR 0033's second kind.
+ *
+ * **There is no denominator and none is invented.** A pipeline is not a fraction
+ * of anything; a target to divide by would be a number the customer never gave
+ * us, which is I1's prohibition arriving as a helpful-looking percentage.
+ */
+export type AmountFigure = {
+  kind: 'amount'
+  label: string
+  /** What was counted **and what was not** — the same guard the scored figure
+   *  carries, against a correct number under a headline promising more. */
+  measures: string
+  /** The population the total came from. Not something to divide by. */
+  count: number
+  /**
+   * Minor units against `currency`. **`null` is not zero**: it means nothing
+   * could be totalled — no priced items, or more than one currency, and adding
+   * those needs a rate whose source and date nobody can see. Zero would say the
+   * pipeline is worth nothing (I10).
+   */
+  total_minor: number | null
+  /** The provider's own, never assumed to be the reporting currency. `null`
+   *  exactly when `total_minor` is. */
+  currency: string | null
+  /** Items in `count` the total leaves out. Part of the figure: a total that
+   *  did not say what it omitted is a total presented as complete. */
+  uncounted: number
+  /** What `uncounted` means here, in the calculator's words. */
+  uncounted_label: string
+  /** Where it was read from — a provider, because a CRM record has no page to
+   *  open. The scored figure's `source_url` is its equivalent. */
+  source: string
+  measured_at: string
+  method: string
+}
+
+/** One tile carries one kind. The union cannot express both or neither. */
+export type Figure = ScoreFigure | AmountFigure
 
 /**
  * A stored sentence about a figure, and enough to trace it.
