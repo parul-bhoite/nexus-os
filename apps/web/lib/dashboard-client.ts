@@ -170,6 +170,24 @@ export type CountFigure = {
   undated: number
   /** When somebody last typed. **Not `measured_at`** — nothing was fetched. */
   recorded_at: string
+  /**
+   * Always true — ADR 0035. The rows are the customer's own; the arithmetic over
+   * them is ours, which is why the widget state stays `live` rather than
+   * becoming `self_reported` (that state renders quoted text and no figure at
+   * all, and would blank this tile). Served rather than inferred from `kind`.
+   */
+  self_reported: boolean
+  /**
+   * The date somebody said this was all of them, or `''` if nobody has — D29.
+   *
+   * **Empty is the common case and the honest one.** It does not weaken the
+   * count, which states what was recorded either way. It refuses every rate over
+   * these rows, and the tile turns it into a sentence rather than letting a
+   * reader assume the figure describes the company.
+   */
+  complete_as_of: string
+  /** When they said it. Separate from `complete_as_of`. */
+  confirmed_on: string
   method: string
 }
 

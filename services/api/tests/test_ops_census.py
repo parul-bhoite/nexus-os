@@ -17,6 +17,7 @@ from uuid import uuid4
 
 import pytest
 
+from app.calculators.completeness import PROJECTS, TASKS, Confirmation
 from app.grounding.compute import OPS_CENSUSES, compute_from_ops, computes
 from app.retrieval.ops import OpsSnapshot, Project, Task
 
@@ -44,11 +45,19 @@ def _snapshot(
     projects: list[Project] | None = None,
     tasks: list[Task] | None = None,
     recorded_at: datetime | None = RECORDED_AT,
+    confirmations: dict[str, Confirmation] | None = None,
 ) -> OpsSnapshot:
     return OpsSnapshot(
         projects=projects if projects is not None else [],
         tasks=tasks if tasks is not None else [],
         recorded_at=recorded_at,
+        confirmations=confirmations or {},
+    )
+
+
+def _confirmed(entity: str) -> Confirmation:
+    return Confirmation(
+        entity=entity, complete_as_of=date(2026, 9, 11), confirmed_on=date(2026, 9, 14)
     )
 
 
@@ -201,3 +210,56 @@ def test_a_snapshot_with_no_stamp_falls_back_to_today(capability_id: str) -> Non
 
 def test_computes_says_yes_for_both(capability_id: str) -> None:
     assert computes(capability_id) is True
+
+
+# ── Completeness — `doc/15` S10.2, ADR 0035 ───────────────────
+
+
+def test_a_figure_carries_no_confirmation_by_default(capability_id: str) -> None:
+    """**The common case, and the one that matters.** Nobody has said whether
+    this is all of them, which is what refuses every rate over these rows and
+    what the tile has to say in words."""
+    result = compute_from_ops(capability_id, _snapshot(), today=TODAY)
+
+    assert result is not None
+    assert result.confirmation is None
+    assert result.trace["complete_as_of"] == "not confirmed"
+
+
+def test_a_figure_carries_the_confirmation_for_its_own_entity(capability_id: str) -> None:
+    entity = PROJECTS if capability_id == "operations.projects_board" else TASKS
+    result = compute_from_ops(
+        capability_id, _snapshot(confirmations={entity: _confirmed(entity)}), today=TODAY
+    )
+
+    assert result is not None
+    assert result.confirmation is not None
+    assert result.confirmation.entity == entity
+    assert result.trace["complete_as_of"] == "2026-09-11"
+
+
+def test_confirming_one_entity_does_not_vouch_for_the_other() -> None:
+    """**The reason completeness is per entity.** Somebody can have recorded
+    every project and a third of the tasks; one switch covering both would let
+    the honest half vouch for the careless one."""
+    snapshot = _snapshot(confirmations={PROJECTS: _confirmed(PROJECTS)})
+
+    projects = compute_from_ops("operations.projects_board", snapshot, today=TODAY)
+    tasks = compute_from_ops("operations.task_queue", snapshot, today=TODAY)
+
+    assert projects is not None and tasks is not None
+    assert projects.confirmation is not None
+    assert tasks.confirmation is None
+
+
+def test_a_confirmation_does_not_add_a_rate_to_the_values(capability_id: str) -> None:
+    """Confirming completeness unlocks S10.4's rate; it does not retroactively
+    turn a count into one. The keys the model may state are unchanged."""
+    entity = PROJECTS if capability_id == "operations.projects_board" else TASKS
+    confirmed = compute_from_ops(
+        capability_id, _snapshot(confirmations={entity: _confirmed(entity)}), today=TODAY
+    )
+    bare = compute_from_ops(capability_id, _snapshot(), today=TODAY)
+
+    assert confirmed is not None and bare is not None
+    assert set(confirmed.computed.values) == set(bare.computed.values)

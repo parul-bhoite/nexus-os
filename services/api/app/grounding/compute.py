@@ -25,6 +25,7 @@ from datetime import UTC, date, datetime
 from typing import Any, Final, Protocol
 
 from app.calculators.audit import CategoryScore, score_brand, score_technical_seo
+from app.calculators.completeness import PROJECTS, TASKS, Confirmation
 from app.calculators.ops import Dated, OpsCounts, count_items
 from app.calculators.pipeline import Deal, Pipeline, compute_pipeline
 from app.domain.page_signals import PageSignals
@@ -185,6 +186,12 @@ class Census:
     select: Records
     """Which of the snapshot's lists this capability counts."""
 
+    entity: str
+    """Which entity's completeness confirmation vouches for this figure — ADR
+    0035. `calculators.completeness.ENTITIES`' vocabulary, and not the same
+    string as `noun` by accident: `noun` is rendered and `entity` is a key, and
+    collapsing them would make a copy change a schema change."""
+
     noun: str
     """What one row is, in the plural. Rendered, so "projects" and not
     "ops_project" — and carried rather than derived from the capability id,
@@ -198,6 +205,7 @@ class Census:
 OPS_CENSUSES: Final[dict[str, Census]] = {
     "operations.projects_board": Census(
         select=lambda snapshot: snapshot.projects,
+        entity=PROJECTS,
         noun="projects",
         label="Projects recorded",
         measures=(
@@ -210,6 +218,7 @@ OPS_CENSUSES: Final[dict[str, Census]] = {
     ),
     "operations.task_queue": Census(
         select=lambda snapshot: snapshot.tasks,
+        entity=TASKS,
         noun="tasks",
         label="Tasks recorded",
         measures=(
@@ -253,6 +262,16 @@ class CountComputation:
     noun: str
     counts: OpsCounts
     recorded_at: datetime
+
+    confirmation: Confirmation | None
+    """Somebody saying this entity's record is all of it, or `None` — ADR 0035.
+
+    **`None` is the common case and the one that matters.** It does not stop the
+    count, which is true either way; it stops any rate over it, and it is what
+    the tile says in words rather than leaving a reader to assume the figure
+    describes the company.
+    """
+
     computed: Computed
     trace: dict[str, Any]
 
@@ -274,6 +293,7 @@ def compute_from_ops(
         return None
 
     counts = count_items(census.select(snapshot), today=today)
+    confirmation = snapshot.confirmations.get(census.entity)
 
     # **Every number the prose may state, and only these** — `compute_from_deals`
     # gives the reasoning. Narration is refused for counts (ADR 0034); filled in
@@ -293,6 +313,7 @@ def compute_from_ops(
         measures=census.measures,
         noun=census.noun,
         counts=counts,
+        confirmation=confirmation,
         recorded_at=snapshot.recorded_at or datetime.combine(today, datetime.min.time(), UTC),
         computed=Computed(values=values),
         trace={
@@ -303,6 +324,11 @@ def compute_from_ops(
             "overdue": counts.overdue,
             "undated": counts.undated,
             "source": "your own records",
+            # Part of the working, not a footnote: a reader checking a count
+            # needs to know whether anybody vouched that it is all of them.
+            "complete_as_of": (
+                confirmation.complete_as_of.isoformat() if confirmation else "not confirmed"
+            ),
             "window": f"the {census.noun} recorded as of {today.isoformat()}",
             "delta": "no_baseline",
             "method": census.method,

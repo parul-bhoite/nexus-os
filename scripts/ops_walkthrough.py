@@ -188,7 +188,50 @@ check(
     f"{r.status_code} {r.text[:150]}",
 )
 
-print("\n\033[1m4. Another workspace sees none of it\033[0m")
+print("\n\033[1m4. Completeness — D29, ADR 0035\033[0m")
+board = tiles.get("operations.projects_board", {}).get("figure") or {}
+check(
+    "before anybody vouches, the figure says so rather than staying silent",
+    board.get("complete_as_of") == "",
+    str(board)[:200],
+)
+check(
+    "and it declares itself self-reported rather than leaving a client to infer it",
+    board.get("self_reported") is True,
+    str(board)[:200],
+)
+
+r = a.post("/ops/completeness", json={"entity": "projects"}, headers=token(a))
+check("POST /ops/completeness -> 201", r.status_code == 201, r.text[:300])
+
+r = a.post(
+    "/ops/completeness",
+    json={"entity": "projects", "complete_as_of": "2099-01-01"},
+    headers=token(a),
+)
+check("a confirmation dated in the future is refused", r.status_code == 422, str(r.status_code))
+
+r = a.post("/ops/completeness", json={"entity": "invoices"}, headers=token(a))
+check("an unknown entity is a 422 naming the field", r.status_code == 422 and "entity" in r.text,
+      f"{r.status_code} {r.text[:150]}")
+
+tiles = {x["key"]: x for x in a.get("/dashboards/surface").json().get("measured", [])}
+board = tiles.get("operations.projects_board", {}).get("figure") or {}
+queue = tiles.get("operations.task_queue", {}).get("figure") or {}
+check("the projects figure now carries the date somebody vouched", bool(board.get("complete_as_of")),
+      str(board)[:200])
+check(
+    "confirming projects does not vouch for tasks",
+    queue.get("complete_as_of") == "",
+    str(queue)[:200],
+)
+check(
+    "and confirming still adds no rate to the figure",
+    "%" not in str(board) and "rate" not in board and "percentage" not in board,
+    str(board)[:200],
+)
+
+print("\n\033[1m5. Another workspace sees none of it\033[0m")
 b = founder("b")
 r = b.get("/ops")
 check(
@@ -203,7 +246,7 @@ if project_id:
     still = a.get("/ops").json()["projects"]
     check("the project is still there for its owner", len(still) == 1, str(still)[:200])
 
-print("\n\033[1m5. Archive stops it counting without deleting it\033[0m")
+print("\n\033[1m6. Archive stops it counting without deleting it\033[0m")
 if project_id:
     r = a.delete(f"/ops/projects/{project_id}", headers=token(a))
     check("DELETE /ops/projects/{id} -> 204", r.status_code == 204, str(r.status_code))

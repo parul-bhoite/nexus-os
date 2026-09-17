@@ -35,6 +35,9 @@ function count(overrides: Partial<CountFigure> = {}): CountFigure {
     overdue: 2,
     undated: 3,
     recorded_at: '2026-09-14',
+    self_reported: true,
+    complete_as_of: '',
+    confirmed_on: '',
     method: 'calculators.ops.count_items',
     ...overrides,
   }
@@ -113,6 +116,45 @@ describe('what a count figure shows', () => {
     render(<BlockCard block={block()} department="operations" />)
 
     expect(screen.queryByRole('button', { name: /explain/i })).toBeNull()
+  })
+})
+
+describe('whether anybody has vouched for the list — D29, ADR 0035', () => {
+  it('says plainly when nobody has', () => {
+    /** **The common case and the most misleading one.** A count with no
+     *  confirmation behind it describes the record, and a reader will take it as
+     *  describing the company unless the tile says otherwise. */
+    render(<BlockCard block={block()} department="operations" />)
+
+    expect(
+      screen.getByText(/have not said whether this is all of them/),
+    ).toBeTruthy()
+  })
+
+  it('reports the date when somebody has', () => {
+    render(
+      <BlockCard
+        block={block(count({ complete_as_of: '2026-09-11', confirmed_on: '2026-09-14' }))}
+        department="operations"
+      />,
+    )
+
+    expect(screen.getByText(/confirmed this is all of them, as of 2026-09-11/)).toBeTruthy()
+    expect(screen.queryByText(/have not said whether/)).toBeNull()
+  })
+
+  it('still draws no rate once completeness is confirmed', () => {
+    /** Confirming unlocks S10.4's rate in the API. It does not turn this count
+     *  into one, and the tile must not start dividing because a date arrived. */
+    const { container } = render(
+      <BlockCard
+        block={block(count({ complete_as_of: '2026-09-11', confirmed_on: '2026-09-14' }))}
+        department="operations"
+      />,
+    )
+
+    expect(container.textContent).not.toMatch(/%/)
+    expect(container.textContent).not.toMatch(/\bout of\b/)
   })
 })
 

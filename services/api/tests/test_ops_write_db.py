@@ -22,6 +22,7 @@ from uuid import UUID, uuid4
 import pytest
 import sqlalchemy as sa
 from fastapi.testclient import TestClient
+from httpx2 import Response
 from sqlalchemy import Engine, create_engine
 
 from app.config import get_settings
@@ -93,6 +94,7 @@ def two_workspaces(engine: Engine) -> Iterator[tuple[tuple[UUID, UUID], tuple[UU
                 sa.text("SELECT set_config('nexus.workspace_id', :w, true)"), {"w": str(ws)}
             )
             for statement in (
+                "DELETE FROM ops_completeness WHERE workspace_id = :w",
                 "DELETE FROM ops_task WHERE workspace_id = :w",
                 "DELETE FROM ops_project WHERE workspace_id = :w",
                 "DELETE FROM membership WHERE workspace_id = :w",
@@ -121,11 +123,26 @@ def as_member(client: TestClient, who: tuple[UUID, UUID], role: Role = Role.OWNE
         role=role,
         departments=frozenset() if role is Role.VIEWER else frozenset({Department.OPERATIONS}),
     )
+    # Still needed: `TestClient.app` is typed as the ASGI callable, which has no
+    # `dependency_overrides`. Unlike the `.json()`/`.status_code` ignores this
+    # replaced, that one is a real gap in Starlette's types rather than a helper
+    # of ours returning `object`.
     client.app.dependency_overrides[current_scope] = lambda: scope  # type: ignore[attr-defined]
     client.cookies.set("nexus_csrf", CSRF)
 
 
-def _post(client: TestClient, path: str, body: dict[str, object]) -> object:
+def _post(client: TestClient, path: str, body: dict[str, object]) -> Response:
+    """`Response`, not `object`.
+
+    From `httpx2`, which is what Starlette's `TestClient` actually returns —
+    `httpx.Response` is a different class here and mypy says so.
+
+    Typed as `object` when this file was written, which made every `.json()` and
+    `.status_code` below need a `# type: ignore[attr-defined]` — eleven of them,
+    each hiding the same thing, and each also able to hide a real mistake at the
+    same call site. `mypy app tests` only surfaced it when S10.2's tests pushed
+    the count past where it had been noticed.
+    """
     return client.post(path, json=body, headers={"X-CSRF-Token": CSRF})
 
 
@@ -142,15 +159,15 @@ def test_a_project_and_a_task_are_recorded_and_read_back(
     as_member(client, mine)
 
     project = _post(client, "/ops/projects", {"name": "Sohar fit-out", "status": "active"})
-    assert project.status_code == 201, project.text  # type: ignore[attr-defined]
-    project_id = project.json()["id"]  # type: ignore[attr-defined]
+    assert project.status_code == 201, project.text
+    project_id = project.json()["id"]
 
     task = _post(
         client,
         "/ops/tasks",
         {"title": "Order the steel", "project_id": project_id, "due_on": "2026-09-01"},
     )
-    assert task.status_code == 201, task.text  # type: ignore[attr-defined]
+    assert task.status_code == 201, task.text
 
     body = client.get("/ops").json()
     assert [p["name"] for p in body["projects"]] == ["Sohar fit-out"]
@@ -170,7 +187,10 @@ def test_a_workspace_that_has_recorded_nothing_says_so(
 
     body = client.get("/ops").json()
 
-    assert body == {"projects": [], "tasks": [], "recorded_at": ""}
+    # Exact equality on purpose — a stray field is a thing this should catch.
+    # `completeness` is empty for the same reason the two lists are: nobody can
+    # have vouched for a record nobody has written (ADR 0035).
+    assert body == {"projects": [], "tasks": [], "completeness": [], "recorded_at": ""}
 
 
 @requires_db
@@ -183,7 +203,7 @@ def test_a_task_needs_no_project(
     mine, _ = two_workspaces
     as_member(client, mine)
 
-    assert _post(client, "/ops/tasks", {"title": "Call the supplier"}).status_code == 201  # type: ignore[attr-defined]
+    assert _post(client, "/ops/tasks", {"title": "Call the supplier"}).status_code == 201
 
 
 # ── Isolation, which is what a write surface gets wrong ───────
@@ -217,12 +237,12 @@ def test_a_task_cannot_be_attached_to_another_workspaces_project(
     """
     mine, theirs = two_workspaces
     as_member(client, mine)
-    project_id = _post(client, "/ops/projects", {"name": "Mine"}).json()["id"]  # type: ignore[attr-defined]
+    project_id = _post(client, "/ops/projects", {"name": "Mine"}).json()["id"]
 
     as_member(client, theirs)
     response = _post(client, "/ops/tasks", {"title": "Sneak", "project_id": project_id})
 
-    assert response.status_code == 404  # type: ignore[attr-defined]
+    assert response.status_code == 404
 
 
 @requires_db
@@ -235,7 +255,7 @@ def test_archiving_another_workspaces_project_changes_nothing(
     the shape `nexus_app` being NOBYPASSRLS protects against."""
     mine, theirs = two_workspaces
     as_member(client, mine)
-    project_id = _post(client, "/ops/projects", {"name": "Mine"}).json()["id"]  # type: ignore[attr-defined]
+    project_id = _post(client, "/ops/projects", {"name": "Mine"}).json()["id"]
 
     as_member(client, theirs)
     client.delete(f"/ops/projects/{project_id}", headers={"X-CSRF-Token": CSRF})
@@ -254,7 +274,7 @@ def test_an_archived_project_stops_counting_without_being_deleted(
     way back, and the row keeps its tasks' history."""
     mine, _ = two_workspaces
     as_member(client, mine)
-    project_id = _post(client, "/ops/projects", {"name": "Put away"}).json()["id"]  # type: ignore[attr-defined]
+    project_id = _post(client, "/ops/projects", {"name": "Put away"}).json()["id"]
 
     client.delete(f"/ops/projects/{project_id}", headers={"X-CSRF-Token": CSRF})
 
@@ -281,7 +301,7 @@ def test_a_viewer_may_not_record_work(
     mine, _ = two_workspaces
     as_member(client, mine, Role.VIEWER)
 
-    assert _post(client, "/ops/projects", {"name": "No"}).status_code == 403  # type: ignore[attr-defined]
+    assert _post(client, "/ops/projects", {"name": "No"}).status_code == 403
 
 
 @requires_db
@@ -295,7 +315,7 @@ def test_a_contributor_may_record_work(
     mine, _ = two_workspaces
     as_member(client, mine, Role.CONTRIBUTOR)
 
-    assert _post(client, "/ops/projects", {"name": "Mine to do"}).status_code == 201  # type: ignore[attr-defined]
+    assert _post(client, "/ops/projects", {"name": "Mine to do"}).status_code == 201
 
 
 @requires_db
@@ -320,5 +340,134 @@ def test_an_unknown_status_is_refused_at_the_edge(
 
     response = _post(client, "/ops/projects", {"name": "X", "status": "nearly"})
 
-    assert response.status_code == 422  # type: ignore[attr-defined]
-    assert "planned" in response.json()["detail"]  # type: ignore[attr-defined]
+    assert response.status_code == 422
+    assert "planned" in response.json()["detail"]
+
+
+# ── Completeness — `doc/15` S10.2, ADR 0035 (D29) ─────────────
+
+
+@requires_db
+def test_confirming_completeness_is_recorded_and_read_back(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """**The one fact the database cannot hold about itself.** Every project row
+    is evidence a project exists; nothing in the table is evidence that no other
+    project does."""
+    mine, _ = two_workspaces
+    as_member(client, mine)
+    _post(client, "/ops/projects", {"name": "Muscat fit-out", "status": "active"})
+
+    response = _post(client, "/ops/completeness", {"entity": "projects"})
+    assert response.status_code == 201, response.text
+    assert response.json()["entity"] == "projects"
+
+    body = client.get("/ops").json()
+    assert [entry["entity"] for entry in body["completeness"]] == ["projects"]
+    assert body["completeness"][0]["complete_as_of"]
+
+
+@requires_db
+def test_confirming_one_entity_does_not_vouch_for_the_other(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """The reason it is asked per entity: somebody can have recorded every
+    project and a third of the tasks."""
+    mine, _ = two_workspaces
+    as_member(client, mine)
+    _post(client, "/ops/projects", {"name": "Muscat fit-out", "status": "active"})
+    _post(client, "/ops/tasks", {"title": "Order the glazing", "status": "todo"})
+    _post(client, "/ops/completeness", {"entity": "projects"})
+
+    entities = [entry["entity"] for entry in client.get("/ops").json()["completeness"]]
+
+    assert entities == ["projects"]
+
+
+@requires_db
+def test_confirming_again_appends_and_the_newest_is_read(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """**Append-only.** The question is asked again as the business changes, and
+    when somebody last vouched for the record is what a reader of a rate needs.
+    An upsert would keep the claim and destroy its history."""
+    mine, ws = two_workspaces[0], two_workspaces[0][1]
+    as_member(client, mine)
+    _post(client, "/ops/projects", {"name": "Muscat fit-out", "status": "active"})
+    _post(client, "/ops/completeness", {"entity": "projects", "complete_as_of": "2026-09-11"})
+    _post(client, "/ops/completeness", {"entity": "projects", "complete_as_of": "2026-09-15"})
+
+    body = client.get("/ops").json()
+
+    assert len(body["completeness"]) == 1, "one row per entity is read, the newest"
+    assert body["completeness"][0]["complete_as_of"] == "2026-09-15"
+    assert ws  # the fixture's teardown removes both confirmations
+
+
+@requires_db
+def test_a_future_confirmation_is_refused(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """ "Complete as of next Tuesday" is not a thing anybody can know, and a
+    figure carrying it would report a confirmation that has not happened."""
+    mine, _ = two_workspaces
+    as_member(client, mine)
+
+    response = _post(
+        client, "/ops/completeness", {"entity": "projects", "complete_as_of": "2099-01-01"}
+    )
+
+    assert response.status_code == 422, response.text
+
+
+@requires_db
+def test_an_unknown_entity_is_refused_at_the_edge(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """A 422 naming the field, not an `IntegrityError` reaching the client as a
+    500 naming a CHECK constraint."""
+    mine, _ = two_workspaces
+    as_member(client, mine)
+
+    response = _post(client, "/ops/completeness", {"entity": "invoices"})
+
+    assert response.status_code == 422
+    assert "entity" in response.text
+
+
+@requires_db
+def test_another_workspaces_confirmation_is_invisible(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """A confirmation crossing a workspace boundary would vouch for somebody
+    else's record — and unlock a rate over it."""
+    mine, theirs = two_workspaces
+    as_member(client, mine)
+    _post(client, "/ops/projects", {"name": "Muscat fit-out", "status": "active"})
+    _post(client, "/ops/completeness", {"entity": "projects"})
+
+    as_member(client, theirs)
+    _post(client, "/ops/projects", {"name": "Their project", "status": "active"})
+
+    assert client.get("/ops").json()["completeness"] == []
+
+
+@requires_db
+def test_a_viewer_may_not_confirm_completeness(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    """Vouching for a record is a claim about the company, not a reading of it."""
+    mine, _ = two_workspaces
+    as_member(client, mine, role=Role.VIEWER)
+
+    assert _post(client, "/ops/completeness", {"entity": "projects"}).status_code == 403
+
+
+@requires_db
+def test_confirming_needs_csrf(
+    client: TestClient, two_workspaces: tuple[tuple[UUID, UUID], tuple[UUID, UUID]]
+) -> None:
+    mine, _ = two_workspaces
+    as_member(client, mine)
+
+    assert client.post("/ops/completeness", json={"entity": "projects"}).status_code == 403

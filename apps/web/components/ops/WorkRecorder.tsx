@@ -6,9 +6,11 @@ import {
   TASK_STATUSES,
   archiveProject,
   archiveTask,
+  confirmComplete,
   createProject,
   createTask,
   fetchOps,
+  type Confirmation,
   type Ops,
 } from '@/lib/ops-client'
 
@@ -41,6 +43,64 @@ function messageOf(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback
 }
 
+/**
+ * *"Is this all of your projects?"* — `doc/15` S10.2, ADR 0035 (D29).
+ *
+ * **The one fact the database cannot hold about itself.** Every row is evidence
+ * that a project exists; nothing in the table is evidence that no other project
+ * does. Without an answer here, every ops rate — S10.4's on-time dispatch and
+ * everything after it — divides by a denominator nobody vouched for.
+ *
+ * Asked per entity, because somebody can plausibly have recorded every project
+ * and a third of the tasks, and one switch covering both would let the honest
+ * half vouch for the careless one.
+ *
+ * **Re-confirmable, and never a checkbox.** A checkbox reads as a setting that
+ * stays true; this is a statement somebody made on a day, and it goes stale
+ * without anybody being told. So the answer is always shown with its date, and
+ * saying it again appends rather than replaces.
+ */
+function Completeness({
+  noun,
+  confirmed,
+  busy,
+  onConfirm,
+}: {
+  noun: string
+  confirmed: Confirmation | null
+  busy: boolean
+  onConfirm: () => void
+}) {
+  return (
+    <div className="max-w-2xl rounded-xl border border-ink-100 bg-bone-50 px-4 py-3">
+      {confirmed ? (
+        <p className="text-sm text-ink-600">
+          You confirmed this is all of your {noun}, as of {confirmed.complete_as_of}.
+        </p>
+      ) : (
+        <p className="text-sm text-ink-700">
+          Is this all of your {noun}? Until you say, NEXUS counts what is written down and
+          will not work out any rate from it.
+        </p>
+      )}
+
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onConfirm}
+        aria-label={`Confirm this is all of your ${noun}`}
+        className="mt-2 rounded-lg border border-ink-200 px-3 py-1.5 text-sm font-medium text-ink-700 hover:border-ink-300 hover:text-ink-900 disabled:opacity-60"
+      >
+        {busy
+          ? 'Recording…'
+          : confirmed
+            ? `Still all of them, as of today`
+            : `Yes — this is all of my ${noun}`}
+      </button>
+    </div>
+  )
+}
+
 export function WorkRecorder() {
   const [ops, setOps] = useState<Ops | null>(null)
   const [loadError, setLoadError] = useState('')
@@ -51,6 +111,7 @@ export function WorkRecorder() {
   const [savingProject, setSavingProject] = useState(false)
   const [savingTask, setSavingTask] = useState(false)
   const [archiving, setArchiving] = useState(false)
+  const [confirming, setConfirming] = useState('')
   const [feedback, setFeedback] = useState<Feedback>(null)
 
   const [projectName, setProjectName] = useState('')
@@ -136,9 +197,27 @@ export function WorkRecorder() {
     }
   }
 
+  async function confirm(entity: string) {
+    setConfirming(entity)
+    setFeedback(null)
+    try {
+      // `null` rather than today's date: the API supplies the date. Two clocks
+      // on one fact, and the browser's is the one nobody can audit.
+      await confirmComplete(entity, null)
+      setFeedback({ kind: 'done', text: 'Thank you — that is recorded.' })
+      await reload()
+    } catch (error) {
+      setFeedback({ kind: 'error', text: messageOf(error, 'Could not record that.') })
+    } finally {
+      setConfirming('')
+    }
+  }
+
   const projects = ops?.projects ?? []
   const tasks = ops?.tasks ?? []
   const nothingYet = ops !== null && projects.length === 0 && tasks.length === 0
+  const confirmedFor = (entity: string) =>
+    (ops?.completeness ?? []).find((entry) => entry.entity === entity) ?? null
 
   return (
     <div className="mt-8 flex flex-col gap-8">
@@ -247,6 +326,15 @@ export function WorkRecorder() {
         </form>
 
         {projects.length > 0 ? (
+          <Completeness
+            noun="projects"
+            confirmed={confirmedFor('projects')}
+            busy={confirming === 'projects'}
+            onConfirm={() => void confirm('projects')}
+          />
+        ) : null}
+
+        {projects.length > 0 ? (
           <ul className="max-w-2xl divide-y divide-ink-100 rounded-xl border border-ink-100">
             {projects.map((project) => (
               <li key={project.id} className="flex flex-wrap items-baseline gap-x-3 px-4 py-3">
@@ -347,6 +435,15 @@ export function WorkRecorder() {
             </button>
           </div>
         </form>
+
+        {tasks.length > 0 ? (
+          <Completeness
+            noun="tasks"
+            confirmed={confirmedFor('tasks')}
+            busy={confirming === 'tasks'}
+            onConfirm={() => void confirm('tasks')}
+          />
+        ) : null}
 
         {tasks.length > 0 ? (
           <ul className="max-w-2xl divide-y divide-ink-100 rounded-xl border border-ink-100">

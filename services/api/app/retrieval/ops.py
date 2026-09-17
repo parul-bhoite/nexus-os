@@ -21,7 +21,7 @@ company.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Final
 from uuid import UUID
@@ -29,6 +29,7 @@ from uuid import UUID
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.calculators.completeness import Confirmation
 from app.domain.session import ScopedSession
 
 _PROJECTS: Final = sa.text(
@@ -55,6 +56,24 @@ _TASKS: Final = sa.text(
      ORDER BY due_on NULLS LAST, title
     """
 )
+
+
+_COMPLETENESS: Final = sa.text(
+    """
+    SELECT DISTINCT ON (entity) entity, complete_as_of, confirmed_at
+      FROM ops_completeness
+     WHERE workspace_id = :w
+     ORDER BY entity, confirmed_at DESC
+    """
+)
+"""The newest confirmation per entity — ADR 0035.
+
+`DISTINCT ON` rather than a window function or a correlated subquery: the table
+is append-only, the index is `(workspace_id, entity, confirmed_at DESC)`, and
+this is the shape that reads it straight. A `GROUP BY entity` with `max()` would
+give the date and lose the row it came from, which is the half carrying who
+said it.
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,6 +109,15 @@ class OpsSnapshot:
     tasks: list[Task]
     recorded_at: datetime | None
 
+    confirmations: dict[str, Confirmation] = field(default_factory=dict)
+    """The newest completeness confirmation per entity, keyed by entity.
+
+    **Absent is the common case and the meaningful one.** A missing key means
+    nobody has said whether this is all of them, which is what stops a rate
+    (ADR 0035) and what the tile says in words. Defaulted so a caller building a
+    snapshot in a hermetic test keeps compiling.
+    """
+
 
 async def current_ops(db: AsyncSession, scope: ScopedSession) -> OpsSnapshot | None:
     """This workspace's projects and tasks, or `None` if it has recorded none.
@@ -104,7 +132,12 @@ async def current_ops(db: AsyncSession, scope: ScopedSession) -> OpsSnapshot | N
     task_rows = (await db.execute(_TASKS, {"w": str(scope.workspace_id)})).all()
 
     if not project_rows and not task_rows:
+        # Read before the confirmations on purpose: a workspace that has
+        # recorded nothing cannot have vouched for anything, and a third round
+        # trip to `us-east-2` to prove that costs a page load for no answer.
         return None
+
+    confirmation_rows = (await db.execute(_COMPLETENESS, {"w": str(scope.workspace_id)})).all()
 
     stamps = [row.updated_at for row in project_rows] + [row.updated_at for row in task_rows]
 
@@ -131,4 +164,12 @@ async def current_ops(db: AsyncSession, scope: ScopedSession) -> OpsSnapshot | N
             for row in task_rows
         ],
         recorded_at=max(stamps) if stamps else None,
+        confirmations={
+            row.entity: Confirmation(
+                entity=row.entity,
+                complete_as_of=row.complete_as_of,
+                confirmed_on=row.confirmed_at.date(),
+            )
+            for row in confirmation_rows
+        },
     )

@@ -40,6 +40,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.auth.csrf import require_csrf
+from app.calculators.completeness import ENTITIES
 from app.deps import CurrentScope
 from app.domain.scopes import Role
 from app.logging import get_logger
@@ -85,9 +86,31 @@ class TaskOut(BaseModel):
     due_on: date | None
 
 
+class ConfirmationIn(BaseModel):
+    entity: str
+    complete_as_of: date | None = None
+    """The date the claim is *about*. Defaults to today, because "is this all of
+    them?" is almost always answered about right now — and is settable, because
+    somebody catching up on Monday can honestly vouch for Friday."""
+
+
+class ConfirmationOut(BaseModel):
+    entity: str
+    complete_as_of: date
+    confirmed_on: date
+
+
 class OpsOut(BaseModel):
     projects: list[ProjectOut]
     tasks: list[TaskOut]
+    completeness: list[ConfirmationOut]
+    """Who has vouched for what — ADR 0035 (D29).
+
+    A list rather than a map with null entries: an entity nobody has confirmed
+    is simply absent, and a `{"projects": null}` invites a client to render
+    "not confirmed: null" somewhere. Empty is the ordinary state.
+    """
+
     recorded_at: str
     """Empty when nothing has been recorded — the state that leaves the tiles
     `locked`. Not the same as a workspace with everything marked done."""
@@ -134,12 +157,20 @@ async def read_ops(scope: CurrentScope) -> OpsOut:
         snapshot = await current_ops(db, scope)
 
     if snapshot is None:
-        return OpsOut(projects=[], tasks=[], recorded_at="")
+        return OpsOut(projects=[], tasks=[], completeness=[], recorded_at="")
 
     return OpsOut(
         projects=[
             ProjectOut(id=p.id, name=p.name, status=p.status, client=p.client, due_on=p.due_on)
             for p in snapshot.projects
+        ],
+        completeness=[
+            ConfirmationOut(
+                entity=confirmation.entity,
+                complete_as_of=confirmation.complete_as_of,
+                confirmed_on=confirmation.confirmed_on,
+            )
+            for confirmation in snapshot.confirmations.values()
         ],
         tasks=[
             TaskOut(
@@ -293,3 +324,64 @@ async def archive_task(task_id: UUID, scope: CurrentScope) -> None:
             {"t": str(task_id), "w": str(scope.workspace_id), "now": datetime.now(UTC)},
         )
         await db.commit()
+
+
+@router.post(
+    "/completeness",
+    response_model=ConfirmationOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_csrf)],
+)
+async def confirm_completeness(body: ConfirmationIn, scope: CurrentScope) -> ConfirmationOut:
+    """Record that this entity's list is all of them — `doc/15` S10.2, ADR 0035.
+
+    **The one fact the database cannot hold about itself.** Every row in
+    `ops_project` is evidence that a project exists; nothing in the table is
+    evidence that no other project does. Without this, `doc/15` S10.4's on-time
+    rate divides by a denominator nobody vouched for.
+
+    **201 and a new row every time, never an update.** The table is append-only:
+    the question is asked again as the business changes, and when somebody last
+    vouched for the record is exactly what a reader of a rate needs. Replacing
+    the previous answer would keep the claim and destroy its history, which is
+    the half that carries the doubt.
+
+    A future date is refused. "Complete as of next Tuesday" is not a thing
+    anybody can know, and a figure carrying it would report a confirmation that
+    has not happened yet.
+    """
+    _may_write(scope)
+    _validate(body.entity, ENTITIES, "entity")
+
+    as_of = body.complete_as_of or datetime.now(UTC).date()
+    if as_of > datetime.now(UTC).date():
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "complete_as_of cannot be in the future — nobody can vouch for a record as it will be.",
+        )
+
+    async with scoped_connection(scope) as db:
+        row = (
+            await db.execute(
+                sa.text(
+                    "INSERT INTO ops_completeness"
+                    " (workspace_id, entity, complete_as_of, confirmed_by)"
+                    " VALUES (:w, :entity, :as_of, :user)"
+                    " RETURNING entity, complete_as_of, confirmed_at"
+                ),
+                {
+                    "w": str(scope.workspace_id),
+                    "entity": body.entity,
+                    "as_of": as_of,
+                    "user": str(scope.user_id),
+                },
+            )
+        ).one()
+        await db.commit()
+
+    log.info("ops.completeness_confirmed", entity=body.entity)
+    return ConfirmationOut(
+        entity=row.entity,
+        complete_as_of=row.complete_as_of,
+        confirmed_on=row.confirmed_at.date(),
+    )

@@ -34,15 +34,36 @@ export type Task = {
 }
 
 /**
+ * Somebody saying an entity's list is all of it — ADR 0035 (D29).
+ *
+ * The one fact the database cannot hold about itself: every project row is
+ * evidence a project exists, and nothing in the table is evidence that no other
+ * project does.
+ */
+export type Confirmation = {
+  entity: string
+  /** The date the claim is about. */
+  complete_as_of: string
+  /** The day it was made. Separate, because somebody catching up on Monday can
+   *  honestly vouch for Friday. */
+  confirmed_on: string
+}
+
+/**
  * What this workspace has recorded.
  *
  * `recorded_at` is empty exactly when nothing has ever been recorded — the
  * state that leaves the tiles locked, and **not** the same as a workspace with
  * everything marked done.
+ *
+ * `completeness` lists only the entities somebody has vouched for. An entity
+ * nobody has confirmed is **absent**, not null: the empty state is ordinary and
+ * a null entry invites a client to render "not confirmed: null".
  */
 export type Ops = {
   projects: Project[]
   tasks: Task[]
+  completeness: Confirmation[]
   recorded_at: string
 }
 
@@ -99,6 +120,21 @@ export function createTask(body: {
     '/ops/tasks',
     { method: 'POST', body: JSON.stringify(body) },
     'Could not record that task.',
+  )
+}
+
+/**
+ * Record that an entity's list is all of them — `doc/15` S10.2.
+ *
+ * Every call appends; nothing is replaced. The question is asked again as the
+ * business changes, and when somebody last vouched for the record is exactly
+ * what a reader of a rate needs.
+ */
+export function confirmComplete(entity: string, completeAsOf: string | null): Promise<Confirmation> {
+  return send<Confirmation>(
+    '/ops/completeness',
+    { method: 'POST', body: JSON.stringify({ entity, complete_as_of: completeAsOf }) },
+    'Could not record that confirmation.',
   )
 }
 

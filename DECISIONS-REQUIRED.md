@@ -321,7 +321,7 @@ so it is written and tested rather than remembered later.
 
 ---
 
-### D29 — How does the ops layer know it holds everything? *(blocks every ops figure)*
+### D29 — How does the ops layer know it holds everything? ✅ **Decided 17 September 2026** — ADR 0035
 
 `doc/15`. The ops layer is the first source that **fails on adoption rather than
 on an API** — `domain/sources.py` already says so in its own `cannot_answer`.
@@ -338,11 +338,24 @@ compute counts only and never rates until confirmed; or mark every ops figure
 `self_reported`, which `doc/05` §0 already defines so that a number somebody
 typed never looks like one we measured.
 
-**My recommendation: `self_reported` *and* an explicit completeness question.**
-They answer different halves — the state says where a number came from, the
-question says whether it covers everything.
+**Decided: both halves** — an explicit completeness question per entity, stored
+with a date, *and* self-reported provenance on every ops figure. They answer
+different questions, and either alone leaves a real way to mislead.
 
-**S10.1 can ship before this is answered**, because projects and tasks are counts
+Implemented in `doc/15` S10.2 and recorded in **ADR 0035**, which also explains
+the one place the implementation departs from the wording above: the provenance
+travels **on the figure**, not as `WidgetState.SELF_REPORTED`. That state means a
+value the founder *stated* and `doc/13` §7 renders it as quoted text with no
+figure at all — `BlockCard.hasFigure` returns `false` for it — so setting it on
+the ops tiles would have blanked the counts. An ops count is arithmetic *we*
+performed over rows they entered, which is a different thing, and the state stays
+free for D7's manual finance entry to mean what it was built to mean.
+
+`calculators/completeness.may_compute_a_rate` is the gate every ops rate passes.
+It was written in S10.2 although the first ops rate is S10.4, because a rule
+added after the code it governs is one added after somebody has shipped around it.
+
+**S10.1 shipped before this was answered**, because projects and tasks are counts
 rather than rates, and a count of what was recorded is true either way.
 
 ---

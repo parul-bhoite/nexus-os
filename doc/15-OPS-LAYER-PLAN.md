@@ -145,9 +145,28 @@ Four things this slice found that were not about the ops layer at all:
   recorded" while the whole layer worked end to end. Neither suite can see this — vitest
   mocks `fetch` and pytest calls the API directly. The browser found it.
 
-### S10.2 — Completeness, per D29
+### S10.2 — Completeness, per D29 ✅ *shipped 17 September 2026*
 The answer, applied to the two tiles that already exist. Nothing else should be built until
 this is settled, because every later capability is a rate.
+
+**D29 is decided — both halves (ADR 0035).** A completeness question per entity, stored
+with a date and append-only, plus self-reported provenance on every ops figure.
+Migration `0033` adds `ops_completeness` (RLS forced); `/work` asks *"Is this all of your
+projects?"* per entity and the tile turns the answer into a sentence — either *"You
+confirmed this is all of them, as of 11 September"* or *"You have not said whether this is
+all of them, so this counts the record rather than the company."*
+
+`calculators/completeness.may_compute_a_rate` is the gate, written now though the first
+ops rate is S10.4: a rule added after the code it governs is one added after somebody has
+already shipped around it.
+
+One correction to the wording of D29's recommendation, argued in ADR 0035: the provenance
+travels **on the figure**, not as `WidgetState.SELF_REPORTED`. That state renders quoted
+text and no figure (`doc/13` §7, and `hasFigure` returns `false` for it), so setting it
+would have blanked the counts S10.1 shipped — and it needs to keep its meaning for D7.
+
+Asserted by `scripts/ops_walkthrough.py`: 34 checks, green, including that confirming
+projects does not vouch for tasks and that a confirmation adds no rate to the figure.
 
 ### S10.3 — Milestones and issues
 `operations.milestone_timeline`, `operations.issue_register`. Both hang off a project.

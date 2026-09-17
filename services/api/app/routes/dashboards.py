@@ -506,6 +506,32 @@ class CountFigureOut(BaseModel):
     so there is no moment of measurement to report, and borrowing the word
     would be the tile claiming a provenance it does not have."""
 
+    self_reported: bool = True
+    """**Always true for a count, and served rather than inferred** — ADR 0035.
+
+    The rows are the customer's own. The arithmetic over them is ours and is
+    I1-compliant, which is why the widget state stays `live` and does not become
+    `WidgetState.SELF_REPORTED`: that state means a value the founder *stated*
+    and renders as quoted text with no figure at all (`doc/13` §7), which would
+    blank this tile. Carried as a field so a client reads the provenance instead
+    of deducing it from `kind`.
+    """
+
+    complete_as_of: str = ""
+    """The date somebody said this was all of them, or `""` if nobody has — ADR
+    0035 (D29).
+
+    **Empty is the common case and the honest one.** It does not weaken the
+    count, which states what was recorded either way. It is what refuses every
+    rate over these rows, and what the tile turns into a sentence rather than
+    letting a reader assume the figure describes the company.
+    """
+
+    confirmed_on: str = ""
+    """When they said it. Separate from `complete_as_of` because a founder
+    catching up on Monday can honestly say the record was complete as of
+    Friday."""
+
     method: str
 
 
@@ -992,6 +1018,12 @@ def count_figure_out(capability: Capability, ops: OpsSnapshot | None) -> CountFi
         overdue=computation.counts.overdue,
         undated=computation.counts.undated,
         recorded_at=computation.recorded_at.date().isoformat(),
+        complete_as_of=(
+            computation.confirmation.complete_as_of.isoformat() if computation.confirmation else ""
+        ),
+        confirmed_on=(
+            computation.confirmation.confirmed_on.isoformat() if computation.confirmation else ""
+        ),
         method=str(computation.trace["method"]),
     )
 

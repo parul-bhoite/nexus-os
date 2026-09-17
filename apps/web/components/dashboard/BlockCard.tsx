@@ -280,6 +280,22 @@ function CountFigureBody({ figure }: { figure: CountFigure }) {
       <p className="mt-2 text-sm text-ink-400">
         Counted from what your workspace recorded, last updated {figure.recorded_at}
       </p>
+
+      {/* **D29, in one sentence** (ADR 0035). Whether anybody has vouched that
+          this is the whole list is the difference between a count that describes
+          the record and one a reader will take as describing the company. The
+          unconfirmed case is the common one and the most misleading, so it gets
+          words rather than an absence. */}
+      {figure.complete_as_of ? (
+        <p className="mt-1 text-sm text-ink-500">
+          You confirmed this is all of them, as of {figure.complete_as_of}.
+        </p>
+      ) : (
+        <p className="mt-1 text-sm text-clay-600">
+          You have not said whether this is all of them, so this counts the record rather
+          than the company.
+        </p>
+      )}
     </>
   )
 }
