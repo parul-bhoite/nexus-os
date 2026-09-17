@@ -29,6 +29,23 @@ database the whole page would be well under a second.
 sequential round trips for one page load is a design problem wherever the
 database sits; the latency here only made it visible.
 
+> **Amended 17 September 2026 — the magnitude above is wrong.** Measuring
+> afterwards: `/health/ready`, one trivial query, costs **1,064 ms** from this
+> machine, and the surface's five reads total **3.7 s** in-process against a
+> ~9 s endpoint. The floor under every request is the link, not the query count.
+> Removing one further round trip moved the endpoint from 8,943 ms to 9,050 ms —
+> inside the run-to-run variance.
+>
+> So the sentence above is right in principle and overstated in fact: the same
+> nine trips co-located with the database are perhaps fifty milliseconds, and
+> nobody would be reading this ADR. What this decision actually bought was a
+> page that loads at all on a developer machine; it did not fix a production
+> problem, because there is not one to fix. Further combining — the four
+> remaining cross-concern reads — would save four trips and either duplicate
+> four modules' row-to-dataclass shaping or restructure them to expose SQL
+> fragments. That is real risk against roughly thirty milliseconds, and it should
+> wait for a reason other than a slow link.
+
 ## Decision
 
 **One statement, nine result sets.** `_EVERYTHING` selects nine `json_agg`
