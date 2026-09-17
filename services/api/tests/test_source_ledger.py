@@ -144,13 +144,17 @@ def test_no_connector_advertises_an_unlockable_capability_yet() -> None:
     figure. A tile promised on the connect screen and then blank on the
     dashboard is what `doc/04` §6 rule 1 calls worse than no tile.
     """
-    from app.grounding.compute import CRAWL_AUDITS
+    from app.grounding.compute import computes
 
     for tool in CONNECTABLE:
         for capability in unlocks_now(tool.source, connected=DAY_ONE):
-            assert capability.id in CRAWL_AUDITS or capability.id.endswith(
-                (".setup", ".watchlist")
-            ), (
+            # `computes()` rather than `CRAWL_AUDITS`. This named the crawl dict
+            # when it was the only dispatch; there are now five, and asserting
+            # against one of them failed on `sales.pipeline_board` — a capability
+            # a calculator genuinely computes. The claim was always "something
+            # can put a number on it", and `computes()` is the product's own
+            # answer to exactly that.
+            assert computes(capability.id) or capability.id.endswith((".setup", ".watchlist")), (
                 f"connecting {tool.source.value} is advertised as turning on "
                 f"{capability.id}, and nothing computes it — the founder would "
                 f"connect a tool and find the tile still empty"
@@ -171,14 +175,32 @@ def test_no_reachable_capability_waits_only_on_a_third_party() -> None:
     — a tile a founder can click and never see a number in, which is the
     failure `doc/04` §6 rule 1 calls worse than no tile.
     """
+    from app.grounding.compute import computes
+
     ours = {entry.source for entry in LEDGER if entry.origin is Origin.OURS}
     reachable = [c for c in TILES if c.reachable]
 
     assert reachable, "step D shipped ten and slice 1 added two"
-    stranded = [c for c in reachable if c.required_sources and not (set(c.required_sources) & ours)]
+    # **The premise narrowed a third time, and again the product changed under
+    # it.** This read "every reachable capability draws on a source we produce",
+    # which held while only Setup, the Watchlist and the crawl audits were
+    # reachable. `sales.pipeline_board` is reachable and needs a CRM — a third
+    # party — and that is deliberate (ADR 0033): it renders `locked` with a
+    # named unlock until one connects, and carries a real figure afterwards.
+    #
+    # The claim underneath survives: a reachable capability must not be
+    # reachable *in name only*. Either something we produce can already answer
+    # it, or a calculator is waiting for the connector it names — never a tile a
+    # founder can click and never see a number in, whatever they connect.
+    stranded = [
+        c
+        for c in reachable
+        if c.required_sources and not (set(c.required_sources) & ours) and not computes(c.id)
+    ]
     assert not stranded, (
-        f"{sorted(c.id for c in stranded)} are reachable but every source they need "
-        f"comes from a third party — nothing we control can put a number on them"
+        f"{sorted(c.id for c in stranded)} are reachable, every source they need comes "
+        f"from a third party, and nothing computes them — connecting the tool would "
+        f"leave the tile exactly as empty as before"
     )
 
 

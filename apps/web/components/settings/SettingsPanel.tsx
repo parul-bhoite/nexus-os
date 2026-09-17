@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AuditLogCard } from '@/components/settings/AuditLogCard'
 import { DepartmentBlockCard } from '@/components/settings/DepartmentBlockCard'
+import { Connections } from '@/components/settings/Connections'
 import { BrainCard } from '@/components/settings/BrainCard'
 import { PreferencesCard } from '@/components/settings/PreferencesCard'
 import { DepartmentsCard } from '@/components/settings/DepartmentsCard'
@@ -255,6 +256,12 @@ export function SettingsPanel() {
       {/* Panel 10. Read-only: deleting an item has to fan out to its
           passages, embeddings and derivations, and that is P21's. */}
       <BrainCard />
+
+      {/* `doc/14` S9's tool ledger. Placed above the audit log for the same
+          reason the audit log is last: this is a thing to do, that is a record
+          of things done. Until now the connector API had no screen at all — the
+          OAuth round trip and sealed storage were built and unreachable. */}
+      <Connections />
 
       {/* Panel 12, last because it is a record of everything above it. It
           renders nothing at all for a caller the API refuses — a red box

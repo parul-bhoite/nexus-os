@@ -28,7 +28,7 @@ Sales.
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Final
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -38,7 +38,7 @@ from app.config import Settings, get_settings
 from app.connectors.contracts import ConnectorError, ProviderMisconfiguredError
 from app.connectors.credentials import CredentialSealError, seal
 from app.connectors.oauth import authorize_url, exchange_code, sign_state, verify_state
-from app.connectors.registry import wiring_for
+from app.connectors.registry import WIRING, wiring_for
 from app.deps import CurrentScope
 from app.logging import get_logger
 from app.retrieval.connections import connect, connected_providers, revoke
@@ -64,8 +64,48 @@ class ConnectionOut(BaseModel):
     """Server-authored, never empty — the rule `unlock` already follows."""
 
 
+class OfferableOut(BaseModel):
+    """One provider a workspace could be reading from."""
+
+    provider: str
+    name: str
+    connected: bool
+    configured: bool
+    """Whether this deployment has the credentials to start an authorisation.
+
+    **The screen cannot work this out for itself**, and the previous payload did
+    not carry it: `providers` listed what was *connected*, so a client had no way
+    to tell "nothing connected, here is the button" from "nothing connected and
+    no button is possible". It would have offered a Connect that fails at the
+    vendor carrying our client id, or offered nothing and left a configured
+    deployment looking broken.
+
+    `ADR 0011`'s rule, one level out: a connector with no credentials is a
+    supported state, and a supported state has to be nameable by the thing
+    drawing the screen.
+    """
+
+
 class ConnectedOut(BaseModel):
     providers: list[str]
+    """Connected providers, as before. Kept because it is the shape the ops and
+    dashboard reads already agree on."""
+
+    offerable: list[OfferableOut] = []
+    """Every provider with an adapter behind it, connected or not.
+
+    Sourced from `WIRING`, which is deliberately one entry: a provider listed
+    here without an adapter would be a Connect button that authorises us and
+    then reads nothing."""
+
+
+PROVIDER_NAMES: Final[dict[str, str]] = {"hubspot": "HubSpot"}
+"""What a founder calls the thing, not what the column does.
+
+`provider.title()` gets "Hubspot", which is not how the vendor spells itself —
+and a screen that misspells the product somebody is about to hand their CRM to
+is a screen that looks like it was not written by anyone.
+"""
 
 
 def _may_connect(scope: CurrentScope) -> None:
@@ -96,10 +136,29 @@ def _refuse(error: ConnectorError) -> HTTPException:
 
 
 @router.get("", response_model=ConnectedOut)
-async def list_connections(scope: CurrentScope) -> ConnectedOut:
-    """Which providers this workspace can currently be read from."""
+async def list_connections(scope: CurrentScope, settings: CurrentSettings) -> ConnectedOut:
+    """Which providers this workspace can be read from, and which it could be.
+
+    Both halves, because a screen needs the difference. The second is not
+    workspace state at all — it is what this deployment has wired and
+    configured — and serving it here rather than from a second endpoint keeps
+    the page one request.
+    """
     async with scoped_connection(scope) as db:
-        return ConnectedOut(providers=sorted(await connected_providers(db, scope)))
+        connected = sorted(await connected_providers(db, scope))
+
+    return ConnectedOut(
+        providers=connected,
+        offerable=[
+            OfferableOut(
+                provider=provider,
+                name=PROVIDER_NAMES.get(provider, provider.title()),
+                connected=provider in connected,
+                configured=settings.connector_configured(provider),
+            )
+            for provider in sorted(WIRING)
+        ],
+    )
 
 
 @router.post(

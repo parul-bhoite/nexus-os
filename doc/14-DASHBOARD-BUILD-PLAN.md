@@ -263,9 +263,20 @@ made.
 person and provider), sealed credential storage (`retrieval/connections.py`), migration
 0031's `crm_deal` with RLS forced, and `calculators/pipeline.py`.
 
+**The browser path is now built too** (17 September 2026). Until then the connector API had
+no screen at all: `routes/connections.py` existed, was tested, and nothing a founder could
+click reached it — the BFF is one file per path, so four missing files were four 404s no
+suite could see. Added: the four `/api/connections` routes, a **Connected tools** section in
+Settings, and the callback page the vendor redirects the browser back to. `GET /connections`
+also grew an `offerable` list, because the old payload said what was *connected* and a
+screen cannot tell "nothing connected, here is the button" from "nothing connected and no
+button is possible" — the second being a supported state under ADR 0011, now said in words.
+
 **Acceptance, outstanding:** a real HubSpot sandbox connects, rows land scoped, one tile
 moves from `locked` to a figure, and disconnecting returns it to `locked` rather than to a
-zero. Needs the developer app in §5.
+zero. Needs the developer app in §5 — **the only thing still missing.** Register the
+redirect URI as the web app's callback page, `…/connections/hubspot/callback`, not the
+API's route: both complete the exchange and only one lands a person on a page.
 
 **And one design question the calculator surfaced.** `FigureOut` carries `score`,
 `max_score`, `percentage` and weighted `checks` — the shape of an audit. A pipeline is a

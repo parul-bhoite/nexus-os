@@ -273,6 +273,17 @@ class Settings(BaseSettings):
             and self.hubspot_redirect_uri
         )
 
+    def connector_configured(self, provider: str) -> bool:
+        """Whether this deployment can start an authorisation for `provider`.
+
+        Keyed here rather than branched at the route, because which credentials a
+        provider needs is a fact about configuration and the screen should not
+        have to know it. **Unknown providers are `False`**, which is the safe
+        direction: an unrecognised name offering a Connect button would send
+        somebody to a consent screen for something nothing reads.
+        """
+        return {"hubspot": self.hubspot_configured}.get(provider, False)
+
     # ── Email (P3) ────────────────────────────────────────────
     # `file` writes RFC-822 `.eml` files to `mail_root`; `smtp` sends. The file
     # backend is not a stub — it is what makes the whole verification and
