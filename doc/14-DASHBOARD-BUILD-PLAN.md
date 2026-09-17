@@ -276,7 +276,9 @@ button is possible" — the second being a supported state under ADR 0011, now s
 moves from `locked` to a figure, and disconnecting returns it to `locked` rather than to a
 zero. Needs the developer app in §5 — **the only thing still missing.** Register the
 redirect URI as the web app's callback page, `…/connections/hubspot/callback`, not the
-API's route: both complete the exchange and only one lands a person on a page.
+API's route — **ADR 0041**: both complete the exchange and only one lands a person on a
+page rather than a JSON document, at the end of the one flow where they have just granted
+access to their whole CRM.
 
 **And one design question the calculator surfaced.** `FigureOut` carries `score`,
 `max_score`, `percentage` and weighted `checks` — the shape of an audit. A pipeline is a
