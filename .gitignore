@@ -53,3 +53,8 @@ apps/web/blob-report/
 
 # Scratch for the published design artifact — the ADRs carry the decisions.
 .nexus-design/
+
+# Browser-automation artifacts (screenshots, a11y snapshots, console logs).
+# 94 of these were committed by accident on 2026-09-17; they are build output,
+# not source.
+.playwright-mcp/

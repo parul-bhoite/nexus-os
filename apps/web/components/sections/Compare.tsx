@@ -51,7 +51,16 @@ export function Compare() {
                         wrapped to two lines pushed its label half a line down —
                         a drift that reached 13px by the last row and read as
                         the table being slightly, inexplicably broken. */}
-                    <div className="flex items-start pt-5 sm:pt-0 sm:py-4">
+                    {/* `sm:pt-[0.8125rem]`, not `sm:py-4`.
+                        Two corrections, measured rather than guessed. The cells
+                        beside this one pad 16px; this one was emitting
+                        `padding-top: 0` because Tailwind orders `pt-0` after
+                        `py-4`, so the label sat 16px above its own row. And the
+                        label is 18px on a 29.25px line box against the values'
+                        14px on 22.75px, which puts its first baseline 3.25px
+                        lower again — so the padding is 16 − 3.25 = 12.75px and
+                        the two baselines actually meet. */}
+                    <div className="flex items-start pt-5 sm:pb-4 sm:pt-[0.8125rem]">
                       <span className="font-display text-lg leading-relaxed text-ink-800">
                         {r.dimension}
                       </span>

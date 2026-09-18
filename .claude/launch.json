@@ -14,7 +14,7 @@
     },
     {
       "name": "nexus-api",
-      "runtimeExecutable": "services/api/.venv/Scripts/python.exe",
+      "runtimeExecutable": "services/api/.venv/bin/python",
       "runtimeArgs": [
         "-m",
         "uvicorn",

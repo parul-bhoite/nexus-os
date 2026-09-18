@@ -1,0 +1,1450 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NEXUS OS · architecture</title>
+<style>
+:root{
+  --bg:#FCFBFA; --surface:#FFFFFF; --surface2:#F7F5F8; --surface3:#F1EEF3;
+  --ink:#241B2E; --text:#453D50; --muted:#7D7589; --faint:#A9A2B4;
+  --line:#E6E1EB; --line2:#D3CCDA;
+  --teal:#0F7A6E;  --blue:#2B5FD0;  --plum:#9D2097;  --lilac:#6B4FD0;
+  --brick:#FF3621; --sage:#0F7A4D;  --sand:#B4770B;  --clay:#D8452F;
+  --slate:#7A7286; --deep:#1B0A2E;
+  --r:9px; --r-sm:6px;
+  --f:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --m:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;overflow:hidden}
+html{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body{background:#F4F1F5;color:var(--text);font-family:var(--f);font-size:13px;line-height:1.5}
+.mono{font-family:var(--m);font-size:11px}
+
+/* ── the 16:9 stage. 1920×1080, scaled to fit the window. nothing scrolls. ── */
+#fit{position:fixed;inset:0;overflow:hidden}
+#stage{position:absolute;top:50%;left:50%;width:1920px;height:1080px;overflow:hidden;
+  background:var(--bg);display:flex;flex-direction:column;
+  transform:translate(-50%,-50%) scale(var(--s,1));transform-origin:center center;
+  box-shadow:0 0 0 1px var(--line),0 30px 80px -40px rgba(27,10,46,.35)}
+
+/* ── header ── */
+.top{flex:none;padding:18px 30px 0;border-bottom:1px solid var(--line);background:var(--bg)}
+.top-row{display:flex;align-items:flex-start;gap:24px}
+h1{margin:0;font-size:21px;font-weight:650;color:var(--ink);letter-spacing:-.015em}
+.sub{margin:3px 0 0;font-size:11.5px;color:var(--muted)}
+.tools{margin-left:auto;display:flex;gap:6px;flex:none}
+.tbtn{appearance:none;font:inherit;font-size:11px;font-weight:550;color:var(--muted);
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);
+  padding:4px 9px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:.15s;white-space:nowrap}
+.tbtn:hover{color:var(--ink);border-color:var(--line2)}
+.tbtn kbd{font-family:var(--m);font-size:9px;color:var(--faint);background:var(--surface2);
+  border:1px solid var(--line);border-radius:3px;padding:0 3px}
+nav{display:flex;gap:2px;margin-top:11px;overflow:hidden}
+nav button{appearance:none;border:0;background:none;font:inherit;font-size:12px;font-weight:550;
+  color:var(--muted);padding:7px 13px;cursor:pointer;white-space:nowrap;
+  border-bottom:2px solid transparent;transition:.15s}
+nav button:hover{color:var(--text)}
+nav button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--plum)}
+nav button i{font-style:normal;font-family:var(--m);font-size:8.5px;color:var(--faint);margin-right:5px}
+.bar{flex:none;display:flex;align-items:center;gap:6px 14px;flex-wrap:wrap;
+  padding:7px 30px;border-bottom:1px solid var(--line);background:var(--surface2)}
+.fgrp{display:flex;align-items:center;gap:4px}
+.flab{font-size:9px;font-weight:650;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-right:1px}
+.fchip{appearance:none;font:inherit;font-size:10px;font-weight:550;cursor:pointer;padding:2px 8px;
+  border-radius:999px;background:var(--surface);border:1px solid var(--line);color:var(--muted);
+  transition:.13s;white-space:nowrap}
+.fchip:hover{border-color:var(--c,var(--line2));color:var(--c,var(--text))}
+.fchip[aria-pressed=true]{background:color-mix(in srgb,var(--c,var(--slate)) 12%,white);
+  border-color:color-mix(in srgb,var(--c,var(--slate)) 42%,white);color:var(--c,var(--ink))}
+.fchip.reset{border-style:dashed;color:var(--faint)}
+.stat{margin-left:auto;display:flex;gap:12px;font-family:var(--m);font-size:9.5px;color:var(--faint);white-space:nowrap}
+.stat b{color:var(--text);font-weight:600}
+.stat s{text-decoration:none;color:var(--brick)}
+
+/* ── the view area. one screen, never scrolls. ── */
+main{flex:1;min-height:0;position:relative}
+section{position:absolute;inset:0;display:none;padding:14px 30px 12px;overflow:hidden}
+section.on{display:block}
+.pane{transform-origin:top left}
+.lede{margin:0;font-size:12px;color:var(--muted);max-width:1080px}
+.lede b{color:var(--text);font-weight:600}
+.lede em{font-style:normal;color:var(--faint)}
+.hd{display:flex;align-items:flex-start;gap:18px;margin-bottom:11px}
+.hd .vtools{margin-left:auto;display:flex;gap:5px;flex:none;flex-wrap:wrap;justify-content:flex-end}
+
+/* ── pieces ── */
+.eyebrow{font-size:9px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0 0 7px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px}
+.tier{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  padding:8px 12px 8px 14px;position:relative;overflow:hidden;margin-bottom:5px}
+.tier::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--c,var(--line2))}
+.tier-h{display:flex;align-items:baseline;gap:11px;flex-wrap:wrap}
+.tier-n{font-size:9px;font-weight:650;letter-spacing:.09em;text-transform:uppercase;color:var(--c,var(--muted))}
+.tier-t{font-size:13.5px;font-weight:600;color:var(--ink)}
+.tier-s{font-size:11px;color:var(--muted)}
+.arrow{text-align:center;color:var(--faint);font-size:11px;line-height:1;margin:-1px 0 3px}
+.arrow em{font-style:normal;font-family:var(--m);font-size:9px;color:var(--faint);margin-left:6px}
+.grid{display:grid;gap:6px}
+.mod{background:var(--surface2);border:1px solid var(--line);border-radius:var(--r-sm);
+  padding:6px 8px;position:relative;overflow:hidden}
+.mod::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2.5px;background:var(--c)}
+.mod.ext{background:var(--surface);border-style:dashed;border-color:var(--c)}
+.mod.new::after{content:'NEW';position:absolute;right:4px;top:3px;font-family:var(--m);font-size:7px;
+  font-weight:650;letter-spacing:.06em;color:var(--brick)}
+.mod-t{font-size:11.5px;font-weight:600;color:var(--ink);letter-spacing:-.005em;line-height:1.25}
+.mod-m{font-family:var(--m);font-size:8.5px;color:var(--faint);margin-top:1px}
+.mod-n{font-size:9px;font-weight:600;color:var(--muted);margin-top:2px}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{font-size:9.5px;font-weight:550;padding:2px 7px;border-radius:999px;background:var(--surface2);
+  border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.chip.a{background:color-mix(in srgb,var(--c) 9%,white);border-color:color-mix(in srgb,var(--c) 26%,white);color:var(--c)}
+.chip b{font-weight:650;margin-left:3px}
+.mark{display:inline-block;width:6px;height:6px;border-radius:2px;background:var(--brick);
+  vertical-align:middle;margin-right:5px;flex:none}
+.mark.x{background:none;border:1.2px solid var(--slate)}
+.svc{display:flex;align-items:center;gap:2px;font-size:11px;padding:1.5px 0}
+.svc b{font-weight:550;color:var(--text)}
+.pill{margin-left:auto;font-size:8px;font-weight:650;letter-spacing:.03em;padding:1px 5px;border-radius:3px;
+  background:color-mix(in srgb,var(--i) 13%,white);color:var(--i)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:9px;padding-top:8px;border-top:1px solid var(--line);
+  font-size:10.5px;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:6px}
+.sw{width:10px;height:10px;border-radius:3px;flex:none}
+.swl{width:16px;height:2px;border-radius:2px;flex:none}
+.note{display:flex;gap:7px;font-size:11px;color:var(--muted)}
+.note::before{content:'';width:3px;border-radius:2px;background:var(--c,var(--line2));flex:none}
+.note b{display:block;color:var(--text);font-weight:600;font-size:11.5px;margin-bottom:1px}
+.rail{background:var(--surface2);border:1px solid var(--line);border-radius:var(--r);padding:11px 13px}
+.rail h4{margin:0 0 1px;font-size:11px;font-weight:600;color:var(--ink)}
+.rail ul{margin:0 0 8px;padding-left:13px}
+.rail li{font-size:10px;color:var(--muted);margin:1px 0}
+.rail ul:last-child{margin-bottom:0}
+.two{display:grid;grid-template-columns:1fr 268px;gap:16px;align-items:start}
+
+table{border-collapse:separate;border-spacing:0;width:100%;font-size:11px}
+th,td{padding:5px 6px;border-bottom:1px solid var(--line);text-align:center;vertical-align:middle}
+th{font-size:9px;font-weight:650;color:var(--muted);border-bottom:1px solid var(--line2);
+  vertical-align:bottom;line-height:1.2}
+th:first-child,td:first-child{text-align:left;padding-left:11px}
+th:last-child,td:last-child{text-align:left}
+tbody tr:hover td{background:var(--surface2)}
+tr.ext td{background:color-mix(in srgb,var(--deep) 4%,white)}
+td.colhi{background:var(--surface2)!important}
+th.colhi{color:var(--ink)}
+.rowt{font-size:11.5px;font-weight:600;color:var(--ink)}
+.rowm{font-family:var(--m);font-size:8.5px;color:var(--faint)}
+.dotm{width:10px;height:10px;border-radius:3px;display:inline-block;transition:transform .13s}
+.dotm.o{background:none;border:1.5px solid currentColor}
+.dotm.d{background:none;border:1.5px dashed var(--sand)}
+td.cell.hi .dotm{transform:scale(1.45)}
+.nil{color:var(--faint)}
+tfoot td{border-bottom:0;border-top:1px solid var(--line2);font-weight:650;font-size:13px;padding-top:7px}
+tfoot td:first-child{font-size:9px;font-weight:650;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+
+svg{display:block;width:100%;height:100%;overflow:visible}
+svg text{font-family:var(--f)}
+.st{font-size:11px;font-weight:600}
+.ss{font-size:9px}
+.sm{font-family:var(--m);font-size:8.5px}
+.sk{font-size:9px;font-weight:650;letter-spacing:.09em;text-transform:uppercase}
+
+/* ── interaction ── */
+[data-k]{cursor:pointer;transition:opacity .17s,box-shadow .17s}
+[data-k]:focus-visible{outline:2px solid var(--plum);outline-offset:2px}
+body.focus [data-k].dim{opacity:.34}
+body.focus [data-k].dim [data-k].dim{opacity:1}
+body.focus [data-k].hi{opacity:1}
+.mod.hi,.card.hi,.tier.hi{box-shadow:0 0 0 1.5px color-mix(in srgb,var(--hc,#9D2097) 45%,white),0 5px 14px -10px rgba(36,27,46,.4)}
+.mod.sel,.card.sel,.tier.sel{box-shadow:0 0 0 2px var(--hc,#9D2097),0 6px 18px -10px rgba(36,27,46,.45)}
+.svc.hi b{text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--hc,#9D2097) 45%,white);text-underline-offset:3px}
+.chip.hi{box-shadow:0 0 0 1.5px color-mix(in srgb,var(--c,#9D2097) 45%,white)}
+tr.hi td{background:color-mix(in srgb,var(--plum) 5%,white)!important}
+svg .edge{transition:opacity .17s,stroke-width .17s}
+body.focus svg .edge.dim{opacity:.1}
+body.focus svg .edge.hi{opacity:.95;stroke-width:2}
+body.focus td.cell.dim{opacity:.42}
+td.cell.hi{background:color-mix(in srgb,var(--plum) 6%,white)!important}
+svg .halo{opacity:0;transition:opacity .17s}
+svg [data-k].hi .halo{opacity:1}
+svg [data-k]:hover .halo{opacity:.55}
+.elab{opacity:.9;transition:opacity .15s}
+body.focus svg .elab.dim{opacity:.08}
+body.focus svg .elab.hi{opacity:1}
+
+/* ── zoom canvas ── */
+.canvas{position:relative;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);
+  overflow:hidden;touch-action:none}
+.zc{position:absolute;right:9px;top:9px;display:flex;gap:3px;z-index:2}
+.zc button{appearance:none;width:22px;height:22px;border:1px solid var(--line);background:var(--surface);
+  color:var(--muted);border-radius:5px;font:inherit;font-size:11px;line-height:1;cursor:pointer;
+  display:grid;place-items:center;transition:.13s}
+.zc button:hover{color:var(--ink);border-color:var(--line2)}
+.zc button.w{width:auto;padding:0 7px;font-size:9px;font-weight:600}
+.hint{position:absolute;left:12px;bottom:6px;font-family:var(--m);font-size:9px;color:var(--faint);pointer-events:none}
+
+/* ── inspector: an overlay, so opening it never reflows the screen ── */
+.insp{position:absolute;top:0;right:0;width:340px;height:100%;z-index:30;background:var(--surface);
+  border-left:1px solid var(--line2);box-shadow:-20px 0 50px -34px rgba(36,27,46,.5);
+  transform:translateX(103%);transition:transform .26s cubic-bezier(.4,0,.2,1);
+  overflow-y:auto;overscroll-behavior:contain;padding:16px 18px 32px}
+.insp.on{transform:none}
+.ix{position:absolute;right:12px;top:12px;appearance:none;border:1px solid var(--line);background:var(--surface);
+  color:var(--muted);width:22px;height:22px;border-radius:5px;cursor:pointer;font-size:12px;line-height:1;
+  display:grid;place-items:center}
+.ix:hover{color:var(--ink);border-color:var(--line2)}
+.ik{font-size:9px;font-weight:650;letter-spacing:.09em;text-transform:uppercase;color:var(--c,var(--muted))}
+.it{margin:2px 0 0;font-size:16px;font-weight:650;color:var(--ink);letter-spacing:-.015em;padding-right:24px;line-height:1.22}
+.im{font-family:var(--m);font-size:9.5px;color:var(--faint);margin-top:2px}
+.isec{margin-top:13px;padding-top:10px;border-top:1px solid var(--line)}
+.isec>.eyebrow{margin-bottom:6px}
+.iw{font-size:11.5px;color:var(--muted);margin:0 0 2px}
+.iw b{color:var(--text);font-weight:600}
+.lks{display:flex;flex-wrap:wrap;gap:4px}
+.lk{appearance:none;font:inherit;font-size:10px;font-weight:550;cursor:pointer;text-align:left;padding:2px 8px;
+  border-radius:999px;color:var(--c,var(--muted));background:color-mix(in srgb,var(--c,#7D7589) 7%,white);
+  border:1px solid color-mix(in srgb,var(--c,#7D7589) 24%,white);transition:.13s}
+.lk:hover{background:color-mix(in srgb,var(--c,#7D7589) 15%,white)}
+.lkr{display:flex;align-items:center;gap:7px;width:100%;padding:4px 8px;border-radius:var(--r-sm);appearance:none;
+  background:var(--surface2);border:1px solid var(--line);cursor:pointer;font:inherit;font-size:11px;
+  color:var(--text);margin-bottom:3px;text-align:left;transition:.13s}
+.lkr:hover{border-color:var(--line2);background:var(--surface3)}
+.lkr b{font-weight:600;color:var(--c,var(--ink))}
+.iq{font-family:var(--m);font-size:9.5px;color:var(--muted);line-height:1.75}
+.ihint{font-size:10.5px;color:var(--faint);margin-top:12px;font-style:italic}
+.warn{margin-top:10px;padding:7px 9px;border-radius:var(--r-sm);font-size:10.5px;
+  background:color-mix(in srgb,var(--sand) 8%,white);border:1px solid color-mix(in srgb,var(--sand) 28%,white);color:var(--sand)}
+
+/* ── palette / help / tooltip ── */
+.pal,.ovl{position:absolute;inset:0;z-index:60;display:none;background:rgba(27,10,46,.22);backdrop-filter:blur(2px)}
+.pal.on,.ovl.on{display:block}
+.pal-in{max-width:540px;margin:9% auto 0;background:var(--surface);border:1px solid var(--line2);border-radius:11px;
+  box-shadow:0 30px 70px -30px rgba(27,10,46,.55);overflow:hidden}
+.pal input{width:100%;border:0;border-bottom:1px solid var(--line);padding:13px 16px;font:inherit;font-size:14px;
+  color:var(--ink);outline:0;background:none}
+.pal input::placeholder{color:var(--faint)}
+.pal ul{list-style:none;margin:0;padding:5px;max-height:400px;overflow-y:auto}
+.pal li{padding:6px 10px;border-radius:var(--r-sm);display:flex;gap:10px;align-items:baseline;cursor:pointer;
+  font-size:12.5px;color:var(--text)}
+.pal li[aria-selected=true]{background:var(--surface2)}
+.pal li b{font-weight:600;color:var(--ink)}
+.pal li em{font-style:normal;margin-left:auto;font-size:10px;color:var(--faint);padding-left:9px}
+.pal .pk{font-size:8.5px;font-weight:650;letter-spacing:.07em;text-transform:uppercase;color:var(--c,var(--faint));
+  min-width:62px;flex:none}
+.pal .none{padding:14px 16px;font-size:12px;color:var(--faint)}
+.ovl-in{max-width:440px;margin:11% auto 0;background:var(--surface);border:1px solid var(--line2);border-radius:11px;
+  box-shadow:0 30px 70px -30px rgba(27,10,46,.55);padding:19px 21px 21px}
+.ovl h3{margin:0 0 11px;font-size:14px;font-weight:650;color:var(--ink)}
+.ovl dl{margin:0;display:grid;grid-template-columns:100px 1fr;gap:6px 12px;font-size:11.5px}
+.ovl dt{font-family:var(--m);font-size:10px;color:var(--plum)}
+.ovl dd{margin:0;color:var(--muted)}
+.tip{position:fixed;z-index:90;pointer-events:none;opacity:0;transition:opacity .12s;background:var(--deep);
+  color:#fff;border-radius:6px;padding:7px 10px;font-size:11px;max-width:280px;line-height:1.45;
+  box-shadow:0 12px 30px -14px rgba(27,10,46,.7)}
+.tip.on{opacity:1}
+.tip b{display:block;font-size:11px;font-weight:600;margin-bottom:2px}
+.tip i{font-style:normal;color:rgba(255,255,255,.62)}
+.tip u{display:block;text-decoration:none;font-family:var(--m);font-size:9px;color:rgba(255,255,255,.45);margin-top:2px}
+</style>
+<div id="fit"><div id="stage">
+  <div class="top">
+    <div class="top-row">
+      <div>
+        <h1>NEXUS OS · architecture <span style="font-weight:500;color:var(--muted);font-size:14px">as built, 18 September 2026</span></h1>
+        <p class="sub">An AI business operating system for the GCC — a Next.js BFF over a single FastAPI process over one Neon Postgres with forced row-level security. Seven directors read one Company Brain; every number is computed by deterministic Python and the model is only ever allowed to phrase it. Read out of the repository, not out of its documents.</p>
+      </div>
+      <div class="tools">
+        <button class="tbtn" id="btnq">Search <kbd>/</kbd></button>
+        <button class="tbtn" id="btnh">Keys <kbd>?</kbd></button>
+      </div>
+    </div>
+    <nav id="nav"></nav>
+  </div>
+  <div class="bar" id="bar"></div>
+  <main id="main"></main>
+  <aside class="insp" id="insp" aria-live="polite"></aside>
+  <div class="pal" id="pal"><div class="pal-in">
+    <input id="q" placeholder="Search components, seams, services, stages, stores…" autocomplete="off" spellcheck="false">
+    <ul id="qr"></ul></div></div>
+  <div class="ovl" id="help"><div class="ovl-in">
+    <h3>Getting around</h3>
+    <dl>
+      <dt>hover</dt><dd>preview &mdash; lights up everything that thing touches</dd>
+      <dt>click</dt><dd>pin it, and open the inspector</dd>
+      <dt>inspector</dt><dd>every chip is clickable &mdash; walk the model hop by hop</dd>
+      <dt>/</dt><dd>search components, seams, services, stages and stores</dd>
+      <dt>1 &ndash; 6</dt><dd>jump to a view</dd>
+      <dt>&larr; &rarr;</dt><dd>previous / next view</dd>
+      <dt>esc</dt><dd>clear the selection, or close this</dd>
+      <dt>&#8984;/ctrl+scroll</dt><dd>zoom a diagram &middot; drag to pan</dd>
+    </dl></div></div>
+</div></div>
+<div class="tip" id="tip"></div>
+
+<script>
+/* ==========================================================================
+   1 · DATA — the single spine. Every array below is transcribed from a
+   named source (a file path, a manifest, a decision the user confirmed).
+   Cite the sources in this comment. Nothing here may be invented; anything
+   you could not confirm belongs in OPEN, not in the model.
+   ========================================================================== */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DATA — read out of the repository, not out of its documents. Where the two
+   disagree the code wins, by Parul's decision of 18 Sep 2026. Sources:
+
+     services/api/app/main.py                  → routers, middleware, lifespan
+     services/api/app/routes/*.py              → 15 modules, ~90 endpoints
+     services/api/app/{ai,embeddings,storage,mail,connectors}/…
+                                               → the 17 seams and their adapters
+     services/api/app/retrieval/scoped.py      → the GUCs, and the one place set
+     services/api/app/domain/dashboards.py     → the seven directors, as data
+     services/api/migrations/versions/*.py     → 36 migrations, 38 live tables
+     services/api/app/jobs/scheduler.py        → three interval jobs
+     apps/web/lib/auth-proxy.ts                → 72 BFF routes, header allowlist
+     db/bootstrap.sql                          → the two roles and their flags
+     AZURE-DEPLOYMENT-PLAN.md                  → the target topology
+     docker-compose.yml                        → db·migrate·api·worker·web·proxy
+
+   Every component→service edge is DERIVED from a component's declared seams
+   and each seam's targets. Nothing is asserted by hand. Counts in the header
+   and the stat bar are computed at render.
+
+   Superseded on purpose: ARCHITECTURE-HLD.md §3 says "layer 3 is a stub and
+   layer 4 does not exist". app/retrieval/ is eight built modules; app/agents/
+   holds only stale .pyc. Drawn as the code is. See OPEN #1.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const V={teal:'#0F7A6E',blue:'#2B5FD0',plum:'#9D2097',lilac:'#6B4FD0',brick:'#FF3621',
+  sage:'#0F7A4D',sand:'#B4770B',clay:'#D8452F',slate:'#7A7286',deep:'#1B0A2E'};
+
+/* status → colour. Fixed across all six views. V.brick is spent on the one
+   distinction the document is arguing about: built and exercised, versus
+   built, tested and called by nothing. */
+const SC={'Built':V.sage,'Partial':V.sand,'Declared':V.brick,'Removed':V.slate,'Target':V.lilac};
+const SD={'Built':'reachable from a request or a job',
+  'Partial':'some of it runs, some of it does not',
+  'Declared':'written and tested, called by no application code',
+  'Removed':'source deleted; only stale bytecode remains',
+  'Target':'planned, no code yet'};
+
+/* ── the layers, top to bottom, in the direction dependency flows ───────── */
+const TIERS=[
+ ['L1','Presentation','apps/web · Next.js 14 App Router',V.blue],
+ ['L2','Interface','services/api · FastAPI, one process',V.lilac],
+ ['L3','Scoped data access','the only path to workspace data',V.plum],
+ ['L3b','Deterministic maths','pure · no IO · no clock · no model',V.teal],
+ ['L4','Model','skills as files · phrases, never computes',V.clay],
+ ['IN','Ingestion & integration','writes read-models; agents never call it',V.sand],
+ ['PL','Platform','composition, config, drivers, process',V.slate]];
+
+/* ── COMPONENTS ─────────────────────────────────────────────────────────── */
+const COMPONENTS=[
+ {t:'Web pages',d:'web-pages',l:'L1',st:'Built',req:['BffProxy'],
+  src:'apps/web/app/**',
+  r:'Landing, auth, guided onboarding, dashboard, work, settings, account. Seven director keys are the only accepted [department] values; anything else is a 404.'},
+ {t:'BFF proxy',d:'web-bff',l:'L1',st:'Built',req:['ApiBase'],
+  src:'apps/web/lib/auth-proxy.ts',
+  r:'72 route files, every one a proxy and not one of them touching a database. Forwards two headers by allowlist — Cookie and X-CSRF-Token — so the session cookie stays first-party and SameSite=Lax keeps meaning something.'},
+
+ {t:'Routes',d:'routes',l:'L2',st:'Built',req:['scoped_connection','PipelineCalculator','Command','ObjectStore','LlmProvider'],
+  src:'app/routes/ · 15 modules',
+  r:'auth · companies · audit · onboarding · onboarding_agent · documents · files · research · review · setup · spine · dashboards · connections · ops. Decides whether 403 or 404 is the honest answer; a wrong-department read is a 404, and the director list carries no count of what was removed.'},
+ {t:'Auth & tenancy',d:'auth',l:'L2',st:'Built',req:['Mailer','scoped_connection'],
+  src:'app/auth/ · 11 modules',
+  r:'argon2 passwords, 256-bit session tokens stored only as a SHA-256, double-submit CSRF, email verification, invitations, password reset, domain claims, company creation.'},
+ {t:'Health',d:'health',l:'L2',st:'Built',req:['ObjectStore','LlmProvider','Embedder','scoped_connection'],
+  src:'app/health.py',
+  r:'/health and /health/ready. Reports an absent model or embedder as a supported state rather than a degraded one, and hides the storage path from the error text so an anonymous caller learns nothing.'},
+
+ {t:'Retrieval',d:'retrieval',l:'L3',st:'Partial',req:['scoped_connection'],
+  src:'app/retrieval/ · 8 modules',
+  r:'The only path to workspace data. No public callable takes a user_id — a test walks every signature and fails the build on one. chunks.py, the single reader of chunk content, is reachable from evals and from nothing else.'},
+ {t:'Domain',d:'domain',l:'L3',st:'Partial',req:['scoped_connection'],
+  src:'app/domain/ · 52 modules',
+  r:'The seven directors as frozen data, departments, the scope lattice, role grants, memberships, audit, the company brain. Nine of the 52 are tested and called by no application code.'},
+
+ {t:'Calculators',d:'calculators',l:'L3b',st:'Partial',req:[],
+  src:'app/calculators/ · 9 modules',
+  r:'Every number in the product originates here. Pure, boundary-safe, no model. deltas.py — weighting, exposure and composite scoring — has no caller outside its test.'},
+ {t:'Grounding',d:'grounding',l:'L3b',st:'Built',req:['PipelineCalculator','scoped_connection'],
+  src:'app/grounding/ · 5 modules',
+  r:'The capability→calculator map, the pipeline that runs it, and the ledger that records what a figure was computed from. 1,139 lines of map — this is what lets a card answer "why are you telling me this?"'},
+
+ {t:'AI runtime',d:'ai-runtime',l:'L4',st:'Built',req:['LlmProvider','SkillManifest'],
+  src:'app/ai/runtime/ · 5 modules',
+  r:'route → command → skill (a file) → LlmProvider. Validates the answer against the skill schema and refuses the rest. The field catalogue declares what a skill may write and at what scope. No __init__.py — the one implicit namespace package in the service.'},
+ {t:'Skills',d:'ai-skills',l:'L4',st:'Built',req:[],
+  src:'app/ai/skills/ · 8 skills',
+  r:'Eight directories, each SKILL.md + manifest.toml + schema.json. narrate-metric declares writes = [] — it phrases a figure already computed and decides nothing that outlives the request.'},
+ {t:'Model boundary',d:'ai',l:'L4',st:'Built',req:[],
+  src:'app/ai/',
+  r:'"Nothing outside this package imports a vendor SDK", asserted as an import-graph test rather than by review. One caught a vendor name in a docstring.'},
+ {t:'Agents',d:'agents',l:'L4',st:'Removed',req:[],f:'ghost',
+  src:'app/agents/ — .pyc only',
+  r:'assistant · brain · persona · untrusted. The sources are gone; five .pyc files last compiled 20 August remain, and nothing imports app.agents anywhere. The HLD still describes this as the planned layer 4.'},
+
+ {t:'Documents',d:'documents',l:'IN',st:'Partial',req:['ObjectStore','Embedder','scoped_connection'],
+  src:'app/documents/ · 6 modules',
+  r:'Parse, chunk, classify, embed. Classification fails closed — anything that fails parsing or falls below threshold becomes L5 and enters review (I4), which is the single failure outcome by construction. rules.py, the proposing classifier, has no caller.'},
+ {t:'Research',d:'research',l:'IN',st:'Built',req:['scoped_connection','direct fetch'],
+  src:'app/research/ · 6 modules',
+  r:'Fetches and reads a public website. The SSRF guard carries 89 test cases and redirects are off, because a redirect is a second URL nobody validated.'},
+ {t:'Connectors',d:'connectors',l:'IN',st:'Partial',req:['OAuth exchange','Transport','SourceAdapter','Session','scoped_connection','direct fetch'],
+  src:'app/connectors/ · 9 modules',
+  r:'One adapter interface, two transports, no model. The registry holds exactly one entry — four Connect buttons with no adapter behind them would authorise us and then do nothing. OAuth, sealing and revocation work; the fetch is never executed.'},
+ {t:'Embeddings',d:'embeddings',l:'IN',st:'Built',req:[],
+  src:'app/embeddings/ · 5 modules',
+  r:'The one package that names an embedding library. Local model, no network at query time, so the residency commitment is structurally true for that path and not only contractually (ADR 0003).'},
+ {t:'Jobs',d:'jobs',l:'IN',st:'Built',req:['jobs_session','Embedder','scoped_connection'],
+  src:'app/jobs/scheduler.py',
+  r:'Three interval jobs — expiry sweep 60 min, embedding pass 5 min, research drain 1 min. Its own docstring still says there is exactly one. In-process: with more than one API process, every process runs the job.'},
+
+ {t:'Platform',d:'platform',l:'PL',st:'Built',req:[],
+  src:'app/{main,config,db,storage,mail,http_limits,worker}.py',
+  r:'App factory, settings, the async engine and its Neon-specific handling, the two drivers, the body-size ceiling, the request-id middleware, and the worker entrypoint — the same image as the API, a different command. Startup refuses outright if the jobs DSN is missing.'},
+];
+
+/* ── SERVICES ───────────────────────────────────────────────────────────── */
+const SERVICES=[
+ {n:'Neon · nexus_app',s:'PostgreSQL 18.4 + pgvector 0.8.6 · FORCE RLS',g:'Data plane'},
+ {n:'Neon · nexus_jobs',s:'maintenance login · two role-targeted policies',g:'Data plane'},
+ {n:'FastAPI process',s:'uvicorn · one process · in-process APScheduler',g:'Own runtime'},
+ {n:'.storage/ filesystem',s:'ObjectStore driver · HMAC-signed URLs, 300 s',g:'Local substitute'},
+ {n:'.mail/ filesystem',s:'FileMailer · 218 .eml written to date',g:'Local substitute'},
+ {n:'fastembed (in-process)',s:'multilingual-e5-large · 1024d · ~2 GB resident',g:'Local substitute'},
+ {n:'Anthropic API',s:'claude-sonnet-5 · claude-haiku-4-5',g:'External',x:1},
+ {n:'HubSpot OAuth',s:'app.hubspot.com · api.hubapi.com',g:'External',x:1},
+ {n:'HubSpot MCP',s:'mcp.hubspot.com/anthropic',g:'External',x:1,f:'dead'},
+ {n:'Customer websites',s:'crawled · SSRF-guarded · redirects off',g:'External',x:1},
+ {n:'Public DNS',s:'TXT · nexus-domain-verification=',g:'External',x:1},
+ {n:'SMTP provider',s:'driver exists, no provider set — D4',g:'Target only',x:1,f:'target'},
+ {n:'Cloud object store',s:'Azure Blob or S3 — no driver written',g:'Target only',x:1,f:'target'},
+];
+const SG={'Data plane':V.plum,'Own runtime':V.slate,'Local substitute':V.teal,'External':V.blue,'Target only':V.lilac};
+
+/* ── CONTRACTS — the seams ──────────────────────────────────────────────── */
+const CONTRACTS=[
+ {p:'LlmProvider',g:'Infrastructure ports',by:'ai',ad:'AnthropicProvider · Unavailable · Scripted',
+  sv:['Anthropic API'],id:'API key · NEXUS_ANTHROPIC_API_KEY',src:'app/ai/contracts.py:223',
+  n:'No key is a supported state, not a degraded one — UnavailableProvider refuses rather than fabricating (ADR 0011).'},
+ {p:'Embedder',g:'Infrastructure ports',by:'embeddings',ad:'FastEmbed · Unavailable · Deterministic',
+  sv:['fastembed (in-process)'],id:'none — the model is local',src:'app/embeddings/contracts.py:110',
+  n:'1024 dimensions on purpose, the same width as a paid provider, so moving is a re-embed and not a schema change.'},
+ {p:'ObjectStore',g:'Infrastructure ports',by:'platform',ad:'FilesystemObjectStore',
+  sv:['.storage/ filesystem','Cloud object store'],id:'HMAC-signed URL · 300 s TTL',src:'app/storage.py:52',f:'gap',
+  n:'Five abstract methods, one implementation. The ABC exists specifically to allow a cloud driver that was never written — deployment blocker one.'},
+ {p:'Mailer',g:'Infrastructure ports',by:'platform',ad:'FileMailer · SmtpMailer',
+  sv:['.mail/ filesystem','SMTP provider'],id:'SMTP username + password (unset)',src:'app/mail.py:38',f:'gap',
+  n:'SmtpMailer is written and wired to nothing. Config refuses to start with the file backend outside development, so this is deployment blocker two — D4.'},
+
+ {p:'scoped_connection',g:'Data access',by:'retrieval',ad:'retrieval/scoped.py',
+  sv:['Neon · nexus_app'],id:'workspace + user, set as transaction-local GUCs',src:'app/retrieval/scoped.py',
+  n:'Takes resolved authority, never an identifier — there is deliberately no workspace_id parameter, because that would make scope something a caller could supply. set_config(…, local=true) throughout: a session-scoped setting would outlive the connection’s return to the pool.'},
+ {p:'jobs_session',g:'Data access',by:'platform',ad:'db.get_jobs_engine',
+  sv:['Neon · nexus_jobs'],id:'a second database login, not a flag',src:'app/db.py:262',
+  n:'ADR 0018 rejected a bypass GUC in favour of a boundary an identity must authenticate to cross. Startup raises if the DSN is absent.'},
+
+ {p:'Transport',g:'Connector spine',by:'connectors',ad:'McpTransport · RestTransport',
+  sv:['HubSpot MCP'],id:'OAuth bearer',src:'app/connectors/contracts.py:84',f:'part',
+  n:'Two implementers; RestTransport has no consumer outside its test.'},
+ {p:'SourceAdapter',g:'Connector spine',by:'connectors',ad:'HubSpotDeals',
+  sv:['HubSpot MCP'],id:'OAuth bearer, Fernet-sealed at rest',src:'app/connectors/contracts.py:117',f:'dead',
+  n:'One implementer. Its only consumer, registry.adapter_over(), is called from a test and from nothing else.'},
+ {p:'Session',g:'Connector spine',by:'connectors',ad:'connectors/session.open_session',
+  sv:['HubSpot MCP'],id:'OAuth bearer',src:'app/connectors/mcp.py:70',f:'dead',
+  n:'Zero references anywhere — application, tests or evals. This is the exact point at which the connector spine stops: a token is held and there is nowhere to spend it.'},
+ {p:'OAuth exchange',g:'Unported calls',by:null,ad:'connectors/oauth.py — httpx direct',
+  sv:['HubSpot OAuth'],id:'client id + secret from config',src:'app/connectors/oauth.py:50',f:'bypass',
+  n:'Authorise and token exchange are made straight over httpx rather than through Transport. The half of the connector that works is the half with no port.'},
+ {p:'direct fetch',g:'Unported calls',by:null,ad:'research/crawler.py · connectors/domain_check.py',
+  sv:['Customer websites','Public DNS'],id:'none — unauthenticated public fetch',src:'app/research/crawler.py:75',f:'bypass',
+  n:'The crawl and the TXT check reach the internet directly, guarded by ssrf.py rather than by a seam. Deliberate, and it means these two reaches have no adapter to swap.'},
+
+ {p:'Command',g:'Model seams',by:'ai-runtime',ad:'6 onboarding commands',sv:[],
+  id:'the caller’s ScopedSession',src:'app/ai/runtime/commands.py:67',
+  n:'Bound by a lazy import inside get_commands(), so a static import graph cannot see it. Not dead — invisible.'},
+ {p:'SkillManifest',g:'Model seams',by:'ai-skills',ad:'manifest.toml + schema.json',sv:[],
+  id:'—',src:'app/ai/runtime/skills.py',
+  n:'Skills are files on disk, not prompts buried in Python. A manifest names its model, its output ceiling, whether it needs grounding, and what it may write.'},
+
+ {p:'PipelineCalculator',g:'Internal seams',by:'calculators',ad:'plain functions, structurally',sv:[],
+  id:'—',src:'app/grounding/compute.py:125',
+  n:'Reaches no external service at all, and terminates inside the process. Drawing a seam like this into the infrastructure tier is the commonest lie in an architecture diagram.'},
+ {p:'Row protocols',g:'Internal seams',by:'retrieval',ad:'Dispatch · Stocked · Dated · Graded · Supplied · Overdue',sv:[],
+  id:'—',src:'app/calculators/{ops,stock,dispatch,supplier,priorities}.py',
+  n:'Six structural protocols, so a calculator names the shape it needs and never the table it came from.'},
+
+ {p:'ApiBase',g:'Process seam',by:'routes',ad:'NEXUS_API_BASE_URL',sv:['FastAPI process'],
+  id:'the caller’s session cookie, forwarded',src:'apps/web/lib/auth-proxy.ts',
+  n:'HTTP between two deployables. 30 s budget, 90 s for model-backed routes, 120 s for uploads; an abort returns 504 and anything else 503.'},
+ {p:'BffProxy',g:'Process seam',by:'web-bff',ad:'app/api/**/route.ts',sv:[],
+  id:'browser cookie · double-submit CSRF',src:'apps/web/app/api/',
+  n:'The browser never reaches the API directly. Cross-origin would force SameSite=None, and SameSite=Lax is the protection the API relies on.'},
+];
+
+/* ── STORES ─────────────────────────────────────────────────────────────── */
+const STORES=[
+ {n:'Tenancy',k:'Postgres',sv:'Neon · nexus_app',by:['auth','domain'],rls:'workspace + user GUC',
+  tb:['tenant','app_user','workspace','membership','user_session','persona','audit_log'],
+  note:'audit_log has an RLS policy and is written by nothing. I9 — every number is auditable — has no trail behind it yet.'},
+ {n:'Auth & verification',k:'Postgres',sv:'Neon · nexus_app',by:['auth','jobs'],rls:'domain_claim only',
+  tb:['email_verification','domain_claim','password_reset','rate_limit_counter'],
+  note:'rate_limit_counter carries no RLS, deliberately — it is keyed per IP and per domain, not per workspace. Rate limiting is Postgres-backed; there is no Redis anywhere.'},
+ {n:'Onboarding',k:'Postgres',sv:'Neon · nexus_app',by:['routes','ai-runtime'],rls:'workspace + token-hash GUC',
+  tb:['onboarding_answer','invitation','onboarding_progress','workspace_department','onboarding_session','onboarding_turn','join_request'],
+  note:'The invitation policy is the narrowest in the schema: someone accepting is in no workspace yet, so the GUC is the token’s hash and the database never sees the secret.'},
+ {n:'Knowledge',k:'Postgres',sv:'Neon · nexus_app',by:['documents'],rls:'workspace',
+  tb:['document','chunk'],
+  note:'chunk carries its scope L1–L5 on the row so the permission predicate sits inside the ANN plan, plus a 1024d vector and an HNSW index. Written on every upload, read back by no route.'},
+ {n:'Research & brain',k:'Postgres',sv:'Neon · nexus_app',by:['research','domain'],rls:'workspace + worker policies',
+  tb:['workspace_url','research_run','research_source','company_brain','brain_version','fact','page_signals'],
+  note:'company_brain.generated_by = "answers". By the end of onboarding the founder has typed it all, every answer still carrying its question, so assembling is not generating.'},
+ {n:'Generation',k:'Postgres',sv:'Neon · nexus_app',by:['grounding'],rls:'workspace',
+  tb:['generation'],
+  note:'The table the HLD said did not exist. Migration 0023 created it with a check constraint tying the refusal reason to the outcome; 0029 added the prose column.'},
+ {n:'Connectors',k:'Postgres',sv:'Neon · nexus_app',by:['connectors'],rls:'workspace',
+  tb:['workspace_connection','crm_deal'],
+  note:'Credentials are Fernet-sealed with a key id so they can be rotated. crm_deal has no writer, because no fetch runs.'},
+ {n:'Ops',k:'Postgres',sv:'Neon · nexus_app',by:['routes'],rls:'workspace',
+  tb:['ops_project','ops_task','ops_completeness','ops_milestone','ops_issue','ops_dispatch','ops_stock_item','ops_supplier'],
+  note:'The only tables a customer writes directly, and the largest single blocker on the product: the ops layer gates 23 tiles, more than accounting does.'},
+ {n:'Document bytes',k:'Filesystem',sv:'.storage/ filesystem',by:['documents'],rls:'path by workspace uuid',
+  tb:['.storage/ws/<uuid>/documents/'],
+  note:'Nine or more workspaces on disk today. Readiness probes it by writing a marker and hides the absolute path from the error text.'},
+ {n:'Outbound mail',k:'Filesystem',sv:'.mail/ filesystem',by:['auth'],rls:'—',
+  tb:['.mail/<ts>-<hash>.eml'],
+  note:'Not a stub — it is what makes the whole verification and invitation chain testable end to end with no provider.'},
+ {n:'Model cache',k:'Filesystem',sv:'fastembed (in-process)',by:['embeddings'],rls:'—',
+  tb:['NEXUS_MODEL_CACHE_DIR'],
+  note:'~2 GB of ONNX weights, downloaded once. ADR 0003 notes this needs its own worker, which is why the same image runs a second command.'},
+];
+
+/* ── LIFE — a founder from nothing to a number on a screen ──────────────── */
+const LIFE=[
+ {n:1,s:'Register',w:'Create an account',u:'argon2 · 12-char floor · a 256-bit token stored only as its SHA-256',
+  a:'Founder',mod:'auth',pt:['Mailer'],sto:['Tenancy','Auth & verification'],lv:'an unverified app_user, and an .eml on disk'},
+ {n:2,s:'Verify & claim',w:'Prove the email, then the domain',u:'DNS TXT, a hosted file, or an address on the company domain',
+  a:'Founder',mod:'auth',pt:['direct fetch'],sto:['Auth & verification'],lv:'a verified domain_claim'},
+ {n:3,s:'Create the company',w:'Tenant, workspace, membership',u:'one company per account — the workspace switch was deleted, not deferred',
+  a:'Founder',mod:'auth',pt:['scoped_connection'],sto:['Tenancy'],lv:'a workspace, and a role that resolves to a scope'},
+ {n:4,s:'Be interviewed',w:'The guided conversation',u:'eight phases over three sections; every request takes its stage from the session row',
+  a:'AI runtime',mod:'ai-runtime',pt:['Command','SkillManifest','LlmProvider'],sto:['Onboarding'],lv:'onboarding_turn rows, and answers carrying their questions'},
+ {n:5,s:'Read the site',w:'Crawl the company website',u:'queued, drained by the scheduler one run a tick; SSRF-guarded, redirects off',
+  a:'Research',mod:'research',pt:['direct fetch','scoped_connection'],sto:['Research & brain'],lv:'research_source and page_signals'},
+ {n:6,s:'Upload',w:'Documents into the brain',u:'parse → chunk → classify; anything that fails becomes L5 and enters review',
+  a:'Founder',mod:'documents',pt:['ObjectStore','scoped_connection'],sto:['Knowledge','Document bytes'],lv:'chunks with a scope and a department'},
+ {n:7,s:'Embed',w:'Vectors, five minutes later',u:'a local 1024d model — the text never leaves the infrastructure to be embedded',
+  a:'Scheduler',mod:'jobs',pt:['Embedder','scoped_connection'],sto:['Knowledge'],lv:'chunk.embedding, and provenance the constraint insists on'},
+ {n:8,s:'Assemble',w:'The Company Brain',u:'generated_by = "answers" — it invents nothing and names a source for every line',
+  a:'Domain',mod:'domain',pt:['scoped_connection'],sto:['Research & brain'],lv:'a versioned brain, every claim traceable'},
+ {n:9,s:'Connect a tool',w:'OAuth to HubSpot',u:'authorise, exchange, seal with Fernet, store the key id for rotation',
+  a:'Founder',mod:'connectors',pt:['OAuth exchange','scoped_connection'],sto:['Connectors'],
+  lv:'a sealed token — and nothing that spends it',warn:'The journey stops here. adapter_over() and open_session() are written, tested and called by nothing, so no row is ever fetched.'},
+ {n:10,s:'Open the dashboard',w:'One URL for everybody',u:'the ScopedSession is built once per request and passed explicitly; a department you cannot reach is absent, not greyed out',
+  a:'Routes',mod:'routes',pt:['scoped_connection','PipelineCalculator'],sto:['Tenancy','Ops'],lv:'a surface composed of what this reader can reach'},
+ {n:11,s:'Compute',w:'Deterministic figures',u:'the calculators are pure; a missing input renders one of seven named states and never a zero',
+  a:'Calculators',mod:'calculators',pt:['PipelineCalculator','Row protocols'],sto:['Generation'],lv:'a figure, with its working'},
+ {n:12,s:'Narrate',w:'The model phrases it',u:'one skill, narrate-metric, whose manifest declares writes = []',
+  a:'AI runtime',mod:'ai-runtime',pt:['LlmProvider','SkillManifest'],sto:['Generation'],lv:'a sentence around a number the model did not produce'},
+];
+
+/* ── CROSS ──────────────────────────────────────────────────────────────── */
+const CROSS=[
+ ['Identity',['session cookie, httponly, SameSite=Lax, 12 h; only its SHA-256 is stored',
+   'double-submit CSRF — the second cookie is JS-readable on purpose',
+   'no middleware.ts: nothing gates a page before it renders. The 401 handler in AppShell is the boundary',
+   'every outbound call is labelled with what it authenticates as, on the seams view']],
+ ['Authorisation',['ScopedSession built once per request, never supplied by the client, never in a model context',
+   'role → scope is a frozen mapping asserted row by row, not scattered conditionals',
+   'L1–L5 monotonic, and L4 is reachable only by being named on the item',
+   'capability existence and record existence are separate response types, so a leak cannot happen by accident']],
+ ['Tenant isolation',['FORCE row-level security — an owner bypasses a merely-enabled policy, and migrations run as the owner',
+   'three GUCs: workspace_id, user_id, invitation_token_hash; an unset GUC matches nothing',
+   'set transaction-local, because a session setting would outlive the connection’s return to the pool',
+   'two logins, neither with BYPASSRLS; the isolation test asserts that before it asserts anything else']],
+ ['Secrets',['.env only — no secret manager, in either topology',
+   'Fernet for connector tokens, with a key id so rotation is possible',
+   'HMAC for signed download URLs, 300 s',
+   'NEXUS_ENV falls back to local, which serves public docs and sets secure=False on both cookies']],
+ ['Observability',['structlog JSON, a request id on every line, secret redaction, and a refusal to log customer content',
+   'one global exception handler — HTTPException deliberately not routed through it',
+   'no metrics, no tracing, no alerting',
+   'audit_log exists, has a policy, and is written by nothing']],
+ ['Asserted as tests',['no retrieval callable may take a user_id — a signature test walks every one',
+   'no module outside app/ai/ may name the model vendor; same for the embedding library',
+   'the connector spine may not be reachable from the model layer, asserted as an import graph',
+   '1,317 backend tests · 146 web tests · ruff, mypy --strict, tsc and next lint in one gate']],
+];
+
+/* ── OPEN ───────────────────────────────────────────────────────────────── */
+const OPEN=[
+ {q:'ARCHITECTURE-HLD §3 and the code now describe different systems. Which one is maintained?',
+  why:'The HLD says layer 3 is a stub and layer 4 does not exist. retrieval/ is eight built modules; agents/ is five stale .pyc files. Anyone reading the HLD is being told the opposite of what runs.',
+  options:['Regenerate the HLD from the code','Keep the HLD as intent and mark it superseded','Retire the HLD in favour of this document'],
+  owner:'Parul',asked:'2026-09-18',on:['agents','retrieval']},
+ {q:'When does the connector fetch path get wired, and what calls it?',
+  why:'open_session, adapter_over and SourceAdapter are complete and tested, and no application code path reaches them. A workspace can authorise HubSpot today and no row will ever arrive.',
+  options:['A scheduler job, alongside the other three','On-demand from a route','Deliberately after the ops layer lands'],
+  owner:'Parul',asked:'2026-09-18',on:['connectors','Session','SourceAdapter']},
+ {q:'Is chunk retrieval in scope for the next release, or is the vector path dormant on purpose?',
+  why:'Documents are parsed, classified, embedded and indexed on every upload. retrieval/chunks.py is the only reader and it is reachable from evals alone — so the embedding cost is paid and nothing is retrieved.',
+  options:['Wire it behind the assistant','Wire it behind the brain','Leave dormant until the assistant exists'],
+  owner:'Parul',asked:'2026-09-18',on:['retrieval','Knowledge','documents']},
+ {q:'Which object store driver, and who writes it?',
+  why:'ObjectStore has five abstract methods and one filesystem implementation. Nothing deploys until a cloud driver exists — this is the first of two hard blockers.',
+  options:['Azure Blob, matching AZURE-DEPLOYMENT-PLAN','S3-compatible, per doc 07 §3','Keep filesystem on a mounted volume'],
+  owner:'Parul',asked:'2026-09-18',on:['ObjectStore','Cloud object store']},
+ {q:'Which email provider settles D4?',
+  why:'SmtpMailer is written and wired to nothing, and config refuses to start on the file backend outside development. Verification, invitation and password reset all stop at the boundary.',
+  options:['Azure Communication Services','A third-party API — Resend, Postmark','A plain SMTP relay'],
+  owner:'Parul',asked:'2026-09-18',on:['Mailer','SMTP provider']},
+ {q:'How does the scheduler survive more than one API instance?',
+  why:'scheduler.py says it plainly: with more than one API process, every process runs the job. The worker entrypoint exists but nothing enforces exactly one of it, and Container Apps scales by default.',
+  options:['Worker pinned to a single replica','An advisory lock per job','A platform scheduler instead of APScheduler'],
+  owner:'Parul',asked:'2026-09-18',on:['jobs','FastAPI process']},
+ {q:'What restores a single origin on Container Apps?',
+  why:'The session cookie is Secure + SameSite=Lax and Caddy serves web and api from one hostname locally. Container Apps gives each app its own FQDN, and the session layer breaks the moment they differ.',
+  options:['Front Door or App Gateway over both','Caddy as a third container','Serve the API under the web app’s domain'],
+  owner:'Parul',asked:'2026-09-18',on:['ApiBase','web-bff']},
+ {q:'Six scoreable departments or five — and is a Department Manager’s portal six directors or seven?',
+  why:'Copy says six, the data carries five, and ADR 0010 gives all seven a dashboard while the scope lattice denies a manager the executive surface. The composite score shows its denominator, so whichever is wrong is wrong in public.',
+  options:['Customers becomes its own scoreable department','Fold Customers into Sales and say five','Drop the composite until the count is settled'],
+  owner:'Parul',asked:'2026-09-18',on:['domain']},
+];
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DERIVED INDEXES — nothing below this line is hand-authored.
+   ══════════════════════════════════════════════════════════════════════════ */
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+const cmp=d=>COMPONENTS.find(m=>m.d===d);
+const ctr=p=>CONTRACTS.find(x=>x.p===p);
+const svc=n=>SERVICES.find(s=>s.n===n);
+const sto=n=>STORES.find(s=>s.n===n);
+const stg=n=>LIFE.find(s=>String(s.n)===String(n));
+
+/* services a component reaches = union over its seams' targets */
+const cSvc=m=>[...new Set((m.req||[]).flatMap(p=>(ctr(p)||{sv:[]}).sv))];
+/* seams a component provides */
+const provOf=d=>CONTRACTS.filter(x=>x.by===d).map(x=>x.p);
+/* who consumes a seam */
+const consOf=p=>COMPONENTS.filter(m=>(m.req||[]).includes(p)).map(m=>m.d);
+/* contracts that reach a service */
+const ctrOf=n=>CONTRACTS.filter(x=>(x.sv||[]).includes(n)).map(x=>x.p);
+/* stores a component writes */
+const stoOf=d=>STORES.filter(s=>(s.by||[]).includes(d)).map(s=>s.n);
+/* open questions attached to an entity */
+const openOn=id=>OPEN.filter(o=>(o.on||[]).includes(id));
+
+const TIER=l=>TIERS.find(t=>t[0]===l);
+const TBL=STORES.filter(s=>s.k==='Postgres').reduce((a,s)=>a+s.tb.length,0);
+const DEAD=CONTRACTS.filter(c=>c.f==='dead').length;
+const BYP=CONTRACTS.filter(c=>c.f==='bypass').length;
+const MIGR=36;   /* services/api/migrations/versions/ */
+
+/* ==========================================================================
+   2 · STATE + FILTERS
+   ========================================================================== */
+const S={v:0,sel:null,hov:null,timer:null,step:0,f:{st:new Set(),g:new Set()},msort:'order',ssort:'group'};
+/* which view each entity kind lives on, so a search result lands somewhere real */
+const HOME={component:0,stage:1,contract:2,service:2,store:4};
+let CV=COMPONENTS,SV=SERVICES,VS=new Set(SERVICES.map(s=>s.n));
+function refilter(){
+  CV=COMPONENTS.filter(m=>!S.f.st.size||S.f.st.has(m.st));
+  SV=SERVICES.filter(s=>!S.f.g.size||S.f.g.has(s.g));
+  VS=new Set(SV.map(s=>s.n));
+}
+
+/* ==========================================================================
+   3 · RELATE — ONE definition of "related", shared by every view.
+   ========================================================================== */
+function relate(sel){
+  const r={component:new Set(),contract:new Set(),service:new Set(),stage:new Set(),store:new Set()};
+  if(!sel)return r;
+  const{k,id}=sel;
+  if(k==='component'){
+    const m=cmp(id); if(!m)return r;
+    r.component.add(id);
+    (m.req||[]).forEach(p=>{                       /* outward — what it depends on */
+      r.contract.add(p);
+      const c=ctr(p); if(!c)return;
+      (c.sv||[]).forEach(s=>r.service.add(s));
+      if(c.by)r.component.add(c.by);
+    });
+    provOf(id).forEach(p=>{                        /* inward — who depends on it */
+      r.contract.add(p);
+      consOf(p).forEach(d=>r.component.add(d));
+      (ctr(p).sv||[]).forEach(s=>r.service.add(s));
+    });
+    stoOf(id).forEach(n=>{r.store.add(n);r.service.add(sto(n).sv);});
+    LIFE.forEach(L=>{if(L.mod===id)r.stage.add(String(L.n));});
+  }
+  else if(k==='contract'){
+    const c=ctr(id); if(!c)return r;
+    r.contract.add(id);
+    if(c.by)r.component.add(c.by);
+    consOf(id).forEach(d=>r.component.add(d));
+    (c.sv||[]).forEach(s=>r.service.add(s));
+    LIFE.forEach(L=>{if((L.pt||[]).includes(id))r.stage.add(String(L.n));});
+  }
+  else if(k==='service'){
+    const s=svc(id); if(!s)return r;
+    r.service.add(id);
+    ctrOf(id).forEach(p=>{
+      r.contract.add(p);
+      const c=ctr(p);
+      if(c.by)r.component.add(c.by);
+      consOf(p).forEach(d=>r.component.add(d));
+    });
+    STORES.filter(x=>x.sv===id).forEach(x=>{
+      r.store.add(x.n);
+      (x.by||[]).forEach(d=>r.component.add(d));
+    });
+    LIFE.forEach(L=>{if((L.pt||[]).some(p=>((ctr(p)||{sv:[]}).sv||[]).includes(id)))r.stage.add(String(L.n));});
+  }
+  else if(k==='stage'){
+    const L=stg(id); if(!L)return r;
+    r.stage.add(String(L.n));
+    if(L.mod)r.component.add(L.mod);
+    (L.pt||[]).forEach(p=>{
+      r.contract.add(p);
+      const c=ctr(p); if(!c)return;
+      (c.sv||[]).forEach(s=>r.service.add(s));
+      if(c.by)r.component.add(c.by);
+    });
+    (L.sto||[]).forEach(n=>{r.store.add(n);const x=sto(n);if(x)r.service.add(x.sv);});
+  }
+  else if(k==='store'){
+    const x=sto(id); if(!x)return r;
+    r.store.add(id);
+    (x.by||[]).forEach(d=>{
+      r.component.add(d);
+      (cmp(d)?cmp(d).req:[]).forEach(p=>r.contract.add(p));
+    });
+    r.service.add(x.sv);
+    LIFE.forEach(L=>{if((L.sto||[]).includes(id))r.stage.add(String(L.n));});
+  }
+  return r;
+}
+const label=(k,id)=>{
+  if(k==='component')return (cmp(id)||{t:id}).t;
+  if(k==='stage'){const L=stg(id);return L?L.n+' · '+L.s:id;}
+  return id;
+};
+const kcol=(k,id)=>{
+  if(k==='component'){const m=cmp(id);return m?SC[m.st]:V.plum;}
+  if(k==='service'){const s=svc(id);return s?SG[s.g]:V.blue;}
+  if(k==='contract'){const c=ctr(id);return c&&(c.f==='dead'||c.f==='bypass'||c.f==='gap')?V.brick:V.plum;}
+  if(k==='store'){const s=sto(id);return s&&s.k==='Postgres'?V.plum:V.teal;}
+  if(k==='stage')return V.clay;
+  return V.plum;
+};
+
+/* ==========================================================================
+   4 · FOCUS + RENDER HELPERS — generic. Do not edit.
+   ========================================================================== */
+function applyFocus(){
+  const sel=S.hov||S.sel,r=relate(sel),sc=main.children[S.v];
+  if(!sc)return;
+  const ents=[...sc.querySelectorAll('[data-k]')];
+  const on=el=>{const st=r[el.dataset.k];return !!(st&&st.has(el.dataset.id))};
+  const live=!!sel&&ents.some(on);
+  document.body.classList.toggle('focus',live);
+  ents.forEach(el=>{
+    const h=live&&on(el);
+    el.classList.toggle('hi',h);
+    el.classList.toggle('dim',live&&!h);
+    el.classList.toggle('sel',!!(S.sel&&el.dataset.k===S.sel.k&&el.dataset.id===S.sel.id));
+    if(h&&sel)el.style.setProperty('--hc',kcol(sel.k,sel.id));
+  });
+  sc.querySelectorAll('[data-ak]').forEach(e=>{
+    const d=e.dataset;
+    const h=live&&r[d.ak]&&r[d.ak].has(d.ai)&&r[d.bk]&&r[d.bk].has(d.bi);
+    e.classList.toggle('hi',!!h); e.classList.toggle('dim',live&&!h);
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   render helpers
+   ══════════════════════════════════════════════════════════════════════════ */
+const nd=(k,id)=>`data-k="${k}" data-id="${esc(id)}"`;
+const ndt=(k,id)=>`${nd(k,id)} tabindex="0" role="button"`;
+const eg=(ak,ai,bk,bi)=>`class="edge" data-ak="${ak}" data-ai="${esc(ai)}" data-bk="${bk}" data-bi="${esc(bi)}"`;
+const empty=w=>`<div class="card" style="text-align:center;padding:48px 20px;color:var(--faint)">
+  <div style="font-size:12px">Nothing left to draw — the filters exclude every ${w}.</div>
+  <button class="fchip reset" data-reset style="margin-top:10px">Clear all filters</button></div>`;
+function canvas(svg,h){return `<div class="canvas" style="height:${h}px">
+  <div class="zc"><button data-z="out" title="Zoom out">−</button><button data-z="in" title="Zoom in">+</button>
+    <button class="w" data-z="fit" title="Reset view">FIT</button></div>${svg}
+  <div class="hint">⌘/ctrl + scroll to zoom · drag to pan · click a node to pin it</div></div>`;}
+function hd(lede,tools){return `<div class="hd"><p class="lede">${lede}</p>
+  ${tools?`<div class="vtools">${tools}</div>`:''}</div>`;}
+function leg(items){return `<div class="legend">${items.map(([k,c,t])=>{
+  const m=k==='sq'?`<i class="sw" style="background:${c}"></i>`
+   :k==='ln'?`<i class="swl" style="background:${c}"></i>`
+   :k==='dash'?`<i class="swl" style="background:repeating-linear-gradient(90deg,${c} 0 4px,transparent 4px 7px)"></i>`
+   :k==='o'?`<i class="sw" style="border:1.5px solid ${c}"></i>`
+   :`<i class="sw" style="border:1.5px dashed ${c}"></i>`;
+  return `<span>${m}${esc(t)}</span>`;}).join('')}</div>`;}
+function wrapSvg(s,px,fs){const per=fs*.53,max=Math.max(1,Math.floor(px/per));
+  const w=s.split(' '),out=[];let cur='';
+  w.forEach(x=>{const t=(cur+' '+x).trim();if(t.length>max&&cur){out.push(cur);cur=x}else cur=t});
+  if(cur)out.push(cur);return out.slice(0,2);}
+/* ==========================================================================
+   5 · VIEWS — one function per tab. Each returns the innerHTML of one
+   .pane. See reference/views.md for the catalogue and the layout recipes.
+   Rules: every clickable node carries nd()/ndt(); every edge carries eg();
+   every view ends in leg(); no view scrolls — autoFit handles the rest.
+   ========================================================================== */
+/* ══════════════════════════════════════════════════════════════════════════
+   1 · ARCHITECTURE — the whole system on one screen
+   ══════════════════════════════════════════════════════════════════════════ */
+function vArch(){
+  const tier=(code,body)=>{const T=TIER(code);
+    const inT=CV.filter(m=>m.l===code);
+    return `<div class="tier" style="--c:${T[3]}">
+      <div class="tier-h"><span class="tier-n">${T[0]}</span><span class="tier-t">${esc(T[1])}</span>
+      <span class="tier-s">${esc(T[2])}</span>
+      <span class="tier-s" style="margin-left:auto;font-family:var(--m);font-size:9px">${inT.length}</span></div>
+      ${inT.length?`<div class="grid" style="grid-template-columns:repeat(5,1fr);margin-top:6px">${inT.map(card).join('')}</div>`:''}</div>`;};
+  const card=m=>{const sv=cSvc(m).length,pr=provOf(m.d).length;
+    return `<div class="mod ${m.f==='ghost'?'ext':''}" ${ndt('component',m.d)} style="--c:${SC[m.st]}">
+      <div class="mod-t">${esc(m.t)}</div><div class="mod-m">${esc(m.src)}</div>
+      <div class="mod-n">${(m.req||[]).length} req · ${pr} prov · ${sv} svc</div></div>`;};
+  const arr=n=>`<div class="arrow">↓<em>${esc(n)}</em></div>`;
+  const byG={};SV.forEach(s=>(byG[s.g]=byG[s.g]||[]).push(s));
+  const svcRail=Object.keys(byG).map(g=>`<h4 style="color:${SG[g]}">${esc(g)}</h4><ul>${
+    byG[g].map(s=>`<li ${ndt('service',s.n)} style="cursor:pointer">${esc(s.n)}</li>`).join('')}</ul>`).join('');
+  return hd('<b>Two deployables, one process each, and one path to data.</b> The browser never reaches the API — 72 proxy routes keep the session cookie first-party. Inside the API, <b>nothing produces a number except layer 3b</b>, and <b>nothing reads workspace data except layer 3</b>, whose one entry point takes resolved authority and refuses to accept an identifier. <em>The seven directors are frozen data, not seven services.</em>')
+   + `<div class="two"><div>
+      ${tier('L1')}${arr('HTTP · Cookie and X-CSRF-Token, by allowlist')}
+      ${tier('L2')}${arr('a ScopedSession, built server-side, passed explicitly')}
+      ${tier('L3')}${tier('L3b')}${arr('figures in, prose out — never the reverse')}
+      ${tier('L4')}
+      <div style="height:7px"></div>
+      ${tier('IN')}${tier('PL')}
+     </div><div class="rail">
+      <h4>What the layering buys</h4>
+      <ul><li><b>I1</b> — layer 3b contains no model, so a figure cannot be invented</li>
+        <li><b>I2/I3</b> — layer 3 takes a session, not an id; layer 4 cannot go around it</li>
+        <li><b>I8</b> — no agent has a shell, and connectors sit in layer 3's dependency graph, not layer 4's</li></ul>
+      <h4>What it runs on</h4>${svcRail}
+      <h4 style="color:${V.brick}">The awkward bits</h4>
+      <ul><li>${DEAD} seams are complete, tested and called by nothing</li>
+        <li>${BYP} external reaches have no port at all</li>
+        <li>${COMPONENTS.filter(m=>m.st==='Removed').length} deleted package of stale bytecode the HLD still treats as layer 4</li></ul>
+     </div></div>`
+   + leg([].concat(Object.keys(SC).map(k=>['sq',SC[k],k+' — '+SD[k]]),[['x',V.slate,'dashed card · outside the running system']]));
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   2 · JOURNEY — a founder from nothing to a number
+   ══════════════════════════════════════════════════════════════════════════ */
+function vLife(){
+  const card=L=>{const m=cmp(L.mod);
+    return `<div class="card" ${ndt('stage',L.n)} style="--c:${V.clay};border-left:3px solid ${L.warn?V.brick:V.clay};padding:7px 10px">
+      <div style="display:flex;align-items:baseline;gap:7px">
+        <span class="mono" style="color:var(--faint);font-weight:650">${String(L.n).padStart(2,'0')}</span>
+        <span style="font-size:12px;font-weight:650;color:var(--ink)">${esc(L.s)}</span>
+        <span class="chip" style="margin-left:auto;font-size:8.5px">${esc(L.a)}</span></div>
+      <div style="font-size:11px;color:var(--text);margin-top:3px">${esc(L.w)}</div>
+      <div style="font-size:9.5px;color:var(--muted);margin-top:2px;line-height:1.4">${esc(L.u)}</div>
+      <div class="chips" style="margin-top:5px">
+        ${m?`<span class="chip a" style="--c:${SC[m.st]}">${esc(m.t)}</span>`:''}
+        ${(L.pt||[]).slice(0,3).map(p=>`<span class="chip" style="font-size:8.5px">${esc(p)}</span>`).join('')}</div>
+      <div style="font-size:9.5px;color:${L.warn?V.brick:'var(--faint)'};margin-top:4px;border-top:1px solid var(--line);padding-top:3px">
+        ${L.warn?'⚠ '+esc(L.warn.slice(0,96))+'…':'↳ leaves '+esc(L.lv)}</div></div>`;};
+  const tools=`<button class="tbtn" data-step="-1">←</button><button class="tbtn" data-walk>▶ Walk</button><button class="tbtn" data-step="1">→</button>`;
+  return hd('<b>Twelve stages, and the product stops dead at nine.</b> Everything up to a sealed OAuth token works end to end and is proved against a real workspace. The connector spine holds the token and has nowhere to spend it, so stages 10–12 run on what the founder typed and what the crawler read — never on what a tool would have returned. <em>Press Walk, or step with ← →.</em>',tools)
+   + `<div class="grid" style="grid-template-columns:repeat(4,1fr)">${LIFE.map(card).join('')}</div>`
+   + leg([['sq',V.clay,'a stage that runs today'],['sq',V.brick,'the stage the journey stops at'],
+      ['o',V.slate,'grey chip · a seam the stage crosses'],['sq',V.sage,'coloured chip · the component that owns the stage']]);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   3 · SEAMS — who declares what, who implements it, and where it lands
+   ══════════════════════════════════════════════════════════════════════════ */
+function vSeams(){
+  const GRP=[...new Set(CONTRACTS.map(c=>c.g))];
+  const GC={'Infrastructure ports':V.blue,'Data access':V.plum,'Connector spine':V.sand,
+    'Unported calls':V.brick,'Model seams':V.clay,'Internal seams':V.teal,'Process seam':V.lilac};
+  const row=c=>{const cons=consOf(c.p),tgt=(c.sv||[]).filter(s=>VS.has(s));
+    const flag=c.f==='dead'?['never called',V.brick]:c.f==='gap'?['no driver',V.brick]
+      :c.f==='bypass'?['no port',V.brick]:c.f==='part'?['half wired',V.sand]:null;
+    return `<div ${ndt('contract',c.p)} style="display:grid;grid-template-columns:212px 1fr 232px 268px;gap:10px;align-items:center;
+        padding:5px 8px;border-radius:var(--r-sm);background:var(--surface2);border:1px solid var(--line);margin-top:4px">
+      <div><div style="font-size:11.5px;font-weight:650;color:var(--ink)">${esc(c.p)}
+        ${flag?`<span class="pill" style="--i:${flag[1]};margin-left:5px">${flag[0]}</span>`:''}</div>
+        <div class="mono" style="color:var(--faint)">${esc(c.src)}</div></div>
+      <div><div style="font-size:10.5px;color:var(--text)">${c.by?'declared &amp; provided by <b>'+esc(label('component',c.by))+'</b>':'<b style="color:'+V.brick+'">no port — a direct call</b>'}</div>
+        <div style="font-size:9.5px;color:var(--muted)">${esc(c.ad||'—')}</div></div>
+      <div class="chips">${cons.length?cons.map(d=>`<span class="chip a" style="--c:${SC[(cmp(d)||{st:'Built'}).st]};font-size:9px">${esc(label('component',d))}</span>`).join('')
+        :`<span style="font-size:10px;color:${V.brick}">nothing consumes it</span>`}</div>
+      <div>${tgt.length?tgt.map(s=>`<div class="svc"><span class="mark" style="background:${SG[svc(s).g]}"></span><b>${esc(s)}</b></div>`).join('')
+        :`<div style="font-size:10px;color:var(--faint)">terminates in-process</div>`}
+        <div class="mono" style="color:var(--faint);margin-top:1px">as: ${esc(c.id)}</div></div></div>`;};
+  const band=g=>{const cs=CONTRACTS.filter(c=>c.g===g);
+    return `<div class="tier" style="--c:${GC[g]};padding:7px 12px 9px 14px">
+      <div class="tier-h"><span class="tier-n">${esc(g)}</span>
+        <span class="tier-s" style="font-size:10px">${cs.length} seam${cs.length>1?'s':''} · ${
+          [...new Set(cs.flatMap(c=>c.sv||[]))].length} target${[...new Set(cs.flatMap(c=>c.sv||[]))].length===1?'':'s'}</span></div>
+      ${cs.map(row).join('')}</div>`;};
+  return hd(`<b>${CONTRACTS.length} seams, and the ${DEAD+BYP} marked in red are the document's argument.</b> Two are written, typed and tested with no caller anywhere in the running application — the connector reads the whole spine was built for. Two more are external calls made with no port at all, which is deliberate, and which means those reaches have no adapter to swap. A fifth, <span class="mono">RestTransport</span>, is an implementer nothing selects. <em>Identity is printed under every target: this is the column architecture documents usually leave blank.</em>`)
+   + GRP.map(band).join('')
+   + leg([['sq',V.brick,'unexercised, or unported — a seam the running system does not cross'],
+      ['sq',V.sand,'half wired — one implementer reachable, one not'],
+      ['sq',V.blue,'infrastructure port · swappable driver'],['sq',V.teal,'internal seam · reaches nothing external'],
+      ['o',V.slate,'chip · a component that consumes the seam']]);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   4 · TRUST — three enforcement layers, each catching a different mistake
+   ══════════════════════════════════════════════════════════════════════════ */
+function vTrust(){
+  const box=(x,y,w,h,c,k,id,t,s,n)=>`<g ${k?ndt(k,id):''}>
+    <rect class="halo" x="${x-3}" y="${y-3}" width="${w+6}" height="${h+6}" rx="10" fill="none" stroke="${c}" stroke-width="2"/>
+    <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="#fff" stroke="${c}" stroke-width="1.2"/>
+    <rect x="${x}" y="${y}" width="3.5" height="${h}" rx="2" fill="${c}"/>
+    <text class="st" x="${x+13}" y="${y+21}" fill="var(--ink)">${esc(t)}</text>
+    <text class="ss" x="${x+13}" y="${y+37}" fill="var(--muted)">${esc(s)}</text>
+    ${n?`<text class="sm" x="${x+13}" y="${y+52}" fill="${c}">${esc(n)}</text>`:''}</g>`;
+  const path=(x1,y1,x2,y2)=>{const dx=Math.max(34,(x2-x1)*.45);return `M${x1},${y1} C${x1+dx},${y1} ${x2-dx},${y2} ${x2},${y2}`;};
+  const e=(ak,ai,bk,bi,x1,y1,x2,y2,lab)=>`<path ${eg(ak,ai,bk,bi)} d="${path(x1,y1,x2,y2)}" fill="none" stroke="${V.slate}" stroke-width="1.3" opacity=".55" marker-end="url(#ar)"/>
+    ${lab?`<text class="sm ${''}" x="${(x1+x2)/2}" y="${(y1+y2)/2-6}" text-anchor="middle" fill="var(--faint)">${esc(lab)}</text>`:''}`;
+  const svg=`<svg viewBox="0 0 1400 330">
+    <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="${V.slate}"/></marker></defs>
+    <text class="sk" x="10" y="16" fill="var(--faint)">request</text>
+    <text class="sk" x="10" y="200" fill="var(--faint)">maintenance</text>
+    ${box(10,30,210,62,V.blue,'component','web-bff','Browser → BFF','cookie, httponly, Lax','12 h · SHA-256 stored')}
+    ${box(290,30,230,62,V.lilac,'component','routes','1 · API layer','deps_scope · role → scope','403 exec-only · 404 wrong dept')}
+    ${box(590,30,240,62,V.plum,'component','retrieval','2 · Query predicate','scope in the WHERE, not after','vector and relational alike')}
+    ${box(900,30,230,62,V.teal,'contract','scoped_connection','GUCs','set_config(…, local=true)','workspace · user · token hash')}
+    ${box(1190,30,200,62,V.brick,'service','Neon · nexus_app','3 · FORCE RLS','~25 tables, default-deny','NOBYPASSRLS, asserted')}
+    ${box(590,214,240,62,V.sand,'component','jobs','Expiry &amp; workers','a second login, not a flag','ADR 0018 rejected a bypass GUC')}
+    ${box(900,214,230,62,V.teal,'contract','jobs_session','jobs_session','role-targeted policies','exactly two tables')}
+    ${box(1190,214,200,62,V.slate,'service','Neon · nexus_jobs','nexus_jobs','maintenance login','USAGE on schema only')}
+    ${e('component','web-bff','component','routes',220,61,290,61,'session')}
+    ${e('component','routes','component','retrieval',520,61,590,61,'ScopedSession')}
+    ${e('component','retrieval','contract','scoped_connection',830,61,900,61,'')}
+    ${e('contract','scoped_connection','service','Neon · nexus_app',1130,61,1190,61,'')}
+    ${e('component','jobs','contract','jobs_session',830,245,900,245,'')}
+    ${e('contract','jobs_session','service','Neon · nexus_jobs',1130,245,1190,245,'')}
+    <text class="ss" x="10" y="122" fill="var(--muted)">Each layer catches a different mistake and none is sufficient alone.</text>
+    <text class="ss" x="10" y="140" fill="var(--muted)">RLS gives tenant and workspace isolation. It does <tspan font-weight="700">not</tspan> give department</text>
+    <text class="ss" x="10" y="158" fill="var(--muted)">isolation — that is layer 2's job, and it is why a chunk carries its</text>
+    <text class="ss" x="10" y="176" fill="var(--muted)">scope and department on the row rather than in a join.</text>
+    <text class="sm" x="290" y="130" fill="${V.brick}">An unset GUC matches nothing — absence denies, it does not permit.</text>
+    <text class="sm" x="290" y="148" fill="var(--muted)">FORCE, not merely ENABLE: migrations run as the table owner, and an owner</text>
+    <text class="sm" x="290" y="166" fill="var(--muted)">bypasses an enabled policy. The isolation suite asserts rolbypassrls is false</text>
+    <text class="sm" x="290" y="184" fill="var(--muted)">before it asserts anything else — a green suite against a BYPASSRLS role</text>
+    <text class="sm" x="290" y="202" fill="var(--muted)">would pass while proving nothing.</text>
+  </svg>`;
+  const ROLES=[['Owner',1,1,'all',0,1,1],['Executive / GM',1,1,'all',0,1,1],['Department Manager',1,1,'own',0,1,0],
+    ['Contributor',1,1,'own ·',0,1,0],['Viewer',1,1,0,0,1,0],['External / Client',0,0,0,0,0,0]];
+  const mk=v=>v===1?`<span class="dotm" style="background:${V.sage}"></span>`
+    :v===0?'<span class="nil">·</span>'
+    :`<span style="font-size:10px;font-weight:600;color:${V.sand}">${esc(String(v))}</span>`;
+  const tbl=`<table><thead><tr><th style="width:190px">Role</th><th>L1 public</th><th>L2 internal</th><th>L3 department</th>
+    <th>L4 restricted</th><th>L5 own</th><th>Executive surface</th><th style="width:300px">Consequence</th></tr></thead><tbody>
+    ${ROLES.map(r=>`<tr><td class="rowt">${esc(r[0])}</td>${r.slice(1,7).map(v=>`<td>${mk(v)}</td>`).join('')}
+      <td style="font-size:10px;color:var(--muted)">${esc(r[0]==='Department Manager'?'six directors, not seven — no Chief of Staff, no composite'
+        :r[0]==='Contributor'?'own department, minus aggregates and others’ records'
+        :r[0]==='Viewer'?'no department reach at all'
+        :r[0]==='External / Client'?'no membership, therefore no row'
+        :'L4 still only by being named on the item')}</td></tr>`).join('')}</tbody>
+    <tfoot><tr><td>L4</td><td colspan="7" style="text-align:left;font-size:10px;font-weight:500;color:var(--muted)">
+      is never role-reachable. It is reachable only by being named on the item, which is why no cell above holds a mark.
+      L0 is deliberately absent: it is the model’s own knowledge, never retrieved content, and therefore never a value on a row.</td></tr></tfoot></table>`;
+  return hd('<b>Three enforcement layers, and only the third is proved.</b> Row-level security is forced on ~25 tables and tested against the database that will serve production. The department predicate that layer 2 owes is the half that decides whether one manager can read another’s figures — and the scope columns exist on the row precisely so that predicate can sit inside the query plan rather than filter after it. <em>Hover any box to see what it reaches.</em>')
+   + canvas(svg,332)
+   + `<div style="margin-top:9px">${tbl}</div>`
+   + leg([['sq',V.sage,'reachable'],['sq',V.sand,'reachable, narrowed'],['o',V.slate,'· not reachable'],
+      ['ln',V.slate,'the path a request takes'],['sq',V.brick,'the layer that is proved']]);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   5 · DATA — where state lives and who is allowed to write it
+   ══════════════════════════════════════════════════════════════════════════ */
+function vData(){
+  const row=s=>`<tr ${ndt('store',s.n)}>
+    <td><div class="rowt">${esc(s.n)}</div><div class="rowm">${esc(s.k)} · ${esc(s.sv)}</div></td>
+    <td style="text-align:left;font-size:10px;color:var(--muted);line-height:1.5">
+      ${s.tb.map(t=>`<span class="mono" style="background:var(--surface2);border:1px solid var(--line);border-radius:3px;padding:0 4px;margin:0 3px 2px 0;display:inline-block">${esc(t)}</span>`).join('')}</td>
+    <td style="width:78px;font-weight:650;color:var(--ink)">${s.k==='Postgres'?s.tb.length:'—'}</td>
+    <td style="width:186px;text-align:left;font-size:10px;color:${s.rls==='—'?'var(--faint)':s.rls.indexOf('only')>0?V.sand:V.sage}">${esc(s.rls)}</td>
+    <td style="width:210px;text-align:left"><div class="chips">${s.by.map(d=>`<span class="chip a" style="--c:${SC[(cmp(d)||{st:'Built'}).st]};font-size:9px">${esc(label('component',d))}</span>`).join('')}</div></td>
+  </tr>`;
+  const pg=STORES.filter(s=>s.k==='Postgres'),fs=STORES.filter(s=>s.k!=='Postgres');
+  return hd(`<b>One Postgres, ${TBL} live tables, and a second database login that exists so no code path can grant itself a bypass.</b> Every workspace-scoped table carries the identical four lines of policy, and the GUC they read is set in exactly one file — consolidated out of ten modules that each used to spell it out. <em>Nothing here is cached, and nothing is projected: the source of truth is the row.</em>`)
+   + `<div class="two"><div><table><thead><tr>
+      <th style="width:218px">Store</th><th style="text-align:left">Tables</th><th>n</th>
+      <th style="text-align:left">Row-level security</th><th style="text-align:left">Written by</th></tr></thead>
+      <tbody>${pg.map(row).join('')}${fs.map(row).join('')}</tbody>
+      <tfoot><tr><td>Postgres</td><td style="text-align:left;font-size:10px;font-weight:500;color:var(--muted)">
+        across ${pg.length} groups, from ${MIGR} linear migrations</td><td>${TBL}</td>
+        <td style="text-align:left;font-size:10px;font-weight:500;color:var(--muted)">forced on the workspace-scoped set</td>
+        <td style="text-align:left;font-size:10px;font-weight:500;color:var(--muted)">${[...new Set(STORES.flatMap(s=>s.by))].length} components write</td></tr></tfoot></table></div>
+     <div class="rail">
+      <h4>Three session variables, not one</h4>
+      <ul><li><b>nexus.workspace_id</b> — the tenant boundary</li>
+        <li><b>nexus.user_id</b> — readable before any workspace is known, which is how a session resolves into one</li>
+        <li><b>nexus.invitation_token_hash</b> — the narrowest. The GUC is the hash, so the database never sees the secret</li></ul>
+      <h4>Vectors</h4>
+      <ul><li>one vector column — <b>chunk.embedding</b>, 1024d</li>
+        <li>HNSW, cosine, m=16, ef_construction=64</li>
+        <li>plain HNSW gives 5% recall at Contributor selectivity; iterative_scan is mandatory, and is not yet set in any application query</li>
+        <li>count() counts through the same predicate on purpose — counting everything and subtracting turns a count into an oracle</li></ul>
+      <h4 style="color:${V.brick}">Written by nothing</h4>
+      <ul><li><b>audit_log</b> — a policy and no writer</li>
+        <li><b>crm_deal</b> — no fetch runs</li>
+        <li><b>chunk</b> — written every upload, read by no route</li></ul>
+     </div></div>`
+   + leg([['sq',V.sage,'forced row-level security on every row'],['sq',V.sand,'partial — one table in the group carries it'],
+      ['o',V.slate,'no policy, deliberately'],['sq',V.teal,'filesystem, not Postgres'],
+      ['sq',V.brick,'chip · a component that writes here']]);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   6 · DEPLOYMENT — what runs, and what stands between it and a customer
+   ══════════════════════════════════════════════════════════════════════════ */
+function vDeploy(){
+  const b=(x,y,w,h,c,k,id,t,s,gap)=>`<g ${k?ndt(k,id):''}>
+    ${k?`<rect class="halo" x="${x-3}" y="${y-3}" width="${w+6}" height="${h+6}" rx="9" fill="none" stroke="${c}" stroke-width="2"/>`:''}
+    <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" fill="#fff" stroke="${gap?V.brick:c}" stroke-width="1.2"
+      ${gap?'stroke-dasharray="5 3"':''}/>
+    <rect x="${x}" y="${y}" width="3" height="${h}" rx="2" fill="${gap?V.brick:c}"/>
+    <text class="st" x="${x+11}" y="${y+19}" fill="${gap?V.brick:'var(--ink)'}">${esc(t)}</text>
+    ${wrapSvg(s,w-20,9).map((l,i)=>`<text class="ss" x="${x+11}" y="${y+34+i*12}" fill="var(--muted)">${esc(l)}</text>`).join('')}</g>`;
+  const ln=(x1,y1,x2,y2,d)=>`<path d="M${x1},${y1} C${x1+Math.max(30,(x2-x1)*.5)},${y1} ${x2-Math.max(30,(x2-x1)*.5)},${y2} ${x2},${y2}"
+    fill="none" stroke="${V.slate}" stroke-width="1.2" opacity=".5" ${d?'stroke-dasharray="4 3"':''}/>`;
+  const svg=`<svg viewBox="0 0 1400 560">
+    <rect x="0" y="0" width="1400" height="248" rx="10" fill="${V.sage}" opacity=".04"/>
+    <text class="sk" x="14" y="22" fill="${V.sage}">runs today · one developer machine</text>
+    ${b(14,34,206,62,V.blue,null,null,'next dev :3000','App Router, server-rendered, no middleware')}
+    ${b(256,34,216,62,V.lilac,'service','FastAPI process','uvicorn :8000','one process, APScheduler inside it')}
+    ${b(510,34,206,62,V.plum,'service','Neon · nexus_app','Neon Postgres','18.4 · pgvector 0.8.6 · us-east-2')}
+    ${b(754,34,196,62,V.slate,'service','Neon · nexus_jobs','nexus_jobs','the second login, same cluster')}
+    ${b(988,34,190,62,V.blue,'service','Anthropic API','Anthropic','optional — absent is a supported state')}
+    ${b(1216,34,170,62,V.teal,'service','fastembed (in-process)','fastembed','1024d, ~2 GB resident')}
+    ${b(14,124,206,62,V.teal,'service','.storage/ filesystem','.storage/','document bytes, signed URLs')}
+    ${b(256,124,216,62,V.teal,'service','.mail/ filesystem','.mail/','218 .eml, nothing sends')}
+    ${b(510,124,206,62,V.blue,'service','Customer websites','the open web','crawled, SSRF-guarded, redirects off')}
+    ${b(754,124,196,62,V.blue,'service','HubSpot OAuth','HubSpot OAuth','authorise, exchange, seal')}
+    ${b(988,124,190,62,V.brick,'service','HubSpot MCP','HubSpot MCP',gapTxt(),1)}
+    ${b(1216,124,170,62,V.slate,null,null,'Docker · WSL2','pgvector:pg17, offline fallback')}
+    ${ln(220,65,256,65)}${ln(472,65,510,65)}${ln(472,96,760,124)}
+    <text class="sm" x="14" y="212" fill="var(--muted)">Six Compose services are defined — db · migrate · api · worker · web · proxy — and Caddy is the only thing giving web and api one origin.</text>
+    <text class="sm" x="14" y="230" fill="var(--muted)">Both Dockerfiles exist. Migrations are already modelled as a job that must exit 0 before api and worker start.</text>
+
+    <rect x="0" y="268" width="1400" height="286" rx="10" fill="${V.lilac}" opacity=".045"/>
+    <text class="sk" x="14" y="290" fill="${V.lilac}">target · Azure Container Apps — four containers and one job</text>
+    ${b(14,302,206,62,V.brick,null,null,'single origin','Front Door or a Caddy container — Container Apps gives each app its own FQDN',1)}
+    ${b(256,302,216,62,V.lilac,null,null,'web · Container App','next standalone, BFF, server-side fetch')}
+    ${b(510,302,206,62,V.lilac,'service','FastAPI process','api · Container App','uvicorn, non-root, /health/ready probe')}
+    ${b(754,302,196,62,V.brick,null,null,'worker · one replica','APScheduler; every replica would run every job',1)}
+    ${b(988,302,190,62,V.lilac,null,null,'migrate · Job','alembic upgrade head, exit 0 first')}
+    ${b(1216,302,170,62,V.plum,'service','Neon · nexus_app','Postgres','Neon, or Flexible Server + pgvector')}
+    ${b(14,392,206,62,V.brick,'service','Cloud object store','Blob storage','ObjectStore has no cloud driver — blocker one',1)}
+    ${b(256,392,216,62,V.brick,'service','SMTP provider','email provider','SmtpMailer wired to nothing — blocker two, D4',1)}
+    ${b(510,392,206,62,V.brick,null,null,'Key Vault','no secret manager in either topology — .env only',1)}
+    ${b(754,392,196,62,V.brick,null,null,'TLS + NEXUS_ENV','env falls back to local, which sets secure=False on both cookies',1)}
+    ${b(988,392,190,62,V.lilac,'service','Anthropic API','Anthropic','unchanged — still optional')}
+    ${b(1216,392,170,62,V.lilac,null,null,'ACR + pipeline','no deploy pipeline exists yet')}
+    ${ln(220,333,256,333,1)}${ln(472,333,510,333)}${ln(716,333,754,333,1)}${ln(716,364,1216,392,1)}
+    <text class="sm" x="14" y="486" fill="${V.brick}">Five things stand between here and a customer: no cloud object store, no mail provider, no secret manager, no single origin, no pipeline.</text>
+    <text class="sm" x="14" y="504" fill="var(--muted)">None of the five is a redesign. Four are a driver or a resource; the fifth is a routing decision.</text>
+    <text class="sm" x="14" y="528" fill="var(--muted)">The whole product is four containers and one job, which is what Container Apps models natively — this is not a Kubernetes-shaped problem.</text>
+  </svg>`;
+  return hd('<b>What runs today is one machine; what is planned is four containers and one job.</b> The shape survives the move — every local convenience sits behind an interface that a cloud driver would satisfy. What does not survive is the session layer: the cookie is <span class="mono">SameSite=Lax</span> and Caddy is the only reason web and api share an origin. <em>Dashed and red means it does not exist yet.</em>')
+   + canvas(svg,562)
+   + leg([['sq',V.sage,'runs today'],['dash',V.brick,'does not exist yet — named, sized, unwritten'],
+      ['sq',V.lilac,'target · Azure Container Apps'],['sq',V.plum,'data plane'],['ln',V.slate,'a dependency that already works'],
+      ['dash',V.slate,'a dependency the target introduces']]);
+}
+function gapTxt(){return 'the token has nowhere to go';}
+
+const VIEWS=[
+  ['Architecture','architecture',vArch],
+  ['Journey','journey',vLife],
+  ['Seams','seams',vSeams],
+  ['Trust','trust',vTrust],
+  ['Data','data',vData],
+  ['Deployment','deployment',vDeploy],
+];
+
+
+/* ==========================================================================
+   6 · INSPECTOR — the pinned detail panel. Every chip inside it is a
+   lk(kind,id) button, so the reader can walk the model hop by hop without
+   ever going back to a diagram.
+   ========================================================================== */
+const isec=(t,html,n)=>!html?'':`<div class="isec"><p class="eyebrow">${esc(t)}${n?` · ${n}`:''}</p>${html}</div>`;
+const lk=(k,id,t)=>`<button class="lk" data-lk="${k}" data-li="${esc(id)}" style="--c:${kcol(k,id)}">${esc(t||label(k,id))}</button>`;
+function inspect(s){
+  if(!s)return '';
+  const X=`<button class="ix" data-close title="Close (esc)">✕</button>`;
+  const warns=o=>o.map(x=>`<div class="warn"><b>Open · ${esc(x.owner)}</b><br>${esc(x.q)}<br>
+    <span style="color:var(--muted)">${esc(x.why)}</span><br>
+    <span class="mono">${x.options.map(esc).join(' · ')}</span></div>`).join('');
+  const hint=t=>`<p class="ihint">${esc(t)}</p>`;
+
+  if(s.k==='component'){
+    const m=cmp(s.id); if(!m)return '';
+    const T=TIER(m.l),sv=cSvc(m),pr=provOf(m.d),st=stoOf(m.d),
+      lf=LIFE.filter(L=>L.mod===m.d);
+    return X+`<div class="ik" style="--c:${SC[m.st]}">${esc(T[1])} · ${esc(T[0])} · ${esc(m.st)}</div>
+      <h2 class="it">${esc(m.t)}</h2><div class="im">${esc(m.src)}</div>
+      <p class="iw" style="margin-top:9px">${esc(m.r)}</p>`
+     + isec('Requires',(m.req||[]).length?`<div class="lks">${m.req.map(p=>lk('contract',p)).join('')}</div>`:'',(m.req||[]).length)
+     + isec('Provides',pr.length?`<div class="lks">${pr.map(p=>lk('contract',p)).join('')}</div>`
+        +`<p class="iw" style="margin-top:5px;font-size:10.5px">Consumed by ${[...new Set(pr.flatMap(consOf))].length} component(s).</p>`:'',pr.length)
+     + isec('Reaches',sv.length?sv.map(n=>`<button class="lkr" data-lk="service" data-li="${esc(n)}" style="--c:${SG[svc(n).g]}">
+        <span class="mark" style="background:${SG[svc(n).g]}"></span><b>${esc(n)}</b>
+        <span style="margin-left:auto;font-size:9px;color:var(--faint)">${esc(svc(n).g)}</span></button>`).join(''):'',sv.length)
+     + isec('Writes',st.length?`<div class="lks">${st.map(n=>lk('store',n)).join('')}</div>`:'',st.length)
+     + isec('Appears in the journey',lf.length?`<div class="lks">${lf.map(L=>lk('stage',L.n)).join('')}</div>`:'',lf.length)
+     + warns(openOn(m.d))
+     + hint('Click any chip to walk to it.');
+  }
+
+  if(s.k==='contract'){
+    const c=ctr(s.id); if(!c)return '';
+    const cons=consOf(c.p),tgt=(c.sv||[]),lf=LIFE.filter(L=>(L.pt||[]).includes(c.p));
+    return X+`<div class="ik" style="--c:${kcol('contract',c.p)}">seam · ${esc(c.g)}</div>
+      <h2 class="it">${esc(c.p)}</h2><div class="im">${esc(c.src)}</div>
+      <div class="chips" style="margin-top:8px">
+        <span class="chip a" style="--c:${V.slate}">as: ${esc(c.id)}</span>
+        ${c.f?`<span class="chip a" style="--c:${V.brick}">${esc({dead:'never called',gap:'no driver',bypass:'no port',part:'half wired'}[c.f])}</span>`:''}</div>
+      <p class="iw" style="margin-top:9px">${esc(c.n)}</p>`
+     + isec('Declared by',c.by?`<div class="lks">${lk('component',c.by)}</div>
+        <p class="iw" style="margin-top:5px;font-size:10.5px">Adapter: <b>${esc(c.ad||'—')}</b></p>`
+        :`<p class="iw" style="color:${V.brick}">Nothing declares it — the call is made directly, over <b>${esc(c.ad)}</b>.</p>`)
+     + isec('Consumed by',cons.length?`<div class="lks">${cons.map(d=>lk('component',d)).join('')}</div>`
+        :`<p class="iw" style="color:${V.brick}">Nothing consumes it. Written, typed and tested; no application code path reaches it.</p>`,cons.length)
+     + isec('Lands on',tgt.length?`<div class="lks">${tgt.map(n=>lk('service',n)).join('')}</div>`
+        :`<p class="iw">Nothing external. It terminates inside the process — which is why it does not belong in the infrastructure tier.</p>`,tgt.length)
+     + isec('Crossed at',lf.length?`<div class="lks">${lf.map(L=>lk('stage',L.n)).join('')}</div>`:'',lf.length)
+     + warns(openOn(c.p))
+     + hint('Identity is the line most often left blank. It is the chip at the top.');
+  }
+
+  if(s.k==='service'){
+    const v=svc(s.id); if(!v)return '';
+    const cs=ctrOf(v.n),users=[...new Set(cs.flatMap(consOf))],sts=STORES.filter(x=>x.sv===v.n);
+    return X+`<div class="ik" style="--c:${SG[v.g]}">${esc(v.g)}${v.x?' · external':''}</div>
+      <h2 class="it">${esc(v.n)}</h2><div class="im">${esc(v.s)}</div>`
+     + isec('Reached through',cs.length?`<div class="lks">${cs.map(p=>lk('contract',p)).join('')}</div>
+        <p class="iw" style="margin-top:5px;font-size:10.5px">as ${[...new Set(cs.map(p=>ctr(p).id))].map(esc).join(' · ')}</p>`
+        :`<p class="iw" style="color:${V.brick}">No seam reaches it yet.</p>`,cs.length)
+     + isec('Used by',users.length?`<div class="lks">${users.map(d=>lk('component',d)).join('')}</div>`:'',users.length)
+     + isec('Holds',sts.length?`<div class="lks">${sts.map(x=>lk('store',x.n)).join('')}</div>`:'',sts.length)
+     + warns(openOn(v.n))
+     + (v.f==='dead'?`<div class="warn">Authorised, sealed and never called. The transport, the adapter and the session are all written; the fetch is not.</div>`:'')
+     + (v.f==='target'?`<div class="warn">Does not exist yet. Named and sized in AZURE-DEPLOYMENT-PLAN.md; no driver or resource behind it.</div>`:'')
+     + hint('Walk back through a seam to see who depends on this.');
+  }
+
+  if(s.k==='stage'){
+    const L=stg(s.id); if(!L)return '';
+    const m=cmp(L.mod);
+    return X+`<div class="ik" style="--c:${V.clay}">stage ${esc(String(L.n))} of ${LIFE.length} · ${esc(L.a)}</div>
+      <h2 class="it">${esc(L.s)}</h2><div class="im">${esc(L.w)}</div>
+      <p class="iw" style="margin-top:9px">${esc(L.u)}</p>`
+     + isec('Runs in',m?`<div class="lks">${lk('component',m.d)}</div>`:'')
+     + isec('Crosses',(L.pt||[]).length?`<div class="lks">${L.pt.map(p=>lk('contract',p)).join('')}</div>`:'',(L.pt||[]).length)
+     + isec('Touches',(L.sto||[]).length?`<div class="lks">${L.sto.map(n=>lk('store',n)).join('')}</div>`:'',(L.sto||[]).length)
+     + isec('Leaves behind',`<p class="iw"><b>${esc(L.lv)}</b></p>`)
+     + (L.warn?`<div class="warn">${esc(L.warn)}</div>`:'')
+     + hint('← and → step through the journey. Walk runs it.');
+  }
+
+  if(s.k==='store'){
+    const x=sto(s.id); if(!x)return '';
+    const lf=LIFE.filter(L=>(L.sto||[]).includes(x.n));
+    return X+`<div class="ik" style="--c:${kcol('store',x.n)}">${esc(x.k)} · ${esc(x.tb.length)} ${x.k==='Postgres'?'tables':'paths'}</div>
+      <h2 class="it">${esc(x.n)}</h2><div class="im">${esc(x.sv)}</div>
+      <div class="chips" style="margin-top:8px"><span class="chip a" style="--c:${x.rls==='—'?V.slate:V.sage}">RLS: ${esc(x.rls)}</span></div>
+      <p class="iw" style="margin-top:9px">${esc(x.note)}</p>`
+     + isec('Tables',`<p class="iq">${x.tb.map(esc).join('<br>')}</p>`,x.tb.length)
+     + isec('Written by',`<div class="lks">${x.by.map(d=>lk('component',d)).join('')}</div>`,x.by.length)
+     + isec('Lives on',`<div class="lks">${lk('service',x.sv)}</div>`)
+     + isec('Touched at',lf.length?`<div class="lks">${lf.map(L=>lk('stage',L.n)).join('')}</div>`:'',lf.length)
+     + warns(openOn(x.n))
+     + hint('Every write here goes through one component. That is the point.');
+  }
+  return '';
+}
+
+/* ==========================================================================
+   7 · ENGINE — generic: 16:9 stage, autofit, selection, tooltips, zoom,
+   search palette, hash routing, keyboard. All of its stubs are filled below.
+   ========================================================================== */
+const stage=document.getElementById('stage'),nav=document.getElementById('nav'),main=document.getElementById('main'),
+  insp=document.getElementById('insp'),tipEl=document.getElementById('tip'),barEl=document.getElementById('bar'),
+  pal=document.getElementById('pal'),qEl=document.getElementById('q'),qrEl=document.getElementById('qr'),
+  helpEl=document.getElementById('help');
+let dragged=false,lastCol='',scale=1;
+
+/* the whole deck is one 16:9 stage scaled to the window — nothing ever scrolls */
+function fitStage(){
+  scale=Math.min(innerWidth/1920,innerHeight/1080);
+  stage.style.setProperty('--s',scale);
+}
+/* Each view fills the frame: shrink if it overruns, grow if it falls short.
+   Width is set to 100/k% so that after scaling it lands back on 100%.
+   Capped both ways — a view is allowed to be a little short of the bottom
+   rather than blown up until the type looks wrong. */
+function autoFit(sc){
+  const p=sc.querySelector('.pane'); if(!p)return;
+  p.style.transform='none'; p.style.width='100%';
+  const avail=()=>sc.clientHeight-26;
+  let k=1;
+  /* scrollHeight is the UNSCALED layout height, and changing width changes it,
+     so converge on it directly — never divide it by the current scale. */
+  for(let i=0;i<5;i++){
+    const want=Math.min(1.15,Math.max(.55,avail()/p.scrollHeight));
+    if(Math.abs(want-k)<.01)break;
+    k=want; p.style.width=(100/k)+'%'; p.style.transform=`scale(${k})`;
+  }
+  /* and a hard guard, because overflowing is the one outcome not allowed */
+  let n=0;
+  while(p.scrollHeight*k>avail()+2&&n++<8){
+    k*=.97; p.style.width=(100/k)+'%'; p.style.transform=`scale(${k})`;
+  }
+}
+function drawBar(){
+  const chip=(g,v,t,c,on)=>`<button class="fchip" data-f="${g}" data-v="${esc(v)}" aria-pressed="${on}" style="--c:${c}">${esc(t)}</button>`;
+  const sts=[...new Set(COMPONENTS.map(m=>m.st))];
+  const grp=[...new Set(SERVICES.map(s=>s.g))];
+  const any=S.f.st.size||S.f.g.size;
+  const openN=OPEN.length, deadN=DEAD+BYP;
+  barEl.innerHTML=
+    `<div class="fgrp"><span class="flab">status</span>${
+      sts.map(k=>chip('st',k,k+' '+COMPONENTS.filter(m=>m.st===k).length,SC[k],S.f.st.has(k))).join('')}</div>`
+   +`<div class="fgrp"><span class="flab">plane</span>${
+      grp.map(g=>chip('g',g,g+' '+SERVICES.filter(s=>s.g===g).length,SG[g],S.f.g.has(g))).join('')}</div>`
+   +(any?`<button class="fchip reset" data-reset>clear</button>`:'')
+   +`<div class="stat">
+      <span><b>${CV.length}</b>/${COMPONENTS.length} components</span>
+      <span><b>${CONTRACTS.length}</b> seams · <s>${deadN}</s> unexercised</span>
+      <span><b>${SV.length}</b>/${SERVICES.length} services</span>
+      <span><b>${TBL}</b> tables · ${MIGR} migrations</span>
+      <span><b>${LIFE.length}</b> stages</span>
+      <span><s>${openN}</s> open</span></div>`;
+}
+
+barEl.addEventListener('click',e=>{
+  if(e.target.closest('[data-reset]'))return resetF();
+  const b=e.target.closest('[data-f]'); if(!b)return;
+  const g=b.dataset.f,v=b.dataset.v;
+  if(g==='sib')S.f.sib=!S.f.sib; else S.f[g].has(v)?S.f[g].delete(v):S.f[g].add(v);
+  render();
+});
+function resetF(){S.f={st:new Set(),g:new Set()};render();}
+
+function select(k,id,keep){
+  id=String(id);
+  if(!keep&&S.sel&&S.sel.k===k&&S.sel.id===id)return clear();
+  S.sel={k,id}; stopWalk();
+  if(!main.children[S.v].querySelector(`[data-k="${k}"]`)){
+    go((typeof HOME!=='undefined'&&HOME[k])??0,true);
+  }
+  showInsp(); applyFocus(); hash();
+}
+function clear(){S.sel=null;S.hov=null;stopWalk();showInsp();applyFocus();hash();}
+function showInsp(){
+  const h=inspect(S.sel);
+  if(h){insp.innerHTML=h;insp.classList.add('on');} else insp.classList.remove('on');
+}
+insp.addEventListener('click',e=>{
+  if(e.target.closest('[data-close]'))return clear();
+  const l=e.target.closest('[data-lk]'); if(l)select(l.dataset.lk,l.dataset.li,true);
+});
+function walkBtn(t){const b=main.children[S.v].querySelector('[data-walk]');if(b)b.textContent=t;}
+const WALK=(typeof LIFE!=='undefined')?LIFE:[];
+function startWalk(){if(!WALK.length)return;stopWalk();S.step=(S.sel&&S.sel.k==='stage')?+S.sel.id:0;tick();S.timer=setInterval(tick,2500);walkBtn('❚❚ Pause');}
+function tick(){S.step++;if(S.step>WALK.length)S.step=1;S.sel={k:'stage',id:String(S.step)};showInsp();applyFocus();hash();}
+function stopWalk(){if(S.timer){clearInterval(S.timer);S.timer=null;walkBtn('▶ Walk');}}
+function step(d){const cur=(S.sel&&S.sel.k==='stage')?+S.sel.id:(d>0?0:WALK.length+1);
+  let n=cur+d;if(n<1)n=WALK.length;if(n>WALK.length)n=1;select('stage',n,true);}
+
+function tipOf(k,id){
+  if(k==='component'){const m=cmp(id);if(!m)return '';
+    const sv=cSvc(m);
+    return `<b>${esc(m.t)}</b><i>${esc(SD[m.st])}</i>
+      <u>${(m.req||[]).length} seams in · ${provOf(m.d).length} out · ${sv.length} services · ${stoOf(m.d).length} stores</u>`;}
+  if(k==='contract'){const c=ctr(id);if(!c)return '';
+    const n=consOf(id).length;
+    return `<b>${esc(c.p)}</b><i>${c.by?'declared by '+esc(label('component',c.by)):'no port — a direct call'} · as ${esc(c.id)}</i>
+      <u>${n?n+' consumer'+(n>1?'s':''):'nothing consumes it'} · ${(c.sv||[]).length?esc(c.sv.join(', ')):'terminates in-process'}</u>`;}
+  if(k==='service'){const v=svc(id);if(!v)return '';
+    return `<b>${esc(v.n)}</b><i>${esc(v.s)}</i>
+      <u>${ctrOf(id).length} seam(s) reach it · ${esc(v.g)}${v.f==='dead'?' · never called':v.f==='target'?' · does not exist yet':''}</u>`;}
+  if(k==='stage'){const L=stg(id);if(!L)return '';
+    return `<b>${esc(L.n)} · ${esc(L.s)}</b><i>${esc(L.w)} — ${esc(L.a)}</i>
+      <u>leaves ${esc(L.lv)}</u>`;}
+  if(k==='store'){const x=sto(id);if(!x)return '';
+    return `<b>${esc(x.n)}</b><i>${esc(x.k)} · ${x.tb.length} ${x.k==='Postgres'?'tables':'paths'} · RLS ${esc(x.rls)}</i>
+      <u>written by ${x.by.map(d=>esc(label('component',d))).join(', ')}</u>`;}
+  return '';
+}
+function tipPair(td){
+  const a=td.dataset.ai,b=td.dataset.bi;
+  if(!a||!b)return '';
+  return `<b>${esc(a)} → ${esc(b)}</b><i>${esc(td.dataset.rel||'')}</i>`;
+}
+function showTip(e,html){
+  if(!html){tipEl.classList.remove('on');return;}
+  tipEl.innerHTML=html;tipEl.classList.add('on');
+  const r=tipEl.getBoundingClientRect();
+  let x=e.clientX+14,y=e.clientY+16;
+  if(x+r.width>innerWidth-12)x=e.clientX-r.width-14;
+  if(y+r.height>innerHeight-12)y=e.clientY-r.height-14;
+  tipEl.style.left=Math.max(8,x)+'px';tipEl.style.top=Math.max(8,y)+'px';
+}
+const same=(a,b)=>(!a&&!b)||(a&&b&&a.k===b.k&&a.id===b.id);
+main.addEventListener('mousemove',e=>{
+  const cell=e.target.closest('.cell'),el=e.target.closest('[data-k]');
+  const h=cell?{k:'service',id:cell.dataset.bi}:el?{k:el.dataset.k,id:el.dataset.id}:null;
+  if(!same(h,S.hov)){S.hov=h;applyFocus();}
+  showTip(e,cell?tipPair(cell):el?tipOf(el.dataset.k,el.dataset.id):'');
+  const ci=e.target.closest('[data-ci]'),key=ci?ci.dataset.ci:'';
+  if(key!==lastCol){lastCol=key;
+    main.children[S.v].querySelectorAll('[data-ci]').forEach(x=>x.classList.toggle('colhi',!!key&&x.dataset.ci===key));}
+});
+main.addEventListener('mouseleave',()=>{S.hov=null;applyFocus();showTip(null,'');lastCol='';
+  main.children[S.v].querySelectorAll('.colhi').forEach(x=>x.classList.remove('colhi'));});
+main.addEventListener('click',e=>{
+  const t=e.target;
+  if(t.closest('[data-z]'))return;
+  if(t.closest('[data-reset]'))return resetF();
+  const ms=t.closest('[data-msort]'); if(ms){S.msort=ms.dataset.msort;return render();}
+  const ss=t.closest('[data-ssort]'); if(ss){S.ssort=ss.dataset.ssort;return render();}
+  if(t.closest('[data-walk]'))return S.timer?stopWalk():startWalk();
+  const sp=t.closest('[data-step]'); if(sp)return step(+sp.dataset.step);
+  if(dragged)return;
+  const cell=t.closest('.cell'); if(cell)return select('service',cell.dataset.bi);
+  const el=t.closest('[data-k]'); if(el)select(el.dataset.k,el.dataset.id);
+});
+main.addEventListener('keydown',e=>{
+  if(e.key!=='Enter'&&e.key!==' ')return;
+  const el=e.target.closest('[data-k]'); if(!el)return;
+  e.preventDefault(); select(el.dataset.k,el.dataset.id);
+});
+function wireZoom(root){
+  root.querySelectorAll('.canvas').forEach(cv=>{
+    const svg=cv.querySelector('svg'); if(!svg)return;
+    const vb0=svg.getAttribute('viewBox').split(/\s+/).map(Number);
+    let vb=vb0.slice();
+    const set=()=>svg.setAttribute('viewBox',vb.join(' '));
+    const zoom=(f,cx,cy)=>{const nw=Math.min(vb0[2]*1.2,Math.max(vb0[2]*.2,vb[2]*f)),k=nw/vb[2];
+      vb[0]=cx-(cx-vb[0])*k;vb[1]=cy-(cy-vb[1])*k;vb[2]=nw;vb[3]*=k;set();};
+    const pt=e=>{const r=svg.getBoundingClientRect();
+      return[vb[0]+(e.clientX-r.left)/r.width*vb[2],vb[1]+(e.clientY-r.top)/r.height*vb[3]];};
+    cv.addEventListener('wheel',e=>{if(!(e.ctrlKey||e.metaKey))return;e.preventDefault();
+      const[cx,cy]=pt(e);zoom(e.deltaY>0?1.1:.9,cx,cy);},{passive:false});
+    let dr=null;
+    cv.addEventListener('pointerdown',e=>{
+      if(e.button||e.target.closest('[data-k]')||e.target.closest('[data-z]'))return;
+      dr={x:e.clientX,y:e.clientY,vb:vb.slice()};dragged=false;cv.classList.add('drag');cv.setPointerCapture(e.pointerId);});
+    cv.addEventListener('pointermove',e=>{if(!dr)return;const r=svg.getBoundingClientRect();
+      if(Math.abs(e.clientX-dr.x)+Math.abs(e.clientY-dr.y)>4)dragged=true;
+      vb[0]=dr.vb[0]-(e.clientX-dr.x)/r.width*dr.vb[2];
+      vb[1]=dr.vb[1]-(e.clientY-dr.y)/r.height*dr.vb[3];set();});
+    const up=()=>{dr=null;cv.classList.remove('drag');setTimeout(()=>dragged=false,0)};
+    cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
+    cv.querySelector('[data-z=in]').onclick=()=>zoom(.8,vb[0]+vb[2]/2,vb[1]+vb[3]/2);
+    cv.querySelector('[data-z=out]').onclick=()=>zoom(1.25,vb[0]+vb[2]/2,vb[1]+vb[3]/2);
+    cv.querySelector('[data-z=fit]').onclick=()=>{vb=vb0.slice();set()};
+  });
+}
+const IDX=(()=>{const o=[];
+  COMPONENTS.forEach(m=>o.push({k:'component',id:m.d,t:m.t,
+    x:m.src+' '+m.r+' '+m.st+' '+(m.req||[]).join(' '),sub:TIER(m.l)[1]+' \u00b7 '+m.st}));
+  CONTRACTS.forEach(c=>o.push({k:'contract',id:c.p,t:c.p,
+    x:c.g+' '+c.src+' '+(c.ad||'')+' '+c.id+' '+c.n,sub:c.g}));
+  SERVICES.forEach(v=>o.push({k:'service',id:v.n,t:v.n,x:v.s+' '+v.g,sub:v.g}));
+  LIFE.forEach(L=>o.push({k:'stage',id:String(L.n),t:L.n+' \u00b7 '+L.s,
+    x:L.w+' '+L.u+' '+L.a+' '+L.lv,sub:'stage \u00b7 '+L.a}));
+  STORES.forEach(x=>o.push({k:'store',id:x.n,t:x.n,x:x.tb.join(' ')+' '+x.note+' '+x.rls,sub:x.k+' \u00b7 '+x.tb.length}));
+  return o;})();
+let qi=0,qres=[];
+function search(v){
+  const s=v.trim().toLowerCase();
+  qres=(!s?IDX.slice(0,9):IDX.map(it=>{
+    const a=it.t.toLowerCase().indexOf(s),b=(it.x||'').toLowerCase().indexOf(s);
+    const sc=a===0?0:a>0?1+a/100:b>=0?50+b/100:-1;
+    return sc<0?null:{it,sc};}).filter(Boolean).sort((p,q)=>p.sc-q.sc).slice(0,11).map(r=>r.it));
+  qi=0;drawQ();
+}
+function drawQ(){
+  qrEl.innerHTML=qres.length?qres.map((it,i)=>`<li aria-selected="${i===qi}" data-i="${i}" style="--c:${kcol(it.k,it.id)}">
+    <span class="pk">${it.k}</span><b>${esc(it.t)}</b><em>${esc(it.sub||'')}</em></li>`).join('')
+    :`<div class="none">Nothing matches that.</div>`;
+}
+function openPal(){pal.classList.add('on');qEl.value='';search('');qEl.focus();}
+function closePal(){pal.classList.remove('on');}
+function chooseQ(i){const it=qres[i];if(!it)return;closePal();select(it.k,it.id,true);}
+qEl.addEventListener('input',()=>search(qEl.value));
+qEl.addEventListener('keydown',e=>{
+  if(e.key==='ArrowDown'){e.preventDefault();qi=Math.min(qi+1,qres.length-1);drawQ();}
+  else if(e.key==='ArrowUp'){e.preventDefault();qi=Math.max(qi-1,0);drawQ();}
+  else if(e.key==='Enter'){e.preventDefault();chooseQ(qi);}
+  else if(e.key==='Escape')closePal();
+});
+qrEl.addEventListener('click',e=>{const li=e.target.closest('li');if(li)chooseQ(+li.dataset.i)});
+pal.addEventListener('click',e=>{if(e.target===pal)closePal()});
+document.getElementById('btnq').onclick=openPal;
+document.getElementById('btnh').onclick=()=>helpEl.classList.add('on');
+helpEl.addEventListener('click',()=>helpEl.classList.remove('on'));
+
+function render(){
+  refilter();
+  const sc=main.children[S.v];
+  sc.innerHTML=`<div class="pane">${VIEWS[S.v][2]()}</div>`;
+  wireZoom(sc); drawBar(); autoFit(sc); applyFocus();
+}
+function go(i,quiet){
+  if(i!==1)stopWalk();
+  S.v=i;
+  [...nav.children].forEach((x,j)=>x.setAttribute('aria-selected',j===i));
+  [...main.children].forEach((x,j)=>x.classList.toggle('on',j===i));
+  render();
+  if(!quiet)hash();
+}
+function hash(){
+  const p=[VIEWS[S.v][1]];
+  if(S.sel)p.push(S.sel.k,encodeURIComponent(S.sel.id));
+  try{history.replaceState(null,'','#'+p.join('/'));}catch(_){}
+}
+function fromHash(){
+  const p=decodeURIComponent(location.hash.replace(/^#/,'')).split('/');
+  const i=VIEWS.findIndex(v=>v[1]===p[0]);
+  S.v=i<0?0:i;
+  if(p[1]&&p[2])S.sel={k:p[1],id:p[2]};
+}
+VIEWS.forEach(([t],i)=>{
+  const b=document.createElement('button');
+  b.innerHTML=`<i>${i+1}</i>${t}`;
+  b.setAttribute('aria-selected',i===0);
+  b.onclick=()=>go(i);
+  nav.appendChild(b);
+  main.appendChild(document.createElement('section'));
+});
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  if(e.key==='/'){e.preventDefault();openPal();return;}
+  if(e.key==='?'){e.preventDefault();helpEl.classList.toggle('on');return;}
+  if(e.key==='Escape'){
+    if(pal.classList.contains('on'))return closePal();
+    if(helpEl.classList.contains('on'))return helpEl.classList.remove('on');
+    return clear();}
+  if(e.metaKey||e.ctrlKey||e.altKey)return;
+  if(e.key>='1'&&e.key<='9'&&+e.key<=VIEWS.length)return go(+e.key-1);
+  if(e.key==='ArrowRight')return go((S.v+1)%VIEWS.length);
+  if(e.key==='ArrowLeft')return go((S.v+VIEWS.length-1)%VIEWS.length);
+});
+addEventListener('resize',()=>{fitStage();autoFit(main.children[S.v]);});
+addEventListener('hashchange',()=>{const v=S.v;fromHash();if(v!==S.v)go(S.v,true);else{showInsp();applyFocus();}});
+fitStage(); fromHash(); go(S.v,true); showInsp();
+</script>

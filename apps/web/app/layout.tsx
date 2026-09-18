@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Fraunces, Inter, JetBrains_Mono } from 'next/font/google'
+import { MotionProvider } from '@/components/motion/MotionProvider'
 import { site } from '@/lib/content'
 import './globals.css'
 
@@ -69,7 +70,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         >
           Skip to content
         </a>
-        {children}
+        {/* One reduced-motion decision for every framer-motion component in
+            the app. The CSS half of the policy is in `globals.css`. */}
+        <MotionProvider>{children}</MotionProvider>
       </body>
     </html>
   )

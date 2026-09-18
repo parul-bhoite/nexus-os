@@ -13,6 +13,7 @@ import { Faq } from '@/components/sections/Faq'
 import { FinalCta } from '@/components/sections/FinalCta'
 import { Footer } from '@/components/sections/Footer'
 import { ScrollProgress } from '@/components/ui/ScrollProgress'
+import { PauseOffscreen } from '@/components/motion/PauseOffscreen'
 import { site, faq } from '@/lib/content'
 
 /** FAQ structured data — the marketing site is SSR'd for exactly this reason. */
@@ -51,6 +52,8 @@ export default function HomePage() {
     <>
       <StructuredData />
       <ScrollProgress />
+      {/* Decorative loops stop in sections that are off screen. */}
+      <PauseOffscreen />
       <Nav />
       <main id="main">
         <Hero />

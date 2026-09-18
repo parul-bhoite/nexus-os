@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Tabs } from '@/components/ui/Tabs'
+import { useToast } from '@/components/ui/Toast'
 import {
   ISSUE_STATUSES,
   MILESTONE_STATUSES,
@@ -176,7 +177,31 @@ export function WorkRecorder() {
   const [savingTask, setSavingTask] = useState(false)
   const [archiving, setArchiving] = useState(false)
   const [confirming, setConfirming] = useState('')
+  /**
+   * Confirmation, and where it goes.
+   *
+   * There were ten `announce({ kind: 'done' })` calls here, all of them
+   * rendering one line of text at the *top* of the page. Every form that
+   * produces one is below it — the deals form was 3,400 pixels down — so the
+   * confirmation for a save appeared somewhere the reader could not see, on a
+   * request that takes several seconds against Neon. The only evidence a save
+   * had worked was the row appearing further down the section.
+   *
+   * `push` is the toast. The wording at each call site is unchanged; what
+   * changed is that it arrives where the reader is looking. An *error* still
+   * renders inline as well, because an error is something to act on and a toast
+   * is gone in five seconds.
+   */
+  const push = useToast()
   const [feedback, setFeedback] = useState<Feedback>(null)
+
+  const announce = useCallback(
+    (next: Feedback) => {
+      setFeedback(next)
+      if (next) push(next.text, { tone: next.kind === 'error' ? 'warn' : 'good' })
+    },
+    [push],
+  )
 
   const [projectName, setProjectName] = useState('')
   const [projectStatus, setProjectStatus] = useState<string>('active')
@@ -248,10 +273,10 @@ export function WorkRecorder() {
       setProjectName('')
       setProjectClient('')
       setProjectDue('')
-      setFeedback({ kind: 'done', text: 'Project recorded.' })
+      announce({ kind: 'done', text: 'Project recorded.' })
       await reload()
     } catch (error) {
-      setFeedback({ kind: 'error', text: messageOf(error, 'Could not record that project.') })
+      announce({ kind: 'error', text: messageOf(error, 'Could not record that project.') })
     } finally {
       setSavingProject(false)
     }
@@ -270,10 +295,10 @@ export function WorkRecorder() {
       })
       setTaskTitle('')
       setTaskDue('')
-      setFeedback({ kind: 'done', text: 'Task recorded.' })
+      announce({ kind: 'done', text: 'Task recorded.' })
       await reload()
     } catch (error) {
-      setFeedback({ kind: 'error', text: messageOf(error, 'Could not record that task.') })
+      announce({ kind: 'error', text: messageOf(error, 'Could not record that task.') })
     } finally {
       setSavingTask(false)
     }
@@ -292,10 +317,10 @@ export function WorkRecorder() {
       })
       setMilestoneTitle('')
       setMilestonePlanned('')
-      setFeedback({ kind: 'done', text: 'Milestone recorded.' })
+      announce({ kind: 'done', text: 'Milestone recorded.' })
       await reload()
     } catch (error) {
-      setFeedback({ kind: 'error', text: messageOf(error, 'Could not record that milestone.') })
+      announce({ kind: 'error', text: messageOf(error, 'Could not record that milestone.') })
     } finally {
       setSavingMilestone(false)
     }
@@ -315,10 +340,10 @@ export function WorkRecorder() {
       })
       setIssueTitle('')
       setIssueDue('')
-      setFeedback({ kind: 'done', text: 'Issue recorded.' })
+      announce({ kind: 'done', text: 'Issue recorded.' })
       await reload()
     } catch (error) {
-      setFeedback({ kind: 'error', text: messageOf(error, 'Could not record that issue.') })
+      announce({ kind: 'error', text: messageOf(error, 'Could not record that issue.') })
     } finally {
       setSavingIssue(false)
     }
@@ -337,10 +362,10 @@ export function WorkRecorder() {
       })
       setDispatchRef('')
       setDispatchSent('')
-      setFeedback({ kind: 'done', text: 'Order recorded.' })
+      announce({ kind: 'done', text: 'Order recorded.' })
       await reload()
     } catch (error) {
-      setFeedback({ kind: 'error', text: messageOf(error, 'Could not record that order.') })
+      announce({ kind: 'error', text: messageOf(error, 'Could not record that order.') })
     } finally {
       setSavingDispatch(false)
     }
@@ -352,10 +377,10 @@ export function WorkRecorder() {
     setFeedback(null)
     try {
       await setDispatchRule(Number(grace))
-      setFeedback({ kind: 'done', text: 'Saved. The on-time figure can be worked out now.' })
+      announce({ kind: 'done', text: 'Saved. The on-time figure can be worked out now.' })
       await reload()
     } catch (error) {
-      setFeedback({ kind: 'error', text: messageOf(error, 'Could not save that rule.') })
+      announce({ kind: 'error', text: messageOf(error, 'Could not save that rule.') })
     } finally {
       setSavingRule(false)
     }
@@ -375,10 +400,10 @@ export function WorkRecorder() {
       setStockName('')
       setStockOnHand('')
       setStockMinimum('')
-      setFeedback({ kind: 'done', text: 'Stock line recorded.' })
+      announce({ kind: 'done', text: 'Stock line recorded.' })
       await reload()
     } catch (error) {
-      setFeedback({ kind: 'error', text: messageOf(error, 'Could not record that stock line.') })
+      announce({ kind: 'error', text: messageOf(error, 'Could not record that stock line.') })
     } finally {
       setSavingStock(false)
     }
@@ -398,10 +423,10 @@ export function WorkRecorder() {
       })
       setSupplierName('')
       setSupplierSpend('')
-      setFeedback({ kind: 'done', text: 'Supplier recorded.' })
+      announce({ kind: 'done', text: 'Supplier recorded.' })
       await reload()
     } catch (error) {
-      setFeedback({ kind: 'error', text: messageOf(error, 'Could not record that supplier.') })
+      announce({ kind: 'error', text: messageOf(error, 'Could not record that supplier.') })
     } finally {
       setSavingSupplier(false)
     }
@@ -422,10 +447,10 @@ export function WorkRecorder() {
       })
       setDealName('')
       setDealAmount('')
-      setFeedback({ kind: 'done', text: 'Deal recorded.' })
+      announce({ kind: 'done', text: 'Deal recorded.' })
       await reload()
     } catch (error) {
-      setFeedback({ kind: 'error', text: messageOf(error, 'Could not record that deal.') })
+      announce({ kind: 'error', text: messageOf(error, 'Could not record that deal.') })
     } finally {
       setSavingDeal(false)
     }
@@ -449,7 +474,7 @@ export function WorkRecorder() {
       await ARCHIVERS[kind](id)
       await reload()
     } catch (error) {
-      setFeedback({ kind: 'error', text: messageOf(error, 'Could not archive that.') })
+      announce({ kind: 'error', text: messageOf(error, 'Could not archive that.') })
     } finally {
       setArchiving(false)
     }
@@ -462,10 +487,10 @@ export function WorkRecorder() {
       // `null` rather than today's date: the API supplies the date. Two clocks
       // on one fact, and the browser's is the one nobody can audit.
       await confirmComplete(entity, null)
-      setFeedback({ kind: 'done', text: 'Thank you — that is recorded.' })
+      announce({ kind: 'done', text: 'Thank you — that is recorded.' })
       await reload()
     } catch (error) {
-      setFeedback({ kind: 'error', text: messageOf(error, 'Could not record that.') })
+      announce({ kind: 'error', text: messageOf(error, 'Could not record that.') })
     } finally {
       setConfirming('')
     }
@@ -502,21 +527,26 @@ export function WorkRecorder() {
    * rather than claiming an empty list during the load (I10). `Tabs` renders
    * nothing for a count it is not given.
    */
+  // Depends on `ops` alone, and reads the lists off it. The eight `?? []`
+  // bindings above are fresh arrays on every render, so listing them as
+  // dependencies would make the memo recompute every time while telling the
+  // reader it does not — the same trap `DirectorPage` documents, caught here by
+  // `next lint`.
   const counts = useMemo<Record<string, number | undefined>>(
     () =>
       ops === null
         ? {}
         : {
-            projects: projects.length,
-            tasks: tasks.length,
-            milestones: milestones.length,
-            issues: issues.length,
-            dispatch: dispatches.length,
-            stock: stock.length,
-            suppliers: suppliers.length,
-            deals: deals.length,
+            projects: ops.projects.length,
+            tasks: ops.tasks.length,
+            milestones: ops.milestones.length,
+            issues: ops.issues.length,
+            dispatch: ops.dispatches.length,
+            stock: ops.stock.length,
+            suppliers: ops.suppliers.length,
+            deals: ops.deals.length,
           },
-    [ops, projects, tasks, milestones, issues, dispatches, stock, suppliers, deals],
+    [ops],
   )
 
   const confirmedFor = (entity: string) =>
@@ -530,11 +560,11 @@ export function WorkRecorder() {
         </p>
       ) : null}
 
-      {feedback ? (
-        <p
-          role="status"
-          className={`text-sm ${feedback.kind === 'error' ? 'text-clay-600' : 'text-steel-600'}`}
-        >
+      {/* Errors only. The success case is a toast, which reaches a reader who
+          is 3,000 pixels down the page; an error stays, because it is something
+          to act on and five seconds is not long enough to act. */}
+      {feedback?.kind === 'error' ? (
+        <p role="alert" className="text-body text-clay-600">
           {feedback.text}
         </p>
       ) : null}

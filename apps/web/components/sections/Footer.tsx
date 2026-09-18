@@ -28,7 +28,7 @@ export function Footer() {
                     <li key={l.label}>
                       <a
                         href={l.href}
-                        className="link-underline text-sm text-ink-600 transition-colors hover:text-ink-900"
+                        className="link-underline inline-flex min-h-[1.75rem] items-center text-sm text-ink-600 transition-colors duration-base ease-out hover:text-ink-900"
                       >
                         {l.label}
                       </a>

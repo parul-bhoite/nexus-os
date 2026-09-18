@@ -1,17 +1,37 @@
 'use client'
 
-import { motion, useReducedMotion, type Variants } from 'framer-motion'
+import { motion, type Variants } from 'framer-motion'
 import { Fragment, type ReactNode } from 'react'
+import { duration, easing, travel } from '@/lib/motion'
 
 type Direction = 'up' | 'down' | 'left' | 'right' | 'none'
 
+/**
+ * How far a revealed element travels.
+ *
+ * `travel.reveal` is 16px, where this file used 28. At 28px a card looks like
+ * it is being thrown into place, and the brief asks for low amplitude — on a
+ * page where twelve cards reveal in sequence, twelve things moving a long way
+ * is the difference between a page that settles and a page that lurches.
+ */
 const offset: Record<Direction, { x: number; y: number }> = {
-  up: { x: 0, y: 28 },
-  down: { x: 0, y: -28 },
-  left: { x: 28, y: 0 },
-  right: { x: -28, y: 0 },
+  up: { x: 0, y: travel.reveal },
+  down: { x: 0, y: -travel.reveal },
+  left: { x: travel.reveal, y: 0 },
+  right: { x: -travel.reveal, y: 0 },
   none: { x: 0, y: 0 },
 }
+
+/**
+ * **No `useReducedMotion()` in this file.**
+ *
+ * It reads a media query, which does not exist on a server, so branching the
+ * *initial style* on it made the server and the client disagree and produced a
+ * hydration mismatch on every revealed element. `MotionProvider` sets
+ * `reducedMotion="user"` at the root instead, and framer-motion drops the
+ * transform at run time on both sides identically. See that file for the full
+ * account.
+ */
 
 export function Reveal({
   children,
@@ -28,8 +48,7 @@ export function Reveal({
   once?: boolean
   amount?: number
 }) {
-  const reduced = useReducedMotion()
-  const { x, y } = reduced ? offset.none : offset[direction]
+  const { x, y } = offset[direction]
 
   return (
     <motion.div
@@ -37,11 +56,7 @@ export function Reveal({
       initial={{ opacity: 0, x, y }}
       whileInView={{ opacity: 1, x: 0, y: 0 }}
       viewport={{ once, amount }}
-      transition={{
-        duration: reduced ? 0 : 0.7,
-        delay: reduced ? 0 : delay,
-        ease: [0.16, 1, 0.3, 1],
-      }}
+      transition={{ duration: duration.slow, delay, ease: easing.out }}
     >
       {children}
     </motion.div>
@@ -52,7 +67,7 @@ export function Reveal({
 export function RevealGroup({
   children,
   className,
-  stagger = 0.08,
+  stagger = 0.045,
   delay = 0,
   amount = 0.2,
 }: {
@@ -62,16 +77,9 @@ export function RevealGroup({
   delay?: number
   amount?: number
 }) {
-  const reduced = useReducedMotion()
-
   const variants: Variants = {
     hidden: {},
-    show: {
-      transition: {
-        staggerChildren: reduced ? 0 : stagger,
-        delayChildren: reduced ? 0 : delay,
-      },
-    },
+    show: { transition: { staggerChildren: stagger, delayChildren: delay } },
   }
 
   return (
@@ -96,8 +104,7 @@ export function RevealItem({
   className?: string
   direction?: Direction
 }) {
-  const reduced = useReducedMotion()
-  const { x, y } = reduced ? offset.none : offset[direction]
+  const { x, y } = offset[direction]
 
   const variants: Variants = {
     hidden: { opacity: 0, x, y },
@@ -105,7 +112,7 @@ export function RevealItem({
       opacity: 1,
       x: 0,
       y: 0,
-      transition: { duration: reduced ? 0 : 0.65, ease: [0.16, 1, 0.3, 1] },
+      transition: { duration: duration.slow, ease: easing.out },
     },
   }
 

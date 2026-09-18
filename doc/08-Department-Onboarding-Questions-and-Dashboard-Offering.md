@@ -508,9 +508,21 @@ rather than forgotten:
 
 ## 12. Open items
 
-1. **Where the question bank lives.** It is currently client-side in the prototype.
-   It must move server-side and be keyed to the workspace's selected departments, or
-   an invited user will be served questions their role should not see.
+1. ~~**Where the question bank lives.**~~ **Resolved.** `question_bank.py` is the
+   server-side bank this item asked for — 29 questions, `consumed_by` capability
+   tracing, documented in ADR 0020. It is what the dashboard's per-department
+   "unanswered questions" tile reads.
+
+   What remains open, and is a different question: the chat interview's own
+   candidate-question filter (`fields.py:askable_fields(department)`) narrows on
+   the user's **self-reported** `stated_department`, not the authorising
+   `membership.departments`/`role` — deliberately, since it only steers which
+   questions are *offered*, never what data is *readable*. That leaves two
+   question surfaces — the interview's `fact.*` answers and this bank's
+   dashboard tile — with no real bridge beyond the informal
+   `FieldSpec.question_key` name match. Someone can fully answer the interview
+   and still see "outstanding" on their dashboard. Tracked for `doc/adr` as a
+   separate decision rather than folded back into this item.
 2. **Answers must be written as cited facts, not form state.** An answer to 3.2
    ("flag after N days") has to be retrievable *with its provenance* when a stale-deal
    alert cites it, otherwise the threshold becomes an unexplained constant.
