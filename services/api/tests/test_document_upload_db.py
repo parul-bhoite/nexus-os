@@ -361,3 +361,81 @@ async def test_an_unreadable_file_is_recorded_but_not_reported_as_created(
     assert len(documents) == 1
     assert documents[0]["filename"] == "evil.exe"
     assert documents[0]["status"] == "quarantined"
+
+
+# ── L3 needs a department, on both roads into it ──────────────
+
+
+async def test_approving_to_a_department_the_chunk_does_not_have_is_refused(
+    client: tuple[TestClient, Seed], engine: Engine
+) -> None:
+    """The gap between the two ways a chunk becomes L3.
+
+    `classify_chunk` refuses to *classify* something L3 with no department — "a
+    low-information answer wearing a high-confidence number". The review queue
+    reached the same state by another road and nobody had closed it, because
+    `decide_review` only ever set `scope`.
+
+    **The consequence is worse than being over-shared.**
+    `retrieval/chunks.py`'s predicate matches L3 on `department && :depts`, and
+    an empty array overlaps nothing — so the chunk becomes readable by *nobody*,
+    including the reviewer who just published it, and the API answered 204.
+    Found by running `chunks.search` against real data for the first time and
+    getting no rows for a chunk that had been approved.
+    """
+    c, seed = client
+    assert _upload(c).status_code == 201
+
+    queue = c.get("/documents/review-queue").json()
+    assert queue["items"], "the payroll fixture must withhold something to review"
+    chunk_id = queue["items"][0]["chunk_id"]
+
+    # The fixture is personal-pattern material, so the classifier named no
+    # department. Approving it *to* a department is the move under test.
+    placed = _rows(
+        engine,
+        seed.workspace_id,
+        "SELECT coalesce(array_length(department, 1), 0) AS n FROM chunk WHERE workspace_id = :ws",
+    )
+    assert all(row["n"] == 0 for row in placed), "fixture assumption: no department was identified"
+
+    refused = c.post(
+        f"/documents/review-queue/{chunk_id}",
+        json={"approve": True, "scope": "l3"},
+        headers={CSRF_HEADER_NAME: CSRF},
+    )
+
+    assert refused.status_code == 409, refused.text
+    assert "readable by nobody" in refused.json()["detail"]
+
+    # And nothing moved: a refusal that had already written would be worse than
+    # the bug, because the reviewer would be told no and the row would say yes.
+    after = _rows(
+        engine,
+        seed.workspace_id,
+        "SELECT scope, review_state FROM chunk WHERE workspace_id = :ws",
+    )
+    assert all(row["review_state"] == ReviewState.PENDING_REVIEW.value for row in after)
+    assert all(row["scope"] == "L5" for row in after)
+
+
+async def test_keeping_it_private_is_still_allowed_for_the_same_chunk(
+    client: tuple[TestClient, Seed],
+) -> None:
+    """The refusal above must not strand the reviewer.
+
+    Approving with no scope leaves the chunk where it is and marks it decided,
+    which is the honest outcome for material that has no department to go to —
+    and it is the option the queue offers beside the one that is refused.
+    """
+    c, _ = client
+    assert _upload(c).status_code == 201
+    chunk_id = c.get("/documents/review-queue").json()["items"][0]["chunk_id"]
+
+    kept = c.post(
+        f"/documents/review-queue/{chunk_id}",
+        json={"approve": True},
+        headers={CSRF_HEADER_NAME: CSRF},
+    )
+
+    assert kept.status_code == 204, kept.text

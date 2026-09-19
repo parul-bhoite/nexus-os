@@ -739,6 +739,35 @@ async def decide_review(
         )
 
     async with scoped_connection(scope) as session:
+        # **L3 needs a department, and this is the second place that rule has to
+        # hold.** `classify_chunk` already refuses to *classify* a chunk as L3
+        # with no department, on the grounds that it is "a low-information
+        # answer wearing a high-confidence number". Approving one here reached
+        # the same state by another road, and the consequence is worse than the
+        # docstring there feared: `retrieval/chunks.py`'s predicate matches L3
+        # with `department && :depts`, and an empty array overlaps nothing — so
+        # the chunk becomes readable by **nobody**, including the reviewer who
+        # just published it, and the API said 204.
+        #
+        # Found by driving `chunks.search` against real data for the first time
+        # (H1) and getting zero rows back for a chunk that had been approved.
+        if target is Scope.L3_DEPARTMENT:
+            placed = (
+                await session.execute(
+                    text(
+                        "SELECT coalesce(array_length(department, 1), 0) AS n"
+                        "  FROM chunk WHERE id = :id"
+                    ),
+                    {"id": str(chunk_id)},
+                )
+            ).scalar()
+            if not placed:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    "This passage has no department, so it cannot be approved to one — "
+                    "it would be readable by nobody. Keep it private instead.",
+                )
+
         result: CursorResult[Any] = await session.execute(  # type: ignore[assignment]
             text(
                 "UPDATE chunk"
