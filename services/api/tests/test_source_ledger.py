@@ -306,18 +306,19 @@ def test_an_unmapped_provider_raises_rather_than_returning_nothing() -> None:
 
 
 def test_no_offered_provider_promises_more_than_the_product_can_deliver() -> None:
-    """The finding, written as an assertion so that closing it is deliberate.
+    """A tool may only carry an `unlocks` sentence if something reads its source.
 
-    Onboarding shows the customer nine tools, each with a sentence saying what
-    connecting it unlocks. One of those sentences is backed by no capability at
-    all: **Google Search Console** — *"Telling you which searches you already
-    rank for, from your own data."* `Source.SEARCH_CONSOLE` is required by
-    nothing, so declaring it turns on no tile, now or when OAuth lands. ADR 0023
-    makes it one of the first two connectors to build, which is what makes this
-    urgent rather than merely untidy.
+    Onboarding shows the customer nine tools, each with a sentence under its
+    name. An `unlocks` sentence is a **promise** — connect this and a tile turns
+    on — and a promise made during onboarding is worse than a locked tile: a
+    locked tile states what is missing, and this states what is coming.
 
-    A promise made during onboarding is worse than a locked tile: a locked tile
-    states what is missing, and this states what is coming.
+    This used to assert the finding itself, pinning `{"search_console"}` as
+    known-broken so that closing it had to be deliberate. It is closed now, and
+    the assertion has become the rule it was holding the place for: Search
+    Console carries `records` rather than `unlocks`, because `SEARCH_CONSOLE` is
+    required by no capability and ADR 0023 has not yet built one. The tick is
+    still collected; only the promise is gone.
 
     **Stripe is a different and softer problem** and deliberately not asserted
     here. It maps to `ACCOUNTING`, which backs twenty capabilities, so the
@@ -325,8 +326,24 @@ def test_no_offered_provider_promises_more_than_the_product_can_deliver() -> Non
     source, and no capability distinguishes them. That is recorded in
     `PROVIDER_SOURCES` next to the mapping rather than as a failure.
     """
-    unbacked = {tool.id for tool in PROVIDERS if not contributes_to(source_for_provider(tool.id))}
+    promising = {
+        tool.id
+        for tool in PROVIDERS
+        if tool.unlocks is not None and not contributes_to(source_for_provider(tool.id))
+    }
 
-    assert unbacked == {"search_console"}, (
-        f"a provider whose unlock sentence no capability can honour. Currently: {sorted(unbacked)}"
+    assert promising == set(), (
+        "a provider whose `unlocks` sentence no capability can honour — give it "
+        f"`records` instead, or build the capability. Currently: {sorted(promising)}"
     )
+
+
+def test_every_provider_says_exactly_one_kind_of_thing() -> None:
+    """The invariant `Tool.__post_init__` enforces, asserted over the real
+    catalogue rather than a constructed example — so a tenth tool added with
+    neither sentence, or with both, fails here and not in a browser."""
+    for tool in PROVIDERS:
+        assert (tool.unlocks is None) != (tool.records is None), (
+            f"{tool.id}: exactly one of `unlocks` or `records`"
+        )
+        assert tool.sentence, f"{tool.id}: the screen would render an empty line"

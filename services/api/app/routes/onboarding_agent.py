@@ -220,7 +220,13 @@ class ToolOut(BaseModel):
     name: str
     department: str
     department_label: str
-    unlocks: str
+    unlocks: str | None
+    """Set only when connecting this would turn a capability on. `None` means
+    nothing reads the source yet — see `records`, and `connections.Tool`."""
+    records: str | None
+    """What ticking it does today, when `unlocks` is `None`. Exactly one of the
+    two is ever set, so the screen always has a sentence and only a real promise
+    reaches the "what you turn on" list."""
     kind: str
     declared: bool
     connectable: bool
@@ -1408,6 +1414,7 @@ async def tools(scope: CurrentScope) -> ToolsOut:
                 department=tool.department.value,
                 department_label=label_for(tool.department),
                 unlocks=tool.unlocks,
+                records=tool.records,
                 kind=tool.kind,
                 declared=tool.id in on_record,
                 connectable=tool.id in connections.OAUTH_READY,

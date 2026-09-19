@@ -172,8 +172,16 @@ export type Tool = {
   name: string
   department: string
   department_label: string
-  /** What connecting it turns on. A capability, never a finding. */
-  unlocks: string
+  /**
+   * What connecting it turns on. A capability, never a finding.
+   *
+   * `null` when no capability reads this source yet — then `records` carries
+   * the sentence instead. Exactly one of the two is set, so a tool that turns
+   * nothing on cannot reach the "what you turn on" list.
+   */
+  unlocks: string | null
+  /** What ticking it does today, when `unlocks` is null. */
+  records: string | null
   /** `crm` for the four that are alternatives to each other, `tool` otherwise. */
   kind: string
   declared: boolean

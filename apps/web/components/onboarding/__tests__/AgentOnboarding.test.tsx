@@ -86,6 +86,7 @@ const TOOL_CATALOGUE: client.ToolCatalogue = {
       department: 'sales',
       department_label: 'Sales',
       unlocks: 'Answering pipeline questions from your own deals.',
+      records: null,
       kind: 'crm',
       declared: false,
       connectable: false,

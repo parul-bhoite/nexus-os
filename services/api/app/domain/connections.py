@@ -95,8 +95,24 @@ class Tool:
     not be asked for its accounting system first.
     """
 
-    unlocks: str
-    """What NEXUS can do once this is connected. A capability, never a finding."""
+    unlocks: str | None = None
+    """What NEXUS can do once this is connected. A capability, never a finding.
+
+    **Only set when a capability actually requires this tool's source.** An
+    `unlocks` sentence is a promise, and `test_source_ledger.py` refuses one the
+    product cannot honour — a promise made during onboarding is worse than a
+    locked tile, because a locked tile states what is missing and this states
+    what is coming. When nothing reads the source yet, use `records` instead.
+    """
+
+    records: str | None = None
+    """What ticking it does *today*, for a tool no capability reads yet.
+
+    The honest half of `unlocks`. Knowing which systems a company runs on is
+    worth collecting before anything can read them — it shapes what the
+    workspace asks and what it says it cannot see — so the tick stays and only
+    the promise goes.
+    """
 
     kind: str = "tool"
     """`crm` for the four that are alternatives to each other, `tool` otherwise.
@@ -106,6 +122,20 @@ class Tool:
     It is display grouping and nothing else — the database stores each on its
     own row, because a company mid-migration really does run two.
     """
+
+    def __post_init__(self) -> None:
+        # Exactly one, so the screen always has a sentence to show and a tool
+        # can neither promise nothing nor promise twice.
+        if (self.unlocks is None) == (self.records is None):
+            raise ValueError(
+                f"{self.id}: set exactly one of `unlocks` (a capability requires "
+                "this source) or `records` (nothing reads it yet)"
+            )
+
+    @property
+    def sentence(self) -> str:
+        """What the screen shows under the name, whichever kind it is."""
+        return self.unlocks or self.records or ""
 
 
 PROVIDERS: Final[tuple[Tool, ...]] = (
@@ -119,7 +149,13 @@ PROVIDERS: Final[tuple[Tool, ...]] = (
         id="search_console",
         name="Google Search Console",
         department=Department.MARKETING,
-        unlocks="Telling you which searches you already rank for, from your own data.",
+        # `records`, not `unlocks`: no capability requires `Source.SEARCH_CONSOLE`
+        # yet, so the old sentence — "telling you which searches you already rank
+        # for" — promised a tile that connecting could not turn on. ADR 0023 makes
+        # this one of the first two connectors to build; until D3's credentials
+        # land and a capability reads it, the tick is worth collecting and the
+        # promise is not worth making.
+        records="Recorded as part of your stack — no tile reads it yet.",
     ),
     Tool(
         id="hubspot",
@@ -343,6 +379,12 @@ def gaps_for(providers: Iterable[str]) -> list[dict[str, str]]:
             continue
         tool = _BY_ID.get(provider)
         if tool is None:
+            continue
+        if tool.unlocks is None:
+            # Nothing is locked behind it, so there is no gap to name. A tool
+            # that carries `records` rather than `unlocks` has no capability
+            # waiting on it — saying it is "still locked" would invent the
+            # very promise the `records` split exists to remove.
             continue
         gaps.append(
             {

@@ -583,6 +583,24 @@ def _out(invitation: invites.Invitation) -> InvitationOut:
     )
 
 
+INVITATION_SENDER_SQL = text(
+    "SELECT w.name AS company,"
+    "       (SELECT display_name FROM app_user WHERE id = :u) AS inviter"
+    "  FROM workspace w WHERE w.id = :w"
+)
+"""Who the invitation is from, and which company it is for, in one round trip.
+
+**A scalar subquery rather than a join, deliberately.** Joining `app_user` means
+a missing or invisible user row drops the whole result, taking the company name
+with it — and the company name is what stops the email reading as phishing. The
+subquery yields `NULL` for an unknown inviter and leaves the company intact,
+which is the difference between a degraded email and no email at all.
+
+Named rather than inline so `tests/test_invitation_email.py` can drive this
+exact statement instead of a second copy of it that could drift.
+"""
+
+
 @router.post(
     "/invitations",
     response_model=IssuedOut,
@@ -637,9 +655,15 @@ async def create_invitation(
     # transport — and after the commit, so an invitation that failed to store is
     # never one somebody received a link for.
     async with scoped_connection(scope) as session:
+        # One round trip, not two. The inviter's name rides along as a scalar
+        # subquery rather than a join so that a missing `app_user` row yields a
+        # NULL name instead of dropping the whole row and taking the company
+        # name with it — the silent-zero-rows shape this codebase has been bitten
+        # by three times. `app_user` carries no RLS, so this reads cleanly.
         row = (
             await session.execute(
-                text("SELECT name FROM workspace WHERE id = :w"), {"w": str(scope.workspace_id)}
+                INVITATION_SENDER_SQL,
+                {"w": str(scope.workspace_id), "u": str(scope.user_id)},
             )
         ).first()
     background.add_task(
@@ -649,7 +673,10 @@ async def create_invitation(
             to=email,
             token=issued.token,
             base_url=settings.public_base_url,
-            company=row.name if row else "your company",
+            company=row.company if row else "your company",
+            # Optional by design: `display_name` is nullable, and the email
+            # falls back to "You have been invited" rather than naming a blank.
+            inviter=row.inviter if row else None,
         ),
     )
     log.info("invitation.queued", role=payload.role)

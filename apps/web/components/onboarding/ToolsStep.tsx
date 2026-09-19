@@ -127,7 +127,10 @@ export function ToolsStep({
       // catalogue is still loading, so depending on it would rebuild this on
       // every render — and the list it produces is rendered in order, so a
       // needless rebuild is a needless reshuffle.
-      if (picked?.has(tool.id)) seen.add(tool.unlocks)
+      // `tool.unlocks`, never `tool.records`. This list is what ticking these
+      // boxes turns on, so a tool nothing reads yet must not appear in it —
+      // that is the whole point of the split, and the type enforces it.
+      if (picked?.has(tool.id) && tool.unlocks) seen.add(tool.unlocks)
     }
     return Array.from(seen)
   }, [catalogue, picked])
@@ -197,9 +200,12 @@ export function ToolsStep({
                           >
                             {tool.name}
                           </span>
-                          {/* A capability, never a finding. */}
+                          {/* A capability, never a finding — or, for a tool no
+                              capability reads yet, what recording it does
+                              instead. Exactly one is set, so this never renders
+                              empty. */}
                           <span className="mt-0.5 block text-xs leading-snug text-ink-400">
-                            {tool.unlocks}
+                            {tool.unlocks ?? tool.records}
                           </span>
                         </span>
                       </label>
