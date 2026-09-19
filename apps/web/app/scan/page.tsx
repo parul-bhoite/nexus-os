@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function ScanPage() {
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center px-6 py-16">
+    <main id="main" className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center px-6 py-16">
       <div className="mb-8">
         <p className="font-mono text-2xs uppercase tracking-[0.14em] text-clay-600">
           Instant Gap Analysis

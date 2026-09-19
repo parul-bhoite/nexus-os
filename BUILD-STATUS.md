@@ -545,7 +545,7 @@ long ago and never struck.
 | **H13** | "Close the 14 open items" — `AUDIT-FINDINGS.md` now has **6** un-struck rows (#5, #14, #17, #22, #23, #26), and #14 and #26 are each explicitly half-closed |
 | **H14** | "Four untested modules" is wrong — all four now have tests. Only `domain/invitations.py` has a thin direct-import surface |
 | **H15** | The two hardest landing-page claims were already reconciled (`lib/content.ts:463`). **What remains is the pillar grid alone**: 35 capabilities named with no status, against a registry of 90 with 23 implemented |
-| **H16** | Reduced-motion is **fixed** in both halves (`globals.css:80-87`, `MotionProvider`). The skip link is the live half: `#main` exists only inside `AppShell`, so it dangles on the 7 `AuthShell` routes, `/scan`, `/connections/[provider]/callback` and `/onboarding/agent` — **10 routes, not "8 of 9"** |
+| ✅ **H16** | **Closed 20 September 2026.** Reduced-motion was already fixed in both halves (`globals.css:80-87`, `MotionProvider`). The skip link was the live half: `#main` existed in only two places, so the first control a keyboard or screen-reader user meets did nothing on **13 routes** — the 7 behind `AuthShell`, `/scan`, the OAuth callback, `/onboarding/agent`, and four added the same week by this session (`/documents`, `/review-queue`, `/privacy`, `/terms`). `id="main"` is now on all nine `<main>` elements, and `components/shell/__tests__/skip-link.test.ts` asserts it statically — every `<main>` in `app/` and `components/`, plus that the root layout still points at `#main`. Verified to fail by removing one id, and confirmed over HTTP on six routes |
 | **M1** | Sections and blocks exist (`SectionRail`, `SetupSection`, `BlockCard`, rendered at `DirectorPage.tsx:256`). What remains is the render states (L3) and reach — 23 of 90 |
 | **M3** | `revoke_claim` and `claims_due_for_recheck` exist (`auth/domains.py:430,454`) but **no job calls them**, and ownership transfer has no implementation |
 | **M7** | "Four settings unread" is wrong — `mailer_backend` and `mail_root` are read at `mail.py:135-137`. **Two** are unread: `signed_url_ttl_seconds`, `model_cache_dir` |
@@ -658,9 +658,8 @@ Ordered by what the evidence in §7 actually supports, not by filing priority.
 1. ~~**Privacy and Terms pages (H11).**~~ Done 20 September 2026, with the legal
    half explicitly unwritten — see §7. **What remains is a lawyer**, plus a
    decision on `doc/17` Phase 3's bilingual PDPL `/legal` surface.
-2. **The skip link (H16).** Ten routes where `#main` does not resolve, now that
-   `/documents` and `/review-queue` are fixed. An accessibility defect with a
-   known, mechanical fix.
+2. ~~**The skip link (H16).**~~ Done 20 September 2026 — 13 routes fixed and a
+   static guard added. See §7.
 3. **The semantic half of retrieval (H1).** `chunks.search` and `chunks.count`
    are written, evaluated by the red-team specs, and called by nothing in
    production. This is the gap between 23 reachable capabilities and the rest —
