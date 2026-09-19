@@ -1,21 +1,49 @@
 # NEXUS OS — Build Status
 
-**Regenerated:** 3 September 2026, at the end of **Phase 3** of
-`doc/12-IMPLEMENTATION-PLAN.md`.
-**Method:** every claim below was run, not read. Where a figure is quoted, the
-command that produced it is named.
+**Pending work list regenerated:** 19 September 2026.
+**Method:** every row in §6 and §7 was checked against the code, the live Neon
+database, or a command that was actually run. Where a row was wrong, the wrong
+clause is named rather than quietly replaced — the point of this file is to be
+trustworthy, and a register that silently corrects itself teaches nobody why it
+drifted.
 
-> ⚠ **Everything below §0 is stale, and knowingly so.** It was written at the end
-> of Phase 3 and the build has since run through P18. Its §2 phase table and §9
-> still speak as though the current work is Phase 4. **The reliable current-state
-> sources are `GOAL-STATUS.md`, `CONTINUE-HERE.md`, `doc/13` §25–26 and the git
-> log.** A full regeneration is outstanding work in its own right — it means
-> re-running the evidence for twenty-two phases — and is deliberately not faked
-> here by editing the numbers in place.
+> ⚠ **What this regeneration covers, and what it does not.**
+>
+> **Regenerated and verified:** §6 (what needs Parul) and §7 (the pending work
+> list) — all 59 rows, by reading the code and querying the database rather than
+> re-reading the register.
+>
+> **Left as historical record, not re-verified:** §0–§5. They describe work at
+> the end of Phase 3 and through P18 and remain accurate *as an account of what
+> happened then*. Their present-tense claims should not be trusted; §7 is now the
+> current state.
+>
+> **Why this mattered.** Before this pass the list was wrong in both directions,
+> and expensively so. Two rows marked absent described things that existed and
+> were shipped (`C11` Dockerfiles, `H8` the whole frontend test suite). One stale
+> row — `M31` — was taken at face value by a planning agent, which concluded the
+> token budget had no production caller and costed a phase against it. Two rows
+> described work already finished (`M17`, `M18`), so a QA pass re-reported closed
+> gaps as open. **Of the rows checked, roughly half were wrong.**
+
+**Current state, measured 19 September 2026:**
+
+| | |
+|---|---|
+| Backend tests | **1,751 collected** across 137 files |
+| Frontend tests | **271 passing** across 33 files, plus 2 Playwright specs |
+| Last full backend run | 1,734 passed / 1 failed in 1h52m — the one failure is **M22**, a known asyncpg flake that passes alone. Tests have been added since; targeted suites are green |
+| Migrations | 39 on disk, head `0039`; **Neon is at `0039`** — in sync |
+| ADRs | 51 |
+| End-to-end walkthrough | `scripts/goal_walkthrough.py` — **64 passed, 0 failed** against a running API and Neon |
+| Gate | `ruff`, `mypy --strict` (161 files), `tsc`, `next lint` all clean |
 
 ---
 
 ## 0. Latest work — the common command surface (17 September 2026)
+
+> **Historical, not re-verified in the 19 September regeneration.** §7 is the
+> current state.
 
 **One dashboard for everybody, no department tab rail.** `doc/14`, ADR 0029–0032,
 on `feature/dashboard-command-surface`. Eight of eleven steps shipped, one
@@ -159,6 +187,9 @@ rendering in the browser; everything past it rests on the test suite.
 
 ## 1. Where this stands
 
+> **Historical, not re-verified in the 19 September regeneration.** §7 is the
+> current state.
+
 **~33% of the product.** Three phases in, and the percentage has gone *down*.
 That is the honest reading and not a rounding artefact: Phase 2 deleted a
 feature that worked. Phase 0 made the suite capable of proving something, Phase 1
@@ -204,6 +235,9 @@ that split is unchanged, and Phase 5 is where it starts to close.
 ---
 
 ## 2. Phase status against `doc/12-IMPLEMENTATION-PLAN.md`
+
+> **Historical, not re-verified in the 19 September regeneration.** §7 is the
+> current state.
 
 | Phase | State | Note |
 |---|---|---|
@@ -296,6 +330,10 @@ a list.
 
 ## 4. What is still broken
 
+> **Historical (Phase 2–3), not re-verified in the 19 September regeneration —
+> with one exception noted at §4.4, which is now false.** §7 is the current
+> state.
+
 Five of the seven are cleared. The two that remain are both *absent features*
 rather than broken ones — nothing here fails at runtime; it simply does not exist
 yet, and each has a phase. §4.7 was both found and fixed inside Phase 2: it
@@ -324,7 +362,20 @@ onboarding, dashboards, documents, invitations — is unreachable from the UI. T
 authenticated product still has no working entry point, and this is now the
 largest single thing standing between the code and a user.
 
-### 4.4 🔴 There is no classifier
+### 4.4 ✅ ~~There is no classifier~~ — **false since 19 September 2026**
+
+**Corrected in the regeneration.** There *was* a classifier the whole time:
+`app/documents/rules.py:propose`, calibrated, with a 42-sample labelled set in
+`tests/test_classifier_calibration.py` — and no production caller. The hardcoded
+`classifier_failed=True` described below was the *call site*, not an absent
+classifier. ADR 0051 connected it; `classify_chunk` was not touched, so the only
+auto-approving path is L3 with an identified department, non-sensitive, at ≥0.85
+confidence. Measured precision 1.00 across seven departments, recall 0.93, with
+operations at 0.50. The model-backed half remains, planned as `doc/19` K0–K13.
+
+The original text follows, as the record of what was believed:
+
+
 
 **Phase 12.** `_classify_all` hardcodes `suggested_scope=L5_PERSONAL`,
 `confidence=0.0`, `classifier_failed=True`. `classify_chunk` is the *gate* that
@@ -440,193 +491,185 @@ was code, it went with the tree.
 
 ## 6. What needs Parul
 
-| # | What | Blocks |
-|---|---|---|
-| **The Actions run** | ✅ **Green in Phase 2** — run [33730363386](https://github.com/xi-4206pbhoite/nexus-os/actions/runs/33730363386), 667 tests executed on a remote runner. Phase 0's claim that this was already true was wrong; see §2 | — |
-| **Push access** | This machine authenticates as `xi-4206pbhoite` and is **denied on `upstream` (`parul-bhoite/nexus-os`)**, which is what `dev` tracks. Phase 2 was pushed to `origin` (`xi-4206pbhoite/nexus-os`) instead, and CI ran there. The two remotes have now diverged and only you can reconcile them | Landing Phase 2 on the canonical repository |
-| ~~**D23**~~ | ✅ Answered and done — Neon reset to the repository's head, schema recorded first in `doc/archive/` | — |
-| **D3** | Google API credentials | P18 (GA4, Search Console), Google sign-in |
-| **D10** | Confirm Zoho as the CRM with the first design partner | P18, P19 |
-| **D13** | Anthropic access and model tier per execution mode | P14, P20 |
-| **`doc/11` §5.4** | The five business calls — B2, B3 and B5 shape the build | P16 onward |
-| **Neon is two migrations behind** | It is at `0009`; head is `0011`. `alembic upgrade head` applies Phase 1's `0010` and Phase 2's `0011`, and **0011 drops `preview_session`** — so it is a data-destroying step on your database and was deliberately left for you | Running the suite locally |
+Verified 19 September 2026. Two rows that used to sit here are gone because they
+are no longer true.
 
-Everything else `doc/11` settled. Nothing in Phase 3 is blocked.
+| # | What | Blocks | State |
+|---|---|---|---|
+| **D3** | Google API credentials | The Search Console and GA4 connectors | **Open.** Search Console is offered at signup but reads nothing; rather than leave a promise the product cannot honour, ADR 0049 moved it from `unlocks` to `records`, so the tick is collected and nothing is claimed. The connector itself still waits on this |
+| **D10** | Confirm Zoho as the CRM with the first design partner | P18, P19 | **Open** |
+| **D13** | Anthropic access **and** model tier per execution mode | The model-backed classifier (`doc/19`), P20 | **Half answered.** A key is configured and `/health/ready` reports `claude-sonnet-5`, so *access* is settled. **The tier-per-mode question is not**, and it is the expensive half: classification is per-chunk, and `doc/19` §7 costs a 60-page PDF at ~140 chunks. `doc/19` frames five options and deliberately does not pick |
+| **`doc/11` §5.4** | The five business calls — B2, B3, B5 shape the build | P16 onward | **Open** |
+| **M5** | Persona: the three extra columns, or not | — | **Decision.** The row's old framing ("use it or drop it") is stale: `persona` is read and written at `routes/auth.py:626,673`, `routes/spine.py:406,459`. What is undecided is only whether to add `department`, `role_title`, `stated_aim` — which exist in neither the database nor any migration |
+| **M24** | Two questions feed capabilities with no section | — | **Decision.** `acquisition_budget` and `people_risk` are live keys (`domain/question_bank.py:101,274`) and `tests/test_sections.py:210` pins the pair. ADR 0020's rule for a question nothing consumes is to cut it; this needs the same call |
+| ~~**The Actions run**~~ | — | — | ✅ Green, and CI now also builds the container images and runs the Playwright journey against the composed stack (`ci.yml:240,243,291`) |
+| ~~**Neon is two migrations behind**~~ | — | — | ✅ **Stale and removed.** Neon is at `0039`, which is head. The warning described a state from Phase 2 |
+| **Push access** | This machine authenticates as `xi-4206pbhoite`; `upstream` is `parul-bhoite/nexus-os` | Landing work on the canonical repository | **Open.** 8 commits sit unpushed on `app/design` |
 
 ---
 
 ## 7. Pending work list
 
-Cleared in Phase 0: **C5** (Postgres in CI, fail on skip), **C6** (Alembic both
-directions), **M9** (coverage, `--strict-markers`, type-check `tests/`).
+**Every row below was verified on 19 September 2026** against the code, the live
+Neon database, or a command that was run. Rows are grouped by what is actually
+true now, not by the priority they were filed under.
 
-Cleared in Phase 1: **C1** (`review_state`), **C2** (`'superseded'`), **C7** (the
-no-op validator), **C8** (`NEXUS_ENV` fails closed), **H10** (correlated
-exception handler), and **M6** (constraint drift detection, as
-`test_constraint_enum_parity.py`). **C12** (database timeouts) was reopened
-between Phase 2's discovery of finding #15 and its fix, and is closed again —
-the three server-side timeouts now apply on Neon, not only in CI.
+### ✅ Closed — and wrongly listed as open
 
-Cleared in Phase 4 so far: **C9** (credential rate limiting, argon2 off the
-event loop) and **H5** (the audit trail). Findings **#1, #2, #3, #9, #10 and
-#11** close with them; **#5 is re-deferred** with a reason rather than left
-looking open-but-forgotten.
+These were open in the register and are not open in the code. Several were shipped
+long ago and never struck.
 
-Cleared in Phase 3: **C10** (wire email delivery) and **M7** (the four config
-settings held back until email existed). `POST /auth/workspace` and
-`_teardown_on_switch` are deleted.
+| ID | What the row claimed | What is true |
+|---|---|---|
+| **C4** 🔴 | "End-to-end test of the real signup journey — does not exist" | `apps/web/e2e/journey.spec.ts:99` walks landing → sign up → verify from the real `.eml` → register company → dashboard, run in CI (`ci.yml:291`) against the composed stack |
+| **C11** 🔴 | "No Dockerfile anywhere" | `apps/web/Dockerfile`, `services/api/Dockerfile`, `docker-compose.yml`, `docker-compose.ci.yml`, plus `docker/caddy` and `docker/postgres`. CI builds and stands them up (`ci.yml:240,243`) |
+| **H2** | "`/evals/permissions` — absent" | `evals/test_permissions.py`, 311 lines. `test_the_eight_permission_specs:178` runs all eight red-team specs against a real database |
+| **H7** | "RLS on `domain_claim` — no policy, 12 SQL sites" | Live Neon: `relrowsecurity` and `relforcerowsecurity` both true, two policies (`domain_claim_own_rows`, `domain_claim_maintenance`) |
+| **H8** | "Frontend test harness — zero tests, no framework" | 33 files, **271 tests**, plus `e2e/journey.spec.ts` and `e2e/scan.spec.ts` |
+| **M8** | "One scoping primitive — route the five implementations through it" | Already true: every `set_config('nexus.*')` in the codebase is inside `retrieval/scoped.py` (lines 29, 30, 86, 103) |
+| **M16** | "No lockfile today, so every CI run resolves fresh" | `services/api/requirements-dev.lock`, hashed, plus `uv.lock`; CI installs `--require-hashes` and caches on it (`ci.yml:74-96`) |
+| **M19** | "Marketing numbers not reachable; nothing calls `marketing_state`" | `marketing_state` **no longer exists**. Both capabilities are listed `_IMPLEMENTED` and `_REACHABLE` (`domain/registry.py:474,521`). The row's evidence is stale in every clause |
+| **M20** | "Refusal phrased in KB, test asserts MB" | `http_limits._readable:92-114` picks the unit by magnitude. The row also names the wrong file and conflates two modules |
+| **M21** | "`test_pre_ping…` reads `pool._pre_ping`; SQLAlchemy drift" | Fixed, 17/17 pass. The diagnosis was also wrong: the cause was this repo's `.env`, not the library |
+| **M29** | Breaking change to `PUT /companies/current/reporting` | Confirmed as described (`routes/companies.py:317,407`) |
+| **M31** | "`narrate`, `pipeline.run`, `ledger.record` have no production caller" | **All three do.** `narrate` ← `routes/dashboards.py:2233`; `pipeline.run` ← `grounding/answer.py:221`; `ledger.record` ← `answer.py:241`. This row misled `doc/19` into a false conclusion about the token budget |
+| **H3 · H4 · M4 · M17 · M18** | see §7.4 | Closed today — the classifier wiring, both document screens, signed download, invitation email coverage, and the Search Console promise |
 
-Cleared in Phase 2: the preview retirement itself, which had no work-item ID —
-it is `doc/12` §Phase 2 in full. **H9** shrank rather than closed: of its three
-test mirrors,
-`expire_previews`' died with the code it mirrored, and `check_and_increment` and
-`scoped_connection` remain.
+### 🟠 Partly done — the row is half right
 
-**Nothing critical fails at runtime.** Every 🔴 below is a feature that does not
-exist yet.
+| ID | Verified state |
+|---|---|
+| **H1** | "5% — `scoped_connection` only" is wrong: `app/retrieval/` is 9 modules / 1,264 lines with ~20 production importers. **What is genuinely open is the semantic half** — `chunks.search` and `chunks.count` (`retrieval/chunks.py:77,137`) have no production caller, only evals |
+| **H5** | "`audit_log` is dead schema" is wrong — `audit.record` is called from 12 sites and `GET /audit-log` exists with a web BFF route. **Open:** the actor is returned as a raw UUID with no join to a name (`routes/audit.py:71`), and there is no read UI |
+| **H12** | "8% — one calculator" is wrong: the `generation` table exists (migrations 0023, 0029; 16 columns live) and `app/calculators/` holds 10. Remaining scope needs restating against what is built |
+| **H13** | "Close the 14 open items" — `AUDIT-FINDINGS.md` now has **6** un-struck rows (#5, #14, #17, #22, #23, #26), and #14 and #26 are each explicitly half-closed |
+| **H14** | "Four untested modules" is wrong — all four now have tests. Only `domain/invitations.py` has a thin direct-import surface |
+| **H15** | The two hardest landing-page claims were already reconciled (`lib/content.ts:463`). **What remains is the pillar grid alone**: 35 capabilities named with no status, against a registry of 90 with 23 implemented |
+| **H16** | Reduced-motion is **fixed** in both halves (`globals.css:80-87`, `MotionProvider`). The skip link is the live half: `#main` exists only inside `AppShell`, so it dangles on the 7 `AuthShell` routes, `/scan`, `/connections/[provider]/callback` and `/onboarding/agent` — **10 routes, not "8 of 9"** |
+| **M1** | Sections and blocks exist (`SectionRail`, `SetupSection`, `BlockCard`, rendered at `DirectorPage.tsx:256`). What remains is the render states (L3) and reach — 23 of 90 |
+| **M3** | `revoke_claim` and `claims_due_for_recheck` exist (`auth/domains.py:430,454`) but **no job calls them**, and ownership transfer has no implementation |
+| **M7** | "Four settings unread" is wrong — `mailer_backend` and `mail_root` are read at `mail.py:135-137`. **Two** are unread: `signed_url_ttl_seconds`, `model_cache_dir` |
+| **M11** | `auth-proxy` already has the header allowlist, manual redirect, three timeouts, correct multi-cookie forwarding and 504/503 disambiguation, with 11 tests. The row states no acceptance criteria, which is its actual defect |
+| **M23** | "No route serves a narrated tile" is wrong — `POST /{department}/narrate` exists (`routes/dashboards.py:2170`). **True:** `calculators/deltas.py` has zero callers |
+| **L1** | 6 confirmed-dead Python symbols (the four in `calculators/deltas.py`, plus `revoke_claim`, `claims_due_for_recheck`). "Ten" is unproven; the frontend half was not checked |
+| **L2** | `chunk.is_dept_aggregate` is **not** dead — it is in the retrieval predicate (`retrieval/chunks.py:45`). `document.retention_until` is dead; `audit_log.impersonated_user_id` is written but never non-`None` |
 
-### 🔴 Critical — blocks the application from being usable
+### 🔴 Open — confirmed
 
-| P | ID | Task | Phase | Current status | Dependencies | Effort |
-|---|---|---|---|---|---|---|
-| 🔴 | C4 | End-to-end test of the real signup journey against Postgres | P9 | Does not exist | C1, C2, C3 | 2 d |
-| 🔴 | C11 | API and web container images + a runnable stack | P9 | No Dockerfile anywhere | none | 2 d |
+| ID | Verified state |
+|---|---|
+| **H9** | The `check_and_increment` mirror is still there (`tests/test_rate_limit.py:60`) |
+| **H11** | **No privacy, terms or legal page exists.** Signups are live. There is no dangling link — the footer removed them rather than pointing at `#` (`lib/content.ts:497`) — so the exposure is the absence itself |
+| **M10** | **37** `as <Type>` casts across `apps/web/lib/*.ts`, not "four", and no runtime validator in `package.json` |
+| **M13** | No `loading.tsx`, no `global-error.tsx`. `error.tsx` and `not-found.tsx` do exist, so the gap is narrower than stated |
+| **M15** | The embedding pass still runs in the API process (`jobs/scheduler.py:111`, started at `main.py:91`) |
+| **M22** | **Nothing has been done**, and it recurred today: one failure in a 1h52m run, passing alone in 75s. No `filterwarnings` entry, no loop/engine handling in `conftest.py` |
+| **M25** | Both halves confirmed: `GET /audit-log` is Executive-readable where `doc/08` §8C says Owner-only, and it returns a raw actor UUID |
+| **M26** | `BrainCard.tsx:175` renders "Read-only here"; no delete or per-item sensitivity |
+| **M27** | **10 requests on load, not eight** — every panel mounts at once and fetches, plus one per running department. The parallel-mount fix the row describes is present |
+| **M28** | `read_across_entities` (`domain/group.py:126`) is called only by tests; no roll-up screen exists |
+| **M32** | Accurate as written. `STALE_AFTER_DAYS = 7`, no route passes `age_days`, nothing re-crawls, so `stale` is unreachable and `measured_at` is served instead |
+| **L3** | `WARMING` / `SELF_REPORTED` are returned only when `history_days` / `self_reported` are passed, and no route call site passes either |
+| **L4** | Exactly four orphaned sections: `#problem`, `#moments`, `#compare`, `#faq` |
+| **L5** | `config.embedding_dim` and the migration's `EMBEDDING_DIM` agree by coincidence; no test asserts it |
+| **L6** | `documents/embed.py:74` still builds a vector literal by hand |
 
-### 🟠 High — required for a complete, production-ready application
+### ⚪ Void or unanswerable as written
 
-| P | ID | Task | Phase | Current status | Dependencies | Effort |
-|---|---|---|---|---|---|---|
-| 🟠 | H1 | The scoped retrieval layer | P10 | 5% — `scoped_connection` only | embeddings | 8 d |
-| 🟠 | H2 | `/evals/permissions` as executable red-team specs, written before H1 | P10 | Absent | — | 3 d |
-| 🟡 | H3 | ~~A real classifier behind the gate~~ — **the rules half is done (ADR 0051); the model half remains** | P12 | **This row was stale: a calibrated classifier already existed and had no caller.** `app/documents/rules.py:propose` and its 42-sample labelled set in `tests/test_classifier_calibration.py` were written for `_classify_all` and never wired to it, so §4.4's "hardcoded failure" was the *call site*, not an absent classifier. Now connected, with `classify_chunk` untouched — the only auto-approving path is L3 + department, on non-sensitive text, at ≥0.85 confidence. Measured: precision 1.00 across all seven departments, recall 0.93 overall and **0.50 for operations**; ADR 0051 states plainly why 1.00 on a self-tuned 42-sample set is not a production figure. **What is left**: a held-out labelled set nobody tuned against, and a model-backed classifier to lift recall (operations first) — that half still wants D13 | D13 for the model half only | rules done; model half re-estimate |
-| 🟡 | H4 | ~~Document upload + review-queue UI~~ — **the review-queue half is built** | P8 | **Review queue done (19 September 2026).** `/review-queue` with `components/review/ReviewQueue.tsx`, a client, and the two BFF routes — per-path, because `app/api/documents/route.ts` does not serve `/api/documents/review-queue` and a missing one is a 404 neither suite can see. Four decisions: whole company (L2), its department (L3), keep private (approve with no scope), reject. No L4 button by design, asserted in a test: L4 is reachable only by being named on the item, so offering it would make a boundary into a UI convention. A 403 from `may_reach_scope` keeps the item on screen carrying the API's own sentence — a refused approval that vanished would read exactly like a successful one. Verified against a running stack: a payroll upload was withheld (`chunks_held_for_review: 1`), appeared with its `PERSONAL` badge and `rules-v1 · 1.00`, and approving to its department persisted as `approved`/`L3` with reviewer and timestamp. **Upload half done too (19 September 2026)**: `/documents` with `components/documents/DocumentLibrary.tsx`. No new BFF routes were needed — `/api/documents` and `/api/documents/asks` already existed, which is why this half was smaller than the queue. It reuses `uploadDocument` rather than restating the rules it owns: the 25 MB ceiling comes from the server's `max_file_bytes`, and a stored-but-unreadable file is rendered as a row with the parser's reason rather than thrown away as a failed request. Workspace quota is shown from `bytes_used`/`workspace_quota_bytes`, which were already on the wire and unseen. Verified through the real file input against a running stack: `salary-bands.txt` uploaded, came back `AWAITING REVIEW`, raised the withheld banner, and appeared in `/review-queue` as `personal`/`rules-v1`/1.00 — so the two screens demonstrably join up. **H4 is closed.** Signed download is not here and is not meant to be: that is M4 | C3 | done |
-| 🟠 | H5 | Write the audit trail | P4 | `audit_log` is dead schema | none | 2 d |
-| 🟠 | H7 | RLS on `domain_claim` | P4 | No policy, 12 SQL sites | none | 1 d |
-| 🟠 | H8 | Frontend test harness — Vitest + Playwright | P9 | Zero tests, no framework | C11 | 3 d |
-| 🟠 | H9 | Retire the `check_and_increment` test mirror | P5 | **One of three left.** `expire_previews`' mirror died with the preview product; `test_tenant_isolation.py`'s hand-set GUCs are **deliberately kept** and now guarded against drift (see that file). The remaining one is `consume` in `test_rate_limit.py`, a synchronous copy of the limiter's upsert. Attempted in P4 and reverted: driving the real async function from a sync test needs an engine per call, which turned a 30-second module into a ten-minute one against Neon. The fix is a module-scoped loop and engine, or making the module async | C5 ✅ | 0.5 d |
-| 🟠 | H11 | Privacy and Terms pages | P16 | Deliberately absent; signups are live | content | 1 d |
-| 🟠 | H12 | Grounding pipeline + `generation` table | P14 | 8% — one calculator | H1, D13 | 8 d |
-| 🟠 | H13 | Close the 14 open items in `AUDIT-FINDINGS.md` | P4 | Open and scheduled | C9 for three | 3 d |
-| 🟠 | H14 | Behavioural tests for the four untested modules | P3, P5 | `routes/onboarding.py`, `auth/domains.py`, `domain/invitations.py`, `retrieval/scoped.py`. `test_document_upload_db.py` is the pattern to copy | C5 ✅ | 3 d |
-| 🟠 | H15 | Reconcile the landing page with what exists | P16 | 35 capabilities named as product | none | 0.5 d |
-| 🟠 | H16 | Fix the skip link and the reduced-motion regression | P16 | Broken on 8 of 9 pages | none | 1 d |
+| ID | Why |
+|---|---|
+| **M12** | "Real state handling in `TeamStep`" — **`TeamStep` does not exist.** `lib/onboarding-client.ts:59` records that it was deleted. The row names a deleted target |
+| **L8** | "Unused component props" names no props, and `tsconfig` sets neither `noUnusedLocals` nor `noUnusedParameters`, so the compiler cannot answer it. A manual scan found none |
 
-**H6 (workspace switcher) is cancelled** — `doc/11` Q9 makes it one person, one
-company. ~2 days saved.
+### 7.4 Closed today, 19 September 2026
 
-### 🟡 Medium — important, not blocking
+Eight commits. Each was verified against a running stack rather than only in
+tests, and two were verified by planting the regression and watching the new test
+fail.
 
-| P | ID | Task | Phase | Dependencies | Effort |
-|---|---|---|---|---|---|
-| 🟡 | M1 | Dashboard shell + first real widgets. **Step A of `doc/13` is done** — the capability table is one id space, the source ledger is data, and the Reporting panel exists (migration 0027). The sections, the blocks and the seven render states are what remain | P15, P16 | H1, H12, D7 ✅, D8 ✅ | 8 d |
-| 🟡 | M3 | Domain claim lifecycle — recheck job, ownership transfer, revocation | P3 | none | 2 d |
-| ✅ | M4 | ~~Document list + signed download~~ — **done (19 September 2026)**. The list landed with H4's `/documents` screen; download is a per-row control on it. **The gap was not the endpoint** — `GET /documents/{id}/download` and `routes/files.py` were both complete — it was that `FilesystemObjectStore.signed_url` mints a **relative** `/files/{key}?…`, which a browser resolves against the web app, and the web app served no `/files`. So every signed URL in the product 404'd one hop further out than the gap `routes/files.py` itself closed. Added `app/files/[...key]` (a catch-all, because keys contain slashes) and `proxyDownload`, which streams rather than buffering and forwards no cookie — the signature is the authorisation, decided once against the uploader. **Verified against a running stack**: mint 200 with a 300s TTL, fetch 200 with `attachment`, `nosniff` and the real bytes; and the three signature properties survive the new hop — a tampered sig, an extended `expires` and a different key with the same sig all return an identical 404. One seam closed on the way: a URL with no `sig` gave FastAPI's 422, so `proxyDownload` now normalises every client error to 404 and passes 5xx through | P8 | H4 ✅ | done |
-| 🟡 | M5 | Persona: use it or drop it. The lost migrations had chosen *use it* — three columns and a check, recorded in `doc/archive/neon-schema-before-the-d23-reset.md` §3 | P4 | none | 1 d |
-| 🟡 | ~~M6~~ | ✅ **Done** — `test_constraint_enum_parity.py`, and it requires every value-list constraint to be registered, not only the ones somebody remembered | P1 | — | — |
-| 🟡 | M7 | Config hygiene — `session_secret` deleted and `.env.example` drift now fails the build; four settings (`signed_url_ttl_seconds`, `mailer_backend`, `mail_root`, `model_cache_dir`) are still unread and deliberately kept until P3 wires email | P3 | C10 | 0.25 d |
-| 🟡 | M8 | One scoping primitive — route the five implementations through `retrieval/scoped.py` | P10 | H1 | 1 d |
-| 🟡 | M10 | Validate API responses at the web boundary — four blind `as` casts | P5 | none | 1 d |
-| 🟡 | M11 | `auth-proxy` hardening | P4 | C9 | 0.5 d |
-| 🟡 | M12 | Real state handling in `TeamStep` | P17 | none | 0.5 d |
-| 🟡 | M13 | `loading.tsx` / `global-error.tsx` | P16 | none | 0.5 d |
-| 🟡 | ~~M14~~ | ✅ **Done** — the data was right and the docstring was stale. `score_denominator` returns six because Customers is a unit without a page (finding #27), and the sentence saying five went with the table's move into `domain/registry.py` | P15 | — | — |
-| ✅ | M18 | ~~**Two connectors turn nothing on, and one is promised during onboarding.**~~ — **the promise is closed; the connector is still unbuilt, and that is now stated rather than hidden.** `Tool` splits `unlocks` (a promise — a capability requires this source) from `records` (what ticking it does today), with `__post_init__` enforcing exactly one, so a tool nothing reads *cannot* carry an unlock sentence. Search Console now reads *"Recorded as part of your stack — no tile reads it yet."* Two consequences beyond the copy: `connections.gaps_for` no longer emits a "still locked" line for it — nothing is locked behind it — and the onboarding step's "what you turn on" panel is fed from `unlocks` alone, so only real promises can reach it. `PAGESPEED` is not in `PROVIDERS`, so it was never offered and never promised — the finding overstated it. Building the capability still needs **D3**. Recorded as **ADR 0049** because `ToolOut.unlocks` went nullable, which is a wire change a copy-edit diff would hide | P16, P18 | ADR 0023, ADR 0049 | done |
-| 🟠 | M25 | **The audit log is readable by an Executive and `doc/08` §8C says Owner-only.** `GET /audit-log` gates on `require_executive_surface`. Also shows no actor: it stores `actor_user_id` and returns the UUID, and resolving it needs a join the route does not make | P4, P21 | none | 0.5 d |
-| 🟡 | M26 | **The Brain panel is read-only and `doc/13` §14 asks for more.** Per-item sensitivity and passage counts need the `fact` table exposed; the delete needs P21's fan-out to passages, embeddings, cached answers and derivations. Read-only is the honest cut until both exist | P15, P21 | none | 1.5 d |
-| 🟢 | M27 | **The settings screen makes eight independent requests** — but no longer eight *after* a ninth. The screen used to gate every panel on `fetchCompany` + `fetchState`, so the six prop-less panels did not even begin loading until those resolved; they now mount immediately and fetch in parallel (defect 47), which removes a serial round trip to `us-east-2` from every visit. What remains of this item is the eight requests themselves: per-panel loading is deliberate, so the fix is a shared cache or an optimistic render, not one endpoint | P15 | none | 0.25 d |
-| 🟠 | M24 | **Two questions still feed capabilities with no section**, and step D softened rather than closed it. `acquisition_budget` and `people_risk` now appear in Setup, so the answer is visible — but the Growth Plan and the Executive risk register still have nowhere on any screen to *act* on them. ADR 0020's rule for a question nothing consumes is cut it; this needs the same decision. `test_sections.py` holds the pair | P15 | Parul | — |
-| 🟠 | M28 | **The group roll-up screen is the last of ADR 0026.** `read_across_entities` is the read path and it is generic over the value on purpose; the screen `doc/13` §4.1 describes — *"four entities, three scored"* — needs a figure each entity can compute, and none is reachable yet (M23). The switcher, panel 4b and the switch endpoints are done | P15, P17 | M23 | 1 d |
-| 🟡 | M29 | **`PUT /companies/current/reporting` now requires `currency` and `country`**, so a caller that omits either gets a 422 where it used to get a 200. Deliberate — the panel always sends every field, and treating an absent currency as "keep the existing one" would make a clear-vs-keep decision silently, on the one setting that relabels every figure in the product. Recorded because it is the only breaking change in the settings API | P15 | none | — |
-| 🟢 | M30 | **Step F's full-suite run: 1,229 passed, 4 failed, 1 error** — and none of the five is step F's. Three are the standing M20–M22. The fourth was a real *test* defect and is **fixed**: `test_the_limit_actually_bites` maxed one rate-limit bucket where `_window_start` floors to the hour, so six attempts straddling `14:00` split across two rows and neither reached six — it now sums the `login_email` rows, which a fresh address makes exact. The error was `SSL SYSCALL error: No route to host` against Neon 40 minutes into an 86-minute run; `test_auth_flow.py` passes 10/10 on its own. Nothing here blocks step G | P4 | none | done |
-| ✅ | R1 | **The last screen of setup printed the model's own briefing.** `context.preamble` was rendered verbatim, and `SKILL.md` for `context-personalization` defines that field as *"prose, under 400 words, written to be prepended to a system prompt"* — so a founder read instructions addressed to an agent ("No pronoun is known for X; use the name or 'they'"). It now renders `facts`, the structured form the skill produces precisely so a caller need not paste the prose, with the same L1/L2/L5 scope tags the transcript used | P9 | none | done |
-| ✅ | R2 | **"Still locked" mixed three kinds of string and double-punctuated.** `known_gaps[].topic` is filled by two producers — the model (emitting `brain.products_services` one run, a description the next, because `schema.json` typed it as a bare string with no guidance) and `connections.gaps_for` (a full sentence ending in a stop). Joined with `·` and given a trailing stop, that read `brain.profile · … · exporting anything..`. New `domain/known_gaps.py` normalises server-side — labels for every `company_brain` column, trailing stops trimmed, gaps with no action dropped — plus `SKILL.md` guidance and a manifest bump so the model stops emitting column names. **`unlocked_by` is now rendered**: it travelled the whole pipeline unshown, under a sentence telling the founder each gap "names its own unlock in your workspace" | P9 | none | done |
-| ✅ | F1 | **Onboarding's "Cannot reach the onboarding service right now" — diagnosed and fixed.** Attributed to Neon contention twice; it was not. `OnboardingAgent.next_question` counted a rejected question and re-ran `generate-questions` with **byte-identical arguments**, so the model returned the same compound question and was refused for the same reason — **eight calls, 37 seconds**, past the BFF's 30s abort. Three fixes: the rejection reasons now travel into the retry's grounding (`rejected_so_far`), `MAX_REJECTIONS` 8 → 4 with the budget asserted as arithmetic, and the proxy distinguishes a timeout (504, "took longer than we allow … nothing was lost") from an unreachable service (503). **Verified against the real provider: four turns, four calls, one per turn, no retries.** | P9 | none | done |
-| ✅ | F1b | **Three model-backed routes were on the database-shaped 30s timeout** — `brief`, `answer` and `tools`, found when F1's honest new message fired on the brief step while the API was working. `TIMEOUT_MS`'s own comment says it is sized for "a round trip to a managed database"; a single Haiku call is 4–5s and `answer` can make four. Now `MODEL_TIMEOUT_MS` (90s), named rather than sprinkled, with a vitest guard that reads all six `_require_model` routes and fails if any allows under 60s — so a seventh cannot inherit the database number and stay green | P9 | none | done |
-| ✅ | M33 | **The daily token budget was unenforced for four hours a day** — found at 22:13 UTC by a full-suite run, and **fixed**. `_SPENT_SQL` compared `created_at` (timestamptz) against `date_trunc('day', now() AT TIME ZONE :tz)`, which is **naive**; Postgres reinterpreted it in the session timezone (GMT), so local midnight in Muscat became midnight UTC. Between 20:00 and 24:00 UTC the cutoff sat in the future, the query summed nothing, both budgets read zero and `exhausted` could not become true. The window moved with each workspace's own reporting timezone. Fix is a second `AT TIME ZONE :tz`; the new `test_the_day_boundary_is_the_workspaces_midnight_not_utc` pins it against explicit timestamps and was **verified to fail with the fix reverted**, at any hour | P14 | none | done |
-| ✅ | S1 | **Slice 1: the first computed numbers on a tile.** `marketing.seo_gaps` and `marketing.brand_intelligence` now render a real score, its denominator, what it measures, the page it came from, the date, and a drawer onto the nine checks that produced it. Verified end to end in a browser against a live crawl: `45 / 65 points · 6 of 9 checks`, and the drawer's arithmetic sums. **The blocker was that the crawl threw away the HTML** — `extract_signals` and `calculators/audit.py` were both written, pure and tested with **zero callers** for a year, because nothing kept a page long enough to feed them. Migration 0028's `page_signals` closes it. Both tiles are pinned to `partial` by construction and neither can drift to `live` | P16 | none | done |
-| 🟡 | M31 | **Slice 2: narration, as an explicit user action.** ⚠️ **Partly stale (checked 19 September 2026): `narrate` *does* have a production caller** — `app/routes/dashboards.py:2233`, in the narrate endpoint — and with it `ledger.budgets_for`, so the token budget is live on that one path. Re-verify `pipeline.run` and `ledger.record` before relying on this row; this claim was taken at face value by `doc/19` and had to be corrected there. The rest of the row stands: `narrate`, `pipeline.run` and `ledger.record` were written together and `Computation` was built to carry exactly the `(Computed, trace)` pair `narrate` takes — down to the `window` and `checks` keys — so this is wiring rather than reshaping. Deliberately **not** on the dashboard render path: a model call per tile would mean a missing API key turns a computable 45/65 into `unavailable`, which ADR 0011 makes a regression in honesty, and reloads would hit `BUDGET_EXHAUSTED` on a number already in the database | P16 | S1 | 1 d |
-| 🟡 | M32 | **Re-crawl cadence is an open question, and `stale` stays unreachable until it is answered.** Passing `age_days` to `state_from_sources` looks free and is not: `STALE_AFTER_DAYS` is 7 and **nothing re-crawls** — the background run is queued at registration or on explicit request, and `routes/research.py` counts requests against a quota because queueing belongs to the founder who asked (Q55). So deriving staleness would mark every audit tile "out of date" eight days after signup, permanently. The figure serves `measured_at` and renders it beside the number instead | P16 | none | 0.5 d |
-| 🟠 | M23 | **P14 was built and never joined, and step B joined it.** `grounding/context.py`, `grounding/ledger.py` and `grounding/answer.py` are the seam; `narrate-metric` is the first skill that phrases a figure without producing one. What remains of the phase: `calculators/deltas.py` is still uncalled by any capability, and no route serves a narrated tile — the first one lands with the sections (step C/D) | P14 | M1 | 1 d |
-| 🟠 | M19 | **P16's Marketing numbers are not reachable.** `calculators/audit.py` scores brand and technical SEO and `marketing_state` decides their state, but nothing calls it — so no user can open either tile. `implemented` and `reachable` are separate flags because of this, and `test_capability_registry` asserts the gap | P16 | M1 | 1 d |
-| 🟡 | M20 | **The upload refusal is phrased in KB and the test asserts MB.** `http_limits.py` writes *"over the {limit // 1024} KB limit"*; `test_upload_limits.py` asserts `"25 MB"` is in the detail — and the detail is a dict, so the membership test reads its keys either way. `doc/11` stage 5 says 25 MB, so the message is the half to fix | P8 | none | 0.25 d |
-| 🟡 | M21 | **`test_pre_ping_can_be_turned_off_but_defaults_on` reads `pool._pre_ping`**, which is False on the resolved SQLAlchemy. Either the attribute moved or the default did, and the test cannot tell you which — exactly the drift M16's absent lockfile predicts | P1 | M16 | 0.25 d |
-| 🟢 | M22 | `test_onboarding_agent_e2e` fails only in a full run, with `ExceptionGroup("multiple unraisable exception warnings")`, and passes alone in ~80s. The asyncpg-transport-on-a-closed-loop shape `test_document_upload_db.py`'s fixture docstring already describes, surfacing as a failure of whichever test ran next. **Do not chase the test name: it moves.** The step-F run blamed `test_a_failed_assembly_stage_does_not_claim_nothing_was_saved`; the slice-1 run blamed `test_a_finished_journey_writes_the_brain_the_facts_and_the_persona`, which then passed 1/1 alone. A name that changes between runs is the diagnostic — a real defect would keep failing on the same test | P9 | none | 0.5 d |
-| 🟡 | M15 | Move the embedding pass out of the API process | P9 | C11 | 1.5 d |
-| 🟡 | M16 | Pin the dependency set — a lockfile and `pip-sync` in CI | P4 | Finding #16. No lockfile today, so every CI run resolves fresh. Two defects landed from this in Phase 2 alone, and the first hid the second | none | 0.5 d |
-| ✅ | M17 | ~~Send invitations by email~~ — **was already built and this row was stale**, which is its own lesson: the send landed with `app/auth/invitations_email.py` and a `background.add_task` in `create_invitation`, and nobody struck the ledger, so a QA pass re-reported it as missing. What was *actually* missing is now fixed: **no test referenced `build_invitation_email` at all**, so the delivery half could be deleted with every invitation test still green, and **`inviter` was a parameter no caller passed**, so every invitation read "You have been invited" instead of naming a person. `tests/test_invitation_email.py` covers both — content directly, the wiring by AST — and the inviter assertion was verified to fail against the previous `setup.py` | P5 | none | done |
-
-**M2 (preview deletion path) is void, and now actually so** — Phase 2 deleted
-`POST /preview` and migration 0011 dropped `preview_session`, so no data about a
-company without an account is collected and there is nothing to expire or
-delete. **D9 is marked void in `DECISIONS-REQUIRED.md`**, and finding #14 in
-`AUDIT-FINDINGS.md` narrows to re-verification alone.
-
-### 🟢 Low — polish
-
-| P | ID | Task | Effort |
-|---|---|---|---|
-| 🟢 | L1 | Delete the ten dead functions and components, or add the callers they were built for | 0.5 d |
-| 🟢 | L2 | Drop or use the dead columns `chunk.is_dept_aggregate`, `document.retention_until`, `audit_log.impersonated_user_id` | 0.5 d |
-| 🟢 | L3 | Make `WidgetState.WARMING` / `SELF_REPORTED` reachable, or remove them from both layers | 0.25 d |
-| 🟢 | L4 | Link or remove the four orphaned landing sections | 0.25 d |
-| 🟢 | L5 | Assert `config.embedding_dim` equals the migration's `EMBEDDING_DIM` | 0.1 d |
-| 🟢 | L6 | Use the `pgvector` SQLAlchemy type instead of the string literal in `embed.py` | 0.25 d |
-| 🟢 | L8 | Unused component props — use or remove | 0.25 d |
-
-**L7 is done** — the untracked planning documents in `doc/` are committed.
+- **The anonymous scanner** (G0–G11, ADRs 0045–0048) — `/scan`, robots-respecting,
+  SSRF-guarded, rate-limited, seven-day retention with a working expiry sweep.
+- **ADR 0049** — a tool now carries either `unlocks` (a promise, refused unless a
+  capability backs it) or `records`. Search Console stopped promising a tile.
+- **Invitation email coverage** — the send existed and nothing tested it; `inviter`
+  was a parameter no caller passed.
+- **ADR 0050 / migration 0039** — `_write_one` raises on a discarded worker write,
+  and the blanket `research_source` policies were dropped so the guard can fire on
+  the role production actually uses. Found by `security-reviewer`: the first
+  version of the guard was inert on the deployed path.
+- **ADR 0051** — the calibrated rules classifier was connected. It had existed,
+  measured, with no caller.
+- **`/review-queue` and `/documents`** — H4, both halves. Withheld chunks can be
+  placed; documents can be uploaded and downloaded outside onboarding.
+- **M4** — signed download. The endpoints were complete; the relative `/files/…`
+  URL resolved to a 404 on the web origin.
+- **A defect introduced and fixed in the same day**: `/documents` and
+  `/review-queue` shipped without an `AppShell` layout, so they had no nav, no
+  header and no `#main` for the skip link. Found by H16's audit, fixed, verified.
 
 ---
 
 ## 8. The gate
 
-```powershell
-.\scripts\db-ci.ps1 -RunGate
-.\scripts\db-ci.ps1
-.\scripts\ci.ps1
-.\scripts\db-ci.ps1 -Action down
+> **`scripts/` is PowerShell and this machine is macOS with no `pwsh`, no Docker
+> and no `psql`.** The commands below are what actually runs here; the `.ps1`
+> equivalents are kept in git history for the Windows machine. `CLAUDE.md` has
+> the full list and the traps.
+
+```bash
+export NEXUS_JOBS_DATABASE_URL="$(grep -E '^NEXUS_JOBS_DATABASE_URL=' .env | cut -d= -f2-)" && services/api/.venv/bin/python -m pytest services/api/tests -q
 ```
 
-`ci.ps1` runs: scripts parse · ruff check · ruff format · mypy strict over `app`
-and `tests` · pytest with the coverage floor · tsc · next lint · next build.
+```bash
+cd services/api && .venv/bin/python -m ruff check app tests && .venv/bin/python -m mypy app
+```
 
-**It needs a database.** Without one, `test_a_database_is_configured` fails and
-the skip guard names every database test that did not run. That is deliberate —
-see ADR 0013.
+```bash
+cd apps/web && node_modules/.bin/vitest run --root . && node_modules/.bin/tsc --noEmit -p tsconfig.json && npx next lint
+```
 
-**It needs `NEXUS_ENV` too**, since Phase 1. `.env` supplies it locally and the
-workflow sets it in CI; a missing one is now a startup error rather than a
-silent `local` (ADR 0015).
+```bash
+services/api/.venv/bin/python scripts/goal_walkthrough.py
+```
 
-**Stop the web dev server first.** Both it and `next build` write
-`apps\web\.next`.
+Four things that are easy to get wrong, each of which has cost time:
+
+- **`mypy` must run from `services/api`.** From the repo root it misses
+  `pyproject.toml` and reports phantom errors — including the `apscheduler` stub
+  exemption. Five false errors were chased this way on 19 September.
+- **`NEXUS_JOBS_DATABASE_URL` must be *exported*,** not merely present in `.env`.
+  `tests/dburl.jobs_database_url` reads the environment only, deliberately: a
+  `.env` fallback would silently run the maintenance-role suites as `nexus_app`
+  and prove the opposite of what they assert.
+- **`--no-cov` on a partial pytest run**, or the 75% coverage gate fails after
+  every test in the file passed.
+- **The full backend suite takes ~2 hours against Neon**, not the ~5 minutes
+  quoted elsewhere in this file — that figure was the onboarding suite alone.
+
+**It needs a database, and refuses to run without one** (ADR 0013), **and it
+needs `NEXUS_ENV`** (ADR 0015).
 
 ---
 
 ## 9. Next
 
-**Phase 4 — The security surface, continued.** Three of five items are done.
+Ordered by what the evidence in §7 actually supports, not by filing priority.
 
-**Done and green in CI:**
+1. **Privacy and Terms pages (H11).** The only confirmed-open item with live
+   exposure: signups work today and there is no policy of any kind. Smallest real
+   task on the list.
+2. **The skip link (H16).** Ten routes where `#main` does not resolve, now that
+   `/documents` and `/review-queue` are fixed. An accessibility defect with a
+   known, mechanical fix.
+3. **The semantic half of retrieval (H1).** `chunks.search` and `chunks.count`
+   are written, evaluated by the red-team specs, and called by nothing in
+   production. This is the gap between 23 reachable capabilities and the rest —
+   the single largest lever on what the dashboard can show.
+4. **The model-backed classifier (`doc/19` K0–K13).** Now has a live rules floor
+   to be measured against, which is what `doc/19` §7 recommends doing *before*
+   answering D13.
+5. **M22, the asyncpg flake.** It costs a false failure on every full run and
+   nothing has been done about it.
 
-- **C9.** Login and register rate limited on per-IP *and* per-email counters,
-  exponential backoff, an identical 401 in every case — never a 429, which keyed
-  by email announces that an address has an account, and never a lock, which is a
-  denial-of-service vector against a named user. argon2 runs on a worker thread.
-- **H5, the audit trail.** Eight of nine actions write a row inside the same
-  transaction as the action. `role_changed` has no writer because the product has
-  no way to change a role; it is `UNWIRED` with P17 named, and two tests keep that
-  exemption honest. Owner and Executive read it, through the same
-  `require_executive_surface` the rest of the executive surface uses.
-- **Four of the five named findings** — #3, #9, #10, #11.
-
-**Remaining:**
-
-| Item | Note |
-|---|---|
-| ~~Session refresh~~ | **Done.** One `UPDATE ... RETURNING` that resolves and refreshes together, extending only once the window is more than half spent |
-| ~~Finding #5~~ | **Re-deferred, not skipped.** `validate_url` is synchronous and called from six places including the 89-case SSRF suite; making it `async` ripples through all of them, and `run_in_executor` inside a sync function needs a loop it cannot assume. Its reach shrank in P2 and P4 put a counter in front of the one path that reaches it. Take it with P5's work on those routes |
-
-**Account-level auditing is a gap this phase created and named.** `audit_log` is
-workspace-scoped, so registering, verifying an email, resetting a password and
-signing in with no membership leave no trail anywhere. It needs its own stream
-and is not in any phase's brief yet.
+**Two things that are decisions, not work:** D13's tier-per-mode half, and D3's
+credentials. Both are named in §6.
