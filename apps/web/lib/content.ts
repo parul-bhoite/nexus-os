@@ -496,13 +496,16 @@ export const footer = {
       ],
     },
     // Only pages that exist are listed. About, Design partners, Careers,
-    // Contact, Security, Privacy and Terms were all `href="#"` — seven controls
-    // that looked like navigation and scrolled to the top.
+    // Contact and Security were all `href="#"` — controls that looked like
+    // navigation and scrolled to the top.
     //
-    // Privacy and Terms are the ones worth noting: they are removed rather than
+    // **Privacy and Terms are back (H11).** They were removed rather than
     // pointed at a placeholder, because a link to a privacy policy that does not
-    // exist implies a document a customer could rely on. They belong back here
-    // the moment the pages are written, and before anyone real signs up.
+    // exist implies a document a customer could rely on. The pages now exist and
+    // are linked — with the caveat that they describe what the software does and
+    // say plainly, at the top of each, that the contractual half is unwritten and
+    // unreviewed. That is a weaker claim than a finished policy and a much
+    // stronger one than a dead link.
     {
       title: 'Account',
       links: [
@@ -512,7 +515,11 @@ export const footer = {
     },
     {
       title: 'Trust',
-      links: [{ label: 'How grounding works', href: '#trust' }],
+      links: [
+        { label: 'How grounding works', href: '#trust' },
+        { label: 'Privacy', href: '/privacy' },
+        { label: 'Terms', href: '/terms' },
+      ],
     },
   ],
   legal: 'Product in active development. Figures shown in product illustrations are illustrative, not measured results.',

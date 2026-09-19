@@ -559,7 +559,7 @@ long ago and never struck.
 | ID | Verified state |
 |---|---|
 | **H9** | The `check_and_increment` mirror is still there (`tests/test_rate_limit.py:60`) |
-| **H11** | **No privacy, terms or legal page exists.** Signups are live. There is no dangling link — the footer removed them rather than pointing at `#` (`lib/content.ts:497`) — so the exposure is the absence itself |
+| **H11** | 🟡 **Half closed, 20 September 2026.** `/privacy` and `/terms` now exist and are linked from the footer again, guarded by `components/sections/__tests__/footer-links.test.ts` (verified to fail by repointing a link at a missing page). **Every factual claim on them was read out of the code and cites its file** — the 12-hour rolling session, the seven-day scan retention, the five-minute download link, the keyed-hash rate limiter, embeddings computed locally while interview and document text does go to Anthropic. **What is deliberately not written is the legal half**: no controller identity, no PDPL position, no governing law, no liability, no data-request route, and no retention policy for account data. Those are listed on the pages themselves as undecided rather than filled with template prose. **A lawyer still has to write the contract half before anyone real relies on this** — and `doc/17` Phase 3's bilingual PDPL `/legal` surface, with Arabic as the stated reference version, is untouched |
 | **M10** | **37** `as <Type>` casts across `apps/web/lib/*.ts`, not "four", and no runtime validator in `package.json` |
 | **M13** | No `loading.tsx`, no `global-error.tsx`. `error.tsx` and `not-found.tsx` do exist, so the gap is narrower than stated |
 | **M15** | The embedding pass still runs in the API process (`jobs/scheduler.py:111`, started at `main.py:91`) |
@@ -655,9 +655,9 @@ needs `NEXUS_ENV`** (ADR 0015).
 
 Ordered by what the evidence in §7 actually supports, not by filing priority.
 
-1. **Privacy and Terms pages (H11).** The only confirmed-open item with live
-   exposure: signups work today and there is no policy of any kind. Smallest real
-   task on the list.
+1. ~~**Privacy and Terms pages (H11).**~~ Done 20 September 2026, with the legal
+   half explicitly unwritten — see §7. **What remains is a lawyer**, plus a
+   decision on `doc/17` Phase 3's bilingual PDPL `/legal` surface.
 2. **The skip link (H16).** Ten routes where `#main` does not resolve, now that
    `/documents` and `/review-queue` are fixed. An accessibility defect with a
    known, mechanical fix.
