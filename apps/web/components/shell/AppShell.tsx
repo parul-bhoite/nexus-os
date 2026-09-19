@@ -200,7 +200,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </div>
               </aside>
 
-              <main id="main" className="min-w-0 flex-1 py-7">
+              <main id="main" tabIndex={-1} className="min-w-0 flex-1 py-7">
                 {children}
               </main>
             </div>

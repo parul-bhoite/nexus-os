@@ -32,7 +32,7 @@ export default function Error({
   }, [error])
 
   return (
-    <main id="main" className="flex min-h-screen flex-col bg-bone-50 px-6 py-8 sm:px-10">
+    <main id="main" tabIndex={-1} className="flex min-h-screen flex-col bg-bone-50 px-6 py-8 sm:px-10">
       <a href="/" className="w-fit" aria-label="NEXUS OS home">
         <Logo />
       </a>

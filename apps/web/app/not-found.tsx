@@ -22,7 +22,7 @@ export default function NotFound() {
        `mx-auto max-w-*` wrapper while `/account`, `/onboarding`, `/dashboard`
        and `/settings` all do. A 404 is often the first page somebody sees, and
        one laid out unlike the rest of the product reads as a different site. */
-    <main id="main" className="min-h-screen bg-bone-50">
+    <main id="main" tabIndex={-1} className="min-h-screen bg-bone-50">
       <div className="mx-auto flex min-h-screen max-w-3xl flex-col px-6 py-8 sm:px-10">
         <a href="/" className="w-fit" aria-label="NEXUS OS home">
           <Logo />

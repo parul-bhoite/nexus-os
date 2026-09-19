@@ -63,6 +63,27 @@ describe('the skip link target', () => {
     ).toEqual([])
   })
 
+  it('can actually take focus, not just scroll into view', () => {
+    // `id` alone moves the *viewport* and, in Safari and Firefox, leaves focus
+    // where it was — so the next Tab returns to the navigation the user just
+    // asked to skip, and a screen reader keeps reading from the old position.
+    // The link appears to work and does not. `tabIndex={-1}` makes the target
+    // programmatically focusable without putting it in the tab order.
+    const offenders: string[] = []
+    for (const file of files) {
+      for (const tag of mainTags(readFileSync(file, 'utf8'))) {
+        if (tag.includes('id="main"') && !tag.includes('tabIndex={-1}')) {
+          offenders.push(file.replace(`${ROOT}/`, ''))
+        }
+      }
+    }
+
+    expect(
+      offenders,
+      `the skip link would scroll to these without moving focus: ${offenders.join(', ')}`,
+    ).toEqual([])
+  })
+
   it('is what the root layout actually points at', () => {
     // The other half of the pair. Renaming the anchor's target would leave
     // every assertion above passing and the link still broken.

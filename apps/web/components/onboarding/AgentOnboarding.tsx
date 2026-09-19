@@ -522,7 +522,7 @@ export function AgentOnboarding() {
           The width is a reading measure rather than a layout leftover: this is
           prose being read and prose being written, and a bubble that runs the
           width of a desktop monitor is neither. */}
-      <main id="main" className="relative flex min-h-screen flex-col bg-bone-100">
+      <main id="main" tabIndex={-1} className="relative flex min-h-screen flex-col bg-bone-100">
         {/* The phase, said the way a section of a product tour says itself: a
             small step count over a display-face title. The count is real —
             `phaseIndex` into the same array the rail draws — and `assembling`

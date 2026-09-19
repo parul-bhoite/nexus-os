@@ -55,7 +55,7 @@ export default function HomePage() {
       {/* Decorative loops stop in sections that are off screen. */}
       <PauseOffscreen />
       <Nav />
-      <main id="main">
+      <main id="main" tabIndex={-1}>
         <Hero />
         <Problem />
         <Loop />

@@ -36,7 +36,7 @@ export function AuthShell({
   footer?: ReactNode
 }) {
   return (
-    <main id="main" className="min-h-screen bg-bone-50">
+    <main id="main" tabIndex={-1} className="min-h-screen bg-bone-50">
       <div className="grid min-h-screen w-full grid-cols-1 lg:grid-cols-2">
         {/* ── The form ── */}
         <div className="flex flex-col items-center px-6 py-8 sm:px-10 lg:py-12">

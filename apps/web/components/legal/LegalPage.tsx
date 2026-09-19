@@ -68,7 +68,7 @@ export function LegalPage({
   children: ReactNode
 }) {
   return (
-    <main id="main" className="mx-auto max-w-2xl px-6 py-16">
+    <main id="main" tabIndex={-1} className="mx-auto max-w-2xl px-6 py-16">
       <p className="font-mono text-2xs uppercase tracking-[0.14em] text-clay-600">{kicker}</p>
       <h1 className="mt-3 font-display text-3xl font-bold text-ink-900 sm:text-4xl">{title}</h1>
       <p className="mt-3 text-[0.95rem] leading-relaxed text-ink-600">{lede}</p>

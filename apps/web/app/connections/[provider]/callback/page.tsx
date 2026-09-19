@@ -25,7 +25,7 @@ export default function ConnectionCallbackPage({
   params: { provider: string }
 }) {
   return (
-    <main id="main" className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-6">
+    <main id="main" tabIndex={-1} className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-6">
       <h1 className="font-display text-2xl text-ink-900">Finishing the connection</h1>
       <ConnectionResult provider={params.provider} />
     </main>
