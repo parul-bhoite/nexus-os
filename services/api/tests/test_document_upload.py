@@ -25,7 +25,7 @@ from fastapi.testclient import TestClient
 from app.auth.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME
 from app.deps import current_scope
 from app.documents.classify import ReviewState
-from app.domain.scopes import Department, Role
+from app.domain.scopes import Department, Role, Scope
 from app.domain.session import ScopedSession
 from app.main import create_app
 from app.routes.documents import WorkspaceUsage, workspace_usage
@@ -134,9 +134,16 @@ def test_consent_is_recorded_with_the_wording_in_force(client) -> None:  # type:
 def test_a_sensitive_document_is_not_workspace_visible_until_reviewed(client) -> None:  # type: ignore[no-untyped-def]
     """M5's stated validation, asserted rather than performed by hand.
 
-    No classifier model exists yet, so every chunk arrives with
-    `classifier_failed` and withholds. That is I4 doing its job: the absence of
-    a classifier is a reason to deny, never a reason to default to visible.
+    **This assertion got stronger without changing.** It used to hold for a
+    weak reason — no classifier ran, so everything withheld and a test that
+    uploaded a payroll register proved nothing about payroll registers. Since
+    ADR 0051 wired `rules.propose` in, the fixture's "Payroll"/"Salaries" hits
+    `PERSONAL_PATTERNS`, so the classifier now actively recognises the material
+    as personal and the gate withholds it on `REQUIRES_HUMAN` — at confidence
+    1.0, which is the case worth proving. See
+    `test_a_confident_departmental_document_is_indexed_without_review` for the
+    other side: withholding everything is only a safety property if something
+    is ever released.
     """
     c, recorded = client
     response = upload(c)
@@ -164,6 +171,65 @@ def test_the_uploader_is_the_only_owner_of_a_withheld_chunk(client) -> None:  # 
 
     owners = {cls.owner_user_id for _, cls in recorded[0]["chunks"]}
     assert owners == {str(USER)}
+
+
+# ── The classifier is connected (ADR 0051) ───────────────────
+
+
+def test_a_confident_departmental_document_is_indexed_without_review(client) -> None:  # type: ignore[no-untyped-def]
+    """The half that was missing until `propose` was wired in.
+
+    Every assertion above this line is about material being *withheld*, and all
+    of them passed for a year while `_classify_all` hardcoded
+    `classifier_failed=True` — because a product that indexes nothing withholds
+    everything correctly. This is the test that would have failed, and the
+    reason the wiring is observable rather than a refactor.
+
+    Finance vocabulary, no personal or financial pattern: the one route through
+    the gate that auto-approves.
+    """
+    c, recorded = client
+    response = upload(
+        c,
+        content=b"Invoice ledger reconciliation. The receivable ageing and the payable ledger.",
+        filename="ledger.txt",
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["chunks_indexed"] > 0, (
+        "a confidently-departmental, non-sensitive document must reach the "
+        "workspace without a human in the loop"
+    )
+    assert body["chunks_held_for_review"] == 0
+
+    for _, classification in recorded[0]["chunks"]:
+        assert classification.review_state is ReviewState.AUTO_APPROVED
+        assert classification.scope is Scope.L3_DEPARTMENT
+        assert classification.department is Department.FINANCE
+        assert classification.owner_user_id is None, (
+            "an auto-approved chunk belongs to the department, not the uploader"
+        )
+
+
+def test_a_bank_account_is_withheld_even_though_it_is_obviously_finance(client) -> None:  # type: ignore[no-untyped-def]
+    """Confidence is not permission.
+
+    The pattern match is certain — an IBAN is a fact about the characters — and
+    that certainty is precisely why it must not auto-publish. This is the case
+    where a naive classifier does the most damage, because it is *sure*.
+    """
+    c, recorded = client
+    response = upload(
+        c,
+        content=b"Remit to account number GB29NWBK60161331926819 against the invoice ledger.",
+        filename="remittance.txt",
+    )
+
+    assert response.status_code == 201
+    assert response.json()["chunks_indexed"] == 0
+    for _, classification in recorded[0]["chunks"]:
+        assert classification.review_state is ReviewState.PENDING_REVIEW
 
 
 # ── Failure is visible (task 5.9) ─────────────────────────────

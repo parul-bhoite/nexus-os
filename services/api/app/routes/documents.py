@@ -51,7 +51,6 @@ from app.deps import CurrentScope
 from app.documents.chunk import Chunk, chunk_document
 from app.documents.classify import (
     Classification,
-    ClassificationInput,
     ReviewState,
     classify_chunk,
     review_state_code,
@@ -63,9 +62,9 @@ from app.documents.limits import (
     check_upload,
 )
 from app.documents.parse import ParseOutcome, parse_document
+from app.documents.rules import propose
 from app.documents.status import DocumentStatus
 from app.domain import audit
-from app.domain.access import Sensitivity
 from app.domain.departments import selected_departments
 from app.domain.document_asks import asks_for
 from app.domain.progress import progress_for
@@ -305,28 +304,31 @@ def _classify_all(
 ) -> list[tuple[Chunk, Classification]]:
     """Classify every chunk, defaulting to deny.
 
-    No classifier model exists yet, so nothing is *suggested* with confidence
-    and `classifier_failed` is set on every input. Everything therefore
-    withholds to L5 plus the review queue — which is I4 working exactly as
-    intended. The absence of a classifier is a reason to deny, not a reason to
-    default to visible, and task 5.4's model swaps in here without any caller
-    changing.
+    **`propose` suggests; `classify_chunk` decides.** The split is the whole
+    safety argument and is why connecting a classifier did not require touching
+    the gate: nothing here can widen what the gate permits. Walking the four
+    outcomes `rules.propose` can return against it:
+
+    - a personal pattern (salary, passport, date of birth) → L5 at confidence
+      1.0 with `Sensitivity.PERSONAL`, which `REQUIRES_HUMAN` sends to review
+      *regardless* of that confidence;
+    - a financial pattern (IBAN, account number) → L4, which is not in
+      `ASSIGNABLE_SCOPES`, so it is withheld for a person to place;
+    - a department whose vocabulary wins by at least `CONFIDENT` → L3 with that
+      department, which is the **only** path that auto-approves;
+    - anything weak or unrecognised → L5 with a confidence below the threshold,
+      so it goes to review.
+
+    Until this call existed the input was hardcoded to `classifier_failed=True`
+    and every chunk withheld, which was I4 behaving correctly and also meant
+    `chunks_indexed` was structurally always zero — a review queue holding
+    100% of every upload is a queue nobody can work through. The rules and
+    their calibration set were written for this call site and had no caller;
+    `tests/test_classifier_calibration.py` prints the precision and recall this
+    is trusting, and ADR 0051 records what those numbers do and do not support.
     """
     return [
-        (
-            chunk,
-            classify_chunk(
-                ClassificationInput(
-                    text=chunk.text,
-                    suggested_scope=Scope.L5_PERSONAL,
-                    suggested_department=None,
-                    suggested_sensitivity=Sensitivity.NORMAL,
-                    confidence=0.0,
-                    classifier_failed=True,
-                ),
-                uploader_id=str(scope.user_id),
-            ),
-        )
+        (chunk, classify_chunk(propose(chunk.text), uploader_id=str(scope.user_id)))
         for chunk in chunks
     ]
 
