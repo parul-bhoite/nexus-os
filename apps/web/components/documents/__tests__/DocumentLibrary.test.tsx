@@ -6,6 +6,7 @@ import {
   type UploadStage,
   listDocuments,
   readAsks,
+  requestDownload,
   uploadDocument,
 } from '@/lib/documents-client'
 
@@ -25,6 +26,7 @@ vi.mock('@/lib/documents-client', async (importOriginal) => {
     readAsks: vi.fn(),
     listDocuments: vi.fn(),
     uploadDocument: vi.fn(),
+    requestDownload: vi.fn(),
   }
 })
 
@@ -141,5 +143,55 @@ describe('DocumentLibrary', () => {
     // classifier decided, which the upload response does not.
     await waitFor(() => expect(vi.mocked(listDocuments).mock.calls.length).toBe(2))
     expect(screen.getByText('price-list.pdf')).toBeTruthy()
+  })
+
+  it('mints a signed link on demand and sends the browser to it', async () => {
+    // Two steps, not one. The link is authorised here, against the uploader,
+    // and fetched afterwards with no session — so the component must ask for
+    // one per click rather than holding a URL that outlives its own expiry.
+    withDocuments(INDEXED)
+    vi.mocked(requestDownload).mockResolvedValue({
+      url: '/files/ws/doc?expires=1&sig=abc',
+      expires_in_seconds: 300,
+    })
+    const assign = vi.fn()
+    Object.defineProperty(window, 'location', {
+      value: { assign },
+      writable: true,
+    })
+    render(<DocumentLibrary />)
+    await waitFor(() => expect(screen.getByText('price-list.pdf')).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download' }))
+
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/files/ws/doc?expires=1&sig=abc'))
+    expect(requestDownload).toHaveBeenCalledWith(INDEXED.document_id)
+  })
+
+  it('offers a download for a file that could not be read', async () => {
+    // The case where it matters most: somebody needs the scan back to see
+    // what they actually sent.
+    withDocuments({
+      ...INDEXED,
+      filename: 'scan.pdf',
+      status: 'failed',
+      page_count: null,
+      failure_reason: 'No text layer — this looks like a scan.',
+    })
+    render(<DocumentLibrary />)
+
+    await waitFor(() => expect(screen.getByText('scan.pdf')).toBeTruthy())
+    expect(screen.getByRole('button', { name: 'Download' })).toBeTruthy()
+  })
+
+  it('says so against the row when a link cannot be minted', async () => {
+    withDocuments(INDEXED)
+    vi.mocked(requestDownload).mockRejectedValue(new Error('No such document.'))
+    render(<DocumentLibrary />)
+    await waitFor(() => expect(screen.getByText('price-list.pdf')).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download' }))
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('No such document.'))
   })
 })

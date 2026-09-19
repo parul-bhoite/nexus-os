@@ -276,3 +276,75 @@ export async function proxyUpload(
     clearTimeout(timeout)
   }
 }
+
+/**
+ * Stream a signed file through from the API.
+ *
+ * `storage.signed_url` mints a **relative** `/files/{key}?expires=…&sig=…`, so
+ * the browser resolves it against this app's origin rather than the API's. That
+ * is the right default — it means the API need not be publicly reachable — but
+ * it only works if this app serves the path, which is what this exists for.
+ *
+ * **No cookie is forwarded, deliberately.** `/files` is the one route in the
+ * product with no session: the signature *is* the authorisation, decided once
+ * by `/documents/{id}/download` against the uploader. Sending credentials would
+ * imply this endpoint consults them, and the day it started to, a link that had
+ * already been authorised would begin depending on who clicked it.
+ *
+ * The body streams rather than buffering — a 25 MB document read into memory
+ * here would be read into memory twice, once by this route and once by the
+ * response — and the API's own `Content-Disposition`, `nosniff` and cache
+ * headers are forwarded verbatim rather than restated, so there is one place
+ * that decides a document is never rendered inline.
+ */
+export async function proxyDownload(
+  request: Request,
+  { path, unavailable }: { path: string; unavailable: string },
+): Promise<Response> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS)
+
+  try {
+    const upstream = await fetch(`${API_BASE}${path}`, {
+      method: 'GET',
+      signal: controller.signal,
+      cache: 'no-store',
+      redirect: 'manual',
+    })
+
+    if (!upstream.ok) {
+      // The API answers a bad signature, an expired link, an unsafe key and a
+      // missing file identically, so they cannot be told apart. This hop keeps
+      // that true and closes one seam of its own: a URL with no `sig` at all
+      // fails FastAPI's query validation with a 422, so forwarding the status
+      // verbatim would distinguish "you sent no signature" from "your
+      // signature is wrong". Neither reveals whether a key exists — both
+      // answer the same for a real key and an invented one — but normalising
+      // the body while leaving the status to vary is half a decision, so every
+      // client error becomes the same 404.
+      //
+      // 5xx passes through: a broken service is not a missing file, and
+      // dressing one as the other is how an outage gets diagnosed as a bug.
+      const status = upstream.status >= 500 ? upstream.status : 404
+      return NextResponse.json({ detail: 'Not found' }, { status })
+    }
+
+    const headers = new Headers()
+    for (const header of [
+      'content-type',
+      'content-disposition',
+      'content-length',
+      'x-content-type-options',
+    ]) {
+      const value = upstream.headers.get(header)
+      if (value) headers.set(header, value)
+    }
+    headers.set('cache-control', 'private, no-store')
+
+    return new Response(upstream.body, { status: upstream.status, headers })
+  } catch {
+    return NextResponse.json({ detail: unavailable }, { status: 503 })
+  } finally {
+    clearTimeout(timeout)
+  }
+}

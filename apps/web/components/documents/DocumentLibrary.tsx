@@ -11,6 +11,7 @@ import {
   listDocuments,
   megabytes,
   readAsks,
+  requestDownload,
   uploadDocument,
 } from '@/lib/documents-client'
 
@@ -56,6 +57,8 @@ export function DocumentLibrary() {
    *  `document_id`, so it would vanish on the next read. Shown now or not at
    *  all. */
   const [refused, setRefused] = useState<{ filename: string; why: string }[]>([])
+  /** A download that could not be minted, against the row it belongs to. */
+  const [unavailable, setUnavailable] = useState<Record<string, string>>({})
   const input = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
@@ -112,6 +115,28 @@ export function DocumentLibrary() {
     },
     [load, stage],
   )
+
+  async function download(document: StoredDocument) {
+    setUnavailable((prev) => {
+      const next = { ...prev }
+      delete next[document.document_id]
+      return next
+    })
+    try {
+      const signed = await requestDownload(document.document_id)
+      // A plain navigation, because the response carries
+      // `Content-Disposition: attachment` — the browser saves it and stays put.
+      // Fetching the bytes here to build a blob would hold a 25 MB document in
+      // the tab for no gain, and would lose the filename the server sets.
+      window.location.assign(signed.url)
+    } catch (cause) {
+      setUnavailable((prev) => ({
+        ...prev,
+        [document.document_id]:
+          cause instanceof Error ? cause.message : 'That download could not be prepared.',
+      }))
+    }
+  }
 
   if (error !== null) {
     return (
@@ -215,9 +240,24 @@ export function DocumentLibrary() {
                     {document.page_count} {document.page_count === 1 ? 'page' : 'pages'}
                   </span>
                 )}
+                {/* Offered for an unreadable file too: a scan with no text
+                    layer is exactly the one somebody needs back to check what
+                    they sent. */}
+                <button
+                  type="button"
+                  onClick={() => void download(document)}
+                  className="ml-auto rounded-full border border-bone-300 px-3 py-1 text-xs text-ink-600 hover:bg-bone-100"
+                >
+                  Download
+                </button>
                 {document.failure_reason && (
                   <span className="w-full text-xs leading-relaxed text-clay-600">
                     {document.failure_reason}
+                  </span>
+                )}
+                {unavailable[document.document_id] && (
+                  <span role="alert" className="w-full text-xs leading-relaxed text-clay-600">
+                    {unavailable[document.document_id]}
                   </span>
                 )}
               </li>

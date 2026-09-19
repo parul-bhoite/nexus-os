@@ -157,3 +157,28 @@ export function megabytes(bytes: number): string {
   const mb = bytes / (1024 * 1024)
   return mb >= 10 ? `${Math.round(mb)} MB` : `${mb.toFixed(1)} MB`
 }
+
+export type SignedDownload = {
+  /** Relative — `/files/{key}?expires=…&sig=…`. Resolved against this app,
+   *  which serves it at `app/files/[...key]/route.ts`. */
+  url: string
+  expires_in_seconds: number
+}
+
+/**
+ * Ask for a short-lived link to a document this account uploaded.
+ *
+ * Two steps rather than one because authorisation and delivery are different
+ * questions. This call is authorised — it carries the session, and the API
+ * checks the document belongs to the caller, answering 404 rather than 403 for
+ * one that does not, since "this exists and you may not have it" is itself a
+ * disclosure. The link it returns is then fetched with no session at all.
+ *
+ * **The link is short-lived and that is not a formality.** Possession is not
+ * authorisation: the signature says we issued it, never who is holding it, so
+ * the expiry is what stops a URL pasted into a group chat from being a
+ * permanent grant.
+ */
+export function requestDownload(documentId: string): Promise<SignedDownload> {
+  return call<SignedDownload>(`/api/documents/${documentId}/download`)
+}
