@@ -14,10 +14,10 @@ rather than nothing for four minutes and then everything.
 from __future__ import annotations
 
 import json
-from typing import Final
+from typing import Any, Final, cast
 from uuid import UUID
 
-from sqlalchemy import text
+from sqlalchemy import CursorResult, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import jobs_session
@@ -39,6 +39,44 @@ CONCURRENT_SOURCES: Final = 3
 """How many sources run at once. Three rather than six because they share an
 outbound connection budget and a database pool — running all six flat out makes
 the slowest one slower, and none of them is the bottleneck the founder feels."""
+
+
+class DiscardedWriteError(RuntimeError):
+    """A write this worker requires matched no rows.
+
+    **The failure this file has been bitten by three times**, each time looking
+    exactly like work that never ran: an UPDATE under row-level security with no
+    policy match affects zero rows and raises nothing, so the source stays
+    `queued` or `running` for ever, the run never finishes, and no log line says
+    anything was discarded. The comments through this module record all three.
+
+    A comment is not a guard, so this is the guard. It is deliberately **not** a
+    `SourceState.FAILED` outcome: a source that fails is a crawl that did not
+    work, which Q56 says must leave the other five alone, whereas a discarded
+    write means this transaction's scope is wrong and nothing it writes can be
+    trusted. Those are different events and only one of them is the worker's own
+    plumbing being broken.
+    """
+
+
+async def _write_one(
+    db: AsyncSession, statement: str, params: dict[str, object], *, what: str
+) -> None:
+    """Run a write that must affect exactly one row, and refuse silence.
+
+    Only for writes whose zero-row case is always a defect. `CLAIM_SQL` matching
+    nothing means the queue is empty, and superseding `page_signals` on a first
+    crawl means there was nothing to supersede — both are ordinary, and neither
+    goes through here.
+    """
+    result = cast("CursorResult[Any]", await db.execute(text(statement), params))
+    if result.rowcount != 1:
+        raise DiscardedWriteError(
+            f"{what}: expected to update exactly 1 row, matched {result.rowcount}. "
+            "Almost always the workspace scope was lost — the GUC is "
+            "transaction-local and a commit ends it."
+        )
+
 
 UNAVAILABLE_NO_CREDENTIALS: Final = "unavailable: no_credentials"
 """Q53/D2. Keyword data **stays locked** rather than estimated. An estimate
@@ -75,12 +113,11 @@ async def _record(
         else None
     )
     await apply_workspace_scope(db, workspace_id)
-    await db.execute(
-        text(
-            "UPDATE research_source"
-            "   SET state = :s, error_reason = :e, finished_at = now(), result_json = :p"
-            " WHERE run_id = :r AND kind = :k"
-        ),
+    await _write_one(
+        db,
+        "UPDATE research_source"
+        "   SET state = :s, error_reason = :e, finished_at = now(), result_json = :p"
+        " WHERE run_id = :r AND kind = :k",
         {
             "s": outcome.state.value,
             "e": outcome.error_reason,
@@ -88,6 +125,7 @@ async def _record(
             "r": str(run_id),
             "k": kind.value,
         },
+        what=f"recording {kind.value}",
     )
 
     # The signals, in the same transaction and only for a crawl. The other
@@ -136,24 +174,30 @@ async def _record(
 async def _run_source(
     db: AsyncSession, *, workspace_id: UUID, run_id: UUID, kind: SourceKind, seeds: list[str]
 ) -> None:
-    """One source, start to finish. **Never raises.**
+    """One source, start to finish. **Never raises for a source that fails.**
 
     The `except` is deliberately broad. Q56 says one source failing must not
     fail the run, and a source that raises an exception nobody anticipated would
     do exactly that — so anything unhandled becomes a failed source with a
     reason, and the other five carry on.
+
+    **`DiscardedWriteError` is the one exception that does escape**, and
+    deliberately: it is raised by the two writes here that bracket the `except`
+    rather than by anything inside it, and it means the scope is wrong rather
+    than that a crawl went badly. Swallowing it as a failed source would mark
+    the source failed using the very write that just proved it cannot write —
+    which is how this failure stayed invisible three times.
     """
     # Scoped here, and again in `_record`. The GUC is transaction-local, so the
     # commit below ends it — and an UPDATE under RLS with no policy match
     # affects **zero rows and raises nothing**, leaving the source `queued`
     # forever with nothing in any log.
     await apply_workspace_scope(db, workspace_id)
-    await db.execute(
-        text(
-            "UPDATE research_source SET state='running', started_at=now()"
-            " WHERE run_id=:r AND kind=:k"
-        ),
+    await _write_one(
+        db,
+        "UPDATE research_source SET state='running', started_at=now() WHERE run_id=:r AND kind=:k",
         {"r": str(run_id), "k": kind.value},
+        what=f"starting {kind.value}",
     )
     await db.commit()
 
@@ -246,7 +290,11 @@ async def process_one_run(db: AsyncSession, *, only: UUID | None = None) -> UUID
     # RLS and every source stayed `queued`, with the crash handler firing
     # correctly and nothing in any log to say the write had been discarded.
     # That is the third time in this file that a silently-zero-row UPDATE has
-    # looked exactly like work that never ran.
+    # looked exactly like work that never ran — and the reason `_write_one`
+    # now exists. Were the concurrent version tried again, it would fail
+    # loudly on the first discarded write rather than producing a run that
+    # never finishes, so this comment is a record of why sequential stays
+    # rather than the only thing standing between here and that bug.
     #
     # Sequential is provably correct and six sources is not a throughput
     # problem: the crawl dominates, and D20 caps it at ten minutes regardless.
@@ -266,9 +314,11 @@ async def process_one_run(db: AsyncSession, *, only: UUID | None = None) -> UUID
             )
         ).all()
     ]
-    await db.execute(
-        text("UPDATE research_run SET state = :s, finished_at = now() WHERE id = :i"),
+    await _write_one(
+        db,
+        "UPDATE research_run SET state = :s, finished_at = now() WHERE id = :i",
         {"s": state_for(states).value, "i": str(run_id)},
+        what="finishing the run",
     )
     await db.commit()
 

@@ -72,8 +72,24 @@ async def _research_job() -> None:
     """
     from app.research.worker_loop import process_one_run
 
-    async with jobs_session() as db:
-        run_id = await process_one_run(db)
+    # Handled like `_expiry_job` and `_embedding_job`, and newly load-bearing:
+    # `worker_loop._write_one` raises `DiscardedWriteError` where the same
+    # condition used to pass silently, so a run this worker cannot write — a
+    # legacy run missing one of its `research_source` rows, for instance — now
+    # throws on every claim instead of quietly finishing. Unhandled, that takes
+    # the tick out with no log line.
+    #
+    # **This bounds the blast radius; it does not stop the loop.** Such a run
+    # stays `running`, is reclaimed once it goes stale, and is attempted again —
+    # re-crawling the customer's site each cycle. Giving a permanently
+    # unwritable run a terminal state is the actual fix and is a decision about
+    # what that state means, so it is named here rather than guessed at.
+    try:
+        async with jobs_session() as db:
+            run_id = await process_one_run(db)
+    except Exception as exc:
+        log.warning("research.run_failed", error=type(exc).__name__)
+        return
     if run_id is not None:
         log.info("research.run_finished", run_id=str(run_id))
 

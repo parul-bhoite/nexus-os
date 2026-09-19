@@ -19,12 +19,12 @@ import pytest
 import sqlalchemy as sa
 
 from app.config import get_settings
-from app.db import get_engine, get_sessionmaker
+from app.db import get_engine, get_sessionmaker, jobs_session
 from app.domain.research import SourceKind, SourceState
 from app.research import worker_loop
 from app.research.runner import CrawlOutcome
 from app.retrieval.scoped import apply_workspace_scope
-from tests.dburl import async_database_url
+from tests.dburl import async_database_url, database_url, jobs_database_url
 
 ASYNC_DB_URL = async_database_url()
 requires_db = pytest.mark.requires_db
@@ -310,3 +310,254 @@ async def test_the_background_crawl_stores_page_signals(
                 await db.execute(sa.text(statement), {"w": str(ws)})
             await db.execute(sa.text("DELETE FROM app_user WHERE id = :u"), {"u": str(user)})
             await db.commit()
+
+
+@requires_db
+async def test_a_write_that_matches_no_rows_is_refused_rather_than_ignored(
+    app_db: None,
+) -> None:
+    """A write that matches nothing raises instead of passing silently.
+
+    Three times in this file's history an UPDATE matched zero rows, raised
+    nothing, and left a run that could never finish with nothing in any log.
+    `_write_one` is the guard; this is the proof that it fires.
+
+    **Read what this does and does not cover.** It drives the *app-role*
+    session, where `research_source_workspace_isolation` is the only policy, so
+    a foreign workspace id produces zero rows. On the deployed path
+    `_research_job` passes a `jobs_session()`, and migration 0021 gives
+    `nexus_jobs` `research_source_worker_write USING (true)` — permissive
+    policies OR, so a lost GUC there still matches the row and this guard stays
+    silent. What the guard catches on *every* path is a **missing row**: a run
+    whose `research_source` was never inserted, or was deleted under it.
+    Closing the scope-loss half needs 0021's worker policies narrowed to the
+    GUC, which is tracked as finding #26 and wants its own ADR.
+    """
+    async with get_sessionmaker()() as db:
+        user, tenant, ws = uuid4(), uuid4(), uuid4()
+        await db.execute(
+            sa.text("INSERT INTO app_user (id, email) VALUES (:i,:e)"),
+            {"i": str(user), "e": f"dw-{user.hex[:8]}@example.com"},
+        )
+        await db.execute(
+            sa.text("INSERT INTO tenant (id, name) VALUES (:i,'T')"), {"i": str(tenant)}
+        )
+        await apply_workspace_scope(db, ws)
+        await db.execute(
+            sa.text(
+                "INSERT INTO workspace (id, workspace_id, tenant_id, name, domain,"
+                " website_url, domain_verified_at)"
+                " VALUES (:i,:i,:t,'W',:d,:u, now())"
+            ),
+            {
+                "i": str(ws),
+                "t": str(tenant),
+                "d": f"dw-{ws.hex[:8]}.om",
+                "u": f"https://dw-{ws.hex[:8]}.om",
+            },
+        )
+        run = uuid4()
+        await db.execute(
+            sa.text(
+                "INSERT INTO research_run (id, workspace_id, state, requested_by_user_id)"
+                " VALUES (:i,:w,'running',:u)"
+            ),
+            {"i": str(run), "w": str(ws), "u": str(user)},
+        )
+        await db.execute(
+            sa.text(
+                "INSERT INTO research_source (workspace_id, run_id, kind, state)"
+                " VALUES (:w,:r,:k,'running')"
+            ),
+            {"w": str(ws), "r": str(run), "k": SourceKind.CRAWL.value},
+        )
+        await db.commit()
+
+        try:
+            # The run belongs to `ws`; this records it as some other workspace,
+            # so RLS matches nothing — the shape a commit-ended GUC produces.
+            with pytest.raises(worker_loop.DiscardedWriteError, match="matched 0"):
+                await worker_loop._record(
+                    db,
+                    workspace_id=uuid4(),
+                    run_id=run,
+                    kind=SourceKind.CRAWL,
+                    outcome=CrawlOutcome(state=SourceState.SKIPPED),
+                )
+
+            # And the source is untouched, which is the point: the write was
+            # discarded, so the only honest states are "raised" and "unchanged".
+            await db.rollback()
+            await apply_workspace_scope(db, ws)
+            state = (
+                await db.execute(
+                    sa.text("SELECT state FROM research_source WHERE run_id = :r"),
+                    {"r": str(run)},
+                )
+            ).scalar_one()
+            assert state == "running"
+        finally:
+            await apply_workspace_scope(db, ws)
+            for statement in (
+                "DELETE FROM research_source WHERE workspace_id = :w",
+                "DELETE FROM research_run WHERE workspace_id = :w",
+                "DELETE FROM workspace WHERE id = :w",
+            ):
+                await db.execute(sa.text(statement), {"w": str(ws)})
+            await db.execute(sa.text("DELETE FROM app_user WHERE id = :u"), {"u": str(user)})
+            await db.commit()
+
+
+@requires_db
+async def test_the_guard_fires_on_the_role_the_worker_actually_uses(app_db: None) -> None:
+    """The half that was inert until migration 0039.
+
+    `_research_job` passes a `jobs_session()`, so every guarded write runs as
+    **`nexus_jobs`** in production. Migration 0021 had given that role
+    `research_source_worker_write USING (true)`, and permissive policies OR — so
+    the workspace GUC could not reduce a rowcount to zero and
+    `DiscardedWriteError` could never be raised on the deployed path. The guard
+    fired only in tests, which drive the app role, which is the most misleading
+    place for a guard to work.
+
+    0039 dropped those two blanket policies, leaving the PUBLIC
+    `research_source_workspace_isolation` to govern every role. This asserts the
+    consequence on the role that matters, so re-widening the policy fails here
+    rather than silently restoring the blind spot.
+    """
+    assert jobs_database_url() is not None, (
+        "NEXUS_JOBS_DATABASE_URL is not configured — the maintenance role is "
+        "not optional since ADR 0018"
+    )
+
+    async with get_sessionmaker()() as setup:
+        user, tenant, ws = uuid4(), uuid4(), uuid4()
+        await setup.execute(
+            sa.text("INSERT INTO app_user (id, email) VALUES (:i,:e)"),
+            {"i": str(user), "e": f"jr-{user.hex[:8]}@example.com"},
+        )
+        await setup.execute(
+            sa.text("INSERT INTO tenant (id, name) VALUES (:i,'T')"), {"i": str(tenant)}
+        )
+        await apply_workspace_scope(setup, ws)
+        await setup.execute(
+            sa.text(
+                "INSERT INTO workspace (id, workspace_id, tenant_id, name, domain,"
+                " website_url, domain_verified_at)"
+                " VALUES (:i,:i,:t,'W',:d,:u, now())"
+            ),
+            {
+                "i": str(ws),
+                "t": str(tenant),
+                "d": f"jr-{ws.hex[:8]}.om",
+                "u": f"https://jr-{ws.hex[:8]}.om",
+            },
+        )
+        run = uuid4()
+        await setup.execute(
+            sa.text(
+                "INSERT INTO research_run (id, workspace_id, state, requested_by_user_id)"
+                " VALUES (:i,:w,'running',:u)"
+            ),
+            {"i": str(run), "w": str(ws), "u": str(user)},
+        )
+        await setup.execute(
+            sa.text(
+                "INSERT INTO research_source (workspace_id, run_id, kind, state)"
+                " VALUES (:w,:r,:k,'running')"
+            ),
+            {"w": str(ws), "r": str(run), "k": SourceKind.CRAWL.value},
+        )
+        await setup.commit()
+
+        # The application's own factory, not an engine built here: this is the
+        # exact session `_research_job` hands to `process_one_run`, so the test
+        # cannot pass by connecting differently from production.
+        async with jobs_session() as jobs:
+            # As `nexus_jobs`, scoped to the wrong workspace — the state a lost
+            # GUC leaves behind. Before 0039 this matched the row anyway and
+            # returned quietly.
+            with pytest.raises(worker_loop.DiscardedWriteError, match="matched 0"):
+                await worker_loop._record(
+                    jobs,
+                    workspace_id=uuid4(),
+                    run_id=run,
+                    kind=SourceKind.CRAWL,
+                    outcome=CrawlOutcome(state=SourceState.SKIPPED),
+                )
+            await jobs.rollback()
+
+            # And the worker can still do its real job on this role: the same
+            # write, correctly scoped, succeeds. Without this half, dropping the
+            # grant entirely would also pass.
+            await worker_loop._record(
+                jobs,
+                workspace_id=ws,
+                run_id=run,
+                kind=SourceKind.CRAWL,
+                outcome=CrawlOutcome(state=SourceState.SKIPPED),
+            )
+            await jobs.commit()
+
+        await apply_workspace_scope(setup, ws)
+        state = (
+            await setup.execute(
+                sa.text("SELECT state FROM research_source WHERE run_id = :r"), {"r": str(run)}
+            )
+        ).scalar_one()
+        assert state == "skipped", "the correctly scoped write must still land"
+
+        for statement in (
+            "DELETE FROM research_source WHERE workspace_id = :w",
+            "DELETE FROM research_run WHERE workspace_id = :w",
+            "DELETE FROM workspace WHERE id = :w",
+        ):
+            await setup.execute(sa.text(statement), {"w": str(ws)})
+        await setup.execute(sa.text("DELETE FROM app_user WHERE id = :u"), {"u": str(user)})
+        await setup.commit()
+
+
+@requires_db
+def test_the_worker_holds_no_blanket_policy_on_research_source() -> None:
+    """The shape ADR 0050 chose, pinned against a quiet re-widening.
+
+    A `USING (true)` policy for `nexus_jobs` beside the GUC-keyed isolation
+    policy ORs with it, which is how the guard above came to be inert on the
+    deployed path for a day. The privilege is a separate concern and must
+    survive: revoking the GRANT would also make this pass, and would break the
+    worker instead.
+    """
+    import sqlalchemy as sync_sa
+
+    url = database_url()
+    assert url is not None
+    engine = sync_sa.create_engine(url, poolclass=sync_sa.pool.NullPool)
+    try:
+        with engine.connect() as c:
+            policies = {
+                (r.polname, r.using_expr)
+                for r in c.execute(
+                    sync_sa.text(
+                        "SELECT polname, pg_get_expr(polqual, polrelid) AS using_expr"
+                        "  FROM pg_policy p JOIN pg_class k ON k.oid = p.polrelid"
+                        " WHERE k.relname = 'research_source'"
+                    )
+                )
+            }
+            assert not [p for p, expr in policies if (expr or "").strip() == "true"], (
+                f"a blanket policy is back on research_source: {sorted(policies)}"
+            )
+
+            granted = set(
+                c.execute(
+                    sync_sa.text(
+                        "SELECT privilege_type FROM information_schema.role_table_grants"
+                        " WHERE grantee = 'nexus_jobs' AND table_name = 'research_source'"
+                    )
+                ).scalars()
+            )
+            assert {"SELECT", "UPDATE"} <= granted, (
+                f"the worker lost a privilege it needs: has {sorted(granted)}"
+            )
+    finally:
+        engine.dispose()
