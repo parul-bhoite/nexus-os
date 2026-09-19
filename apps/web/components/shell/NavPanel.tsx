@@ -90,6 +90,12 @@ export function groupsFor(all: Dashboards | null): NavGroup[] {
       label: 'Your data',
       items: [
         { href: '/work', label: 'Your work', hint: 'Projects and tasks' },
+        // Listed unconditionally, with no count. A badge would need the queue
+        // fetched on every page to render the nav, and an *absent* badge would
+        // read as "nothing waiting" on the pages where that fetch had not
+        // finished — which is the one thing a safety queue must never say
+        // wrongly.
+        { href: '/review-queue', label: 'Waiting for review', hint: 'Withheld until you decide' },
         { href: '/onboarding', label: 'Workspace setup' },
       ],
     },

@@ -66,7 +66,18 @@ describe('what the panel lists', () => {
     // '/work' joined the list when doc/15 S10.1 built it — app/work/page.tsx.
     // This set is maintained by hand, so adding to it is a claim, not a fix:
     // check the page actually renders before widening it.
-    const built = new Set(['/dashboard', '/work', '/onboarding', '/settings', '/account'])
+    // '/review-queue' joined when H4 built it — app/review-queue/page.tsx. The
+    // claim was checked the way this comment asks: the page was loaded against
+    // a running stack in both states, and a decision made through it persisted
+    // as `approved`/`L3` with a reviewer and timestamp.
+    const built = new Set([
+      '/dashboard',
+      '/work',
+      '/review-queue',
+      '/onboarding',
+      '/settings',
+      '/account',
+    ])
     const hrefs = groupsFor(dashboards([]))
       .flatMap((group) => group.items)
       .map((item) => item.href)

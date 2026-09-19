@@ -43,11 +43,16 @@ takes. A queue nobody can work through is not a safety control; it is a pile,
 and the realistic human response to a pile is bulk-approval without reading —
 which is worse than the automation it was standing in for.
 
-**And the queue cannot be worked at all today.** `GET /review` exists; nothing
-in `apps/web` calls it — no page, no component, no client function. That is
-H4, and it means withheld content is not "awaiting review" so much as
-stranded. Option A therefore does not preserve a human check; it preserves an
-empty product.
+**And the queue cannot be worked at all today.** `GET /documents/review-queue`
+and `POST /documents/review-queue/{chunk_id}` both exist and are complete,
+including the `may_reach_scope` check that stops the queue becoming a
+privilege-escalation route. Nothing in `apps/web` calls either — no page, no
+component, no client function. That is H4, and it means withheld content is not
+"awaiting review" so much as stranded. Option A therefore does not preserve a
+human check; it preserves an empty product.
+
+*(Corrected: an earlier draft cited `GET /review` here. That is a different
+endpoint — the Company Brain **facts** gate — and not the chunk queue.)*
 
 ### B. Wire `propose` in, unchanged
 
@@ -113,6 +118,10 @@ it.
   exist. **H4 is now the binding constraint on this feature's value, ahead of
   D13** — a classifier that withholds correctly is only half a system while
   nothing can act on what it withheld.
+  *(Resolved the same day: `/review-queue` was built, so withheld chunks can
+  now be placed or rejected. The paragraph above is kept because the reasoning
+  it corrects was published, and because the ordering lesson stands — the
+  screen was the binding constraint, not the model.)*
 - A classifier mistake is now possible where previously only a human's was.
   Bounded to one department, and `classified_by` records `rules-v1` so every
   decision this version made can be found and re-reviewed.
