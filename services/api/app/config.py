@@ -405,6 +405,17 @@ class Settings(BaseSettings):
     crawl_timeout_seconds: int = 15
     crawl_max_redirects: int = 5
 
+    # ── Trusted proxies (ADR 0046, `doc/18` G6) ───────────────
+    # Restored — the anonymous scanner is an anonymous crawl again, and needs
+    # the address to key its rate limits by. `X-Forwarded-For` is
+    # attacker-controlled by default: anyone can send it, and believing it
+    # lets one client mint unlimited rate-limit identities. It is honoured
+    # *only* when the direct peer is listed here. Empty means trust nothing
+    # and use the direct peer — the safe default, at the cost of every
+    # visitor behind a proxy sharing one bucket. A deployment behind one
+    # (the Next.js BFF, in production) must set `NEXUS_TRUSTED_PROXY_IPS`.
+    trusted_proxy_ips: str = ""
+
     # Secrets the application cannot work without once it is deployed.
     # `anthropic_api_key` is deliberately absent: an empty key is a supported
     # operating state (ADR 0011), and listing it here would turn "no AI yet"
@@ -513,6 +524,10 @@ class Settings(BaseSettings):
     @property
     def disabled_ai_skills_set(self) -> frozenset[str]:
         return frozenset(s.strip() for s in self.disabled_ai_skills.split(",") if s.strip())
+
+    @property
+    def trusted_proxies(self) -> frozenset[str]:
+        return frozenset(p.strip() for p in self.trusted_proxy_ips.split(",") if p.strip())
 
     def require(self, name: str) -> str:
         """Fetch a secret, failing loudly if it was never configured.

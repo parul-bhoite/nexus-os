@@ -84,7 +84,7 @@ const UPLOAD_TIMEOUT_MS = 120_000
  * `X-Forwarded-For` and speak as another address, which the API trusts from this
  * hop.
  */
-function upstreamHeaders(request: Request, json: boolean): Headers {
+function upstreamHeaders(request: Request, json: boolean, extra?: Record<string, string>): Headers {
   const headers = new Headers()
   if (json) headers.set('Content-Type', 'application/json')
 
@@ -93,6 +93,13 @@ function upstreamHeaders(request: Request, json: boolean): Headers {
 
   const csrf = request.headers.get('x-csrf-token')
   if (csrf) headers.set('X-CSRF-Token', csrf)
+
+  // Server-computed, never taken from the browser's own headers — a route
+  // that passes something here (e.g. `clientAddress(request)`) is trusted to
+  // have derived it the same way, not to be relaying whatever the client sent.
+  if (extra) {
+    for (const [key, value] of Object.entries(extra)) headers.set(key, value)
+  }
 
   return headers
 }
@@ -134,11 +141,21 @@ export type ProxyOptions = {
    * the browser reports the API as unreachable when it is simply still working.
    */
   timeoutMs?: number
+  /**
+   * Extra headers this route computed itself, forwarded as-is.
+   *
+   * For `clientAddress(request)` — never for anything read directly off the
+   * browser's own request, which is exactly the mistake
+   * `AUDIT-FINDINGS.md`'s bypassable rate limit was. `upstreamHeaders` sets
+   * these after `Cookie`/`X-CSRF-Token`, so a route cannot use this to
+   * override either.
+   */
+  headers?: Record<string, string>
 }
 
 export async function proxyToApi(
   request: Request,
-  { path, method, body, unavailable, timeoutMs }: ProxyOptions,
+  { path, method, body, unavailable, timeoutMs, headers: extraHeaders }: ProxyOptions,
 ): Promise<NextResponse> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs ?? TIMEOUT_MS)
@@ -146,7 +163,7 @@ export async function proxyToApi(
   try {
     const upstream = await fetch(`${API_BASE}${path}`, {
       method,
-      headers: upstreamHeaders(request, body !== undefined),
+      headers: upstreamHeaders(request, body !== undefined, extraHeaders),
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: controller.signal,
       cache: 'no-store',

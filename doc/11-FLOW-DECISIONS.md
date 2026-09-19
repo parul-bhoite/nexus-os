@@ -12,7 +12,7 @@ questions you are good") · **⚠ needs one line of clarification**
 
 | # | Decision | Notes |
 |---|---|---|
-| 1 | ★ **No URL capture on the landing page.** | The pre-signup Preview audit is **removed from the product.** The landing page becomes marketing with one action: sign up. The crawl now starts at stage 2, when the company's website URL is given. **D18 resolved.** See §3.1 for exactly what this deletes and what survives |
+| 1 | ★ ~~**No URL capture on the landing page.**~~ **Partially superseded by ADR 0046** | Was: the pre-signup Preview audit is removed from the product; the crawl starts at stage 2. **D18 resolved.** ADR 0046 reverses the *crawl* half narrowly — one anonymous scan of the domain a visitor types, from `app/scan/`, reaching nothing metered or credentialed. `POST /preview`, `preview_session` and the hero URL form stay deleted. See §3.1's banner and §3.1a |
 | 2 | ★ **No plan or pricing selection before signup.** | A company gets a trial for a fixed period; **functionality during the trial is identical to paid.** At expiry a renewal step appears. Renewal and billing are **not built now** — the workspace carries a trial-expiry date and nothing gates on it yet. Treat the plan as "active" for MVP |
 | 3 | ★ **Privacy and Terms must exist before public signup.** | Both pages, and the footer links restored. Not required for a design partner behind a link |
 | 4 | ★ **Trim the landing page to the seven pillars — and keep a note of the 35 capabilities.** | The full list is preserved in §4 below so nothing is lost when `lib/content.ts` is trimmed |
@@ -122,6 +122,12 @@ before Phase 2.
 
 ### 3.1 Removing the landing URL capture — what dies, what lives
 
+> ⚠ **Partially superseded on 18 September 2026 by ADR 0046 and ADR 0048** — a
+> narrow anonymous scan is built after all. Q1's *crawl* half is reversed; its
+> *endpoint and table* half is not. Read §3.1a below before acting on anything in
+> this section, and read ADR 0046 before either. The deletion table stays
+> accurate: none of the deleted files come back under their old names.
+
 **Deleted from the product:**
 
 | What | Where |
@@ -148,6 +154,28 @@ The strongest asset in the codebase is kept; only its entry point changes.
 minute seven. With it gone, **the review gate at ~minute twenty is the only
 first-value moment.** That raises the stakes on stage 7 finishing quickly, which is
 why the crawl starts at stage 2 and documents parse as they upload.
+
+### 3.1a What ADR 0046 brings back, and what it does not
+
+*Added 18 September 2026.* The paragraph above is the cost this reverses. ADR 0045
+Phase 1 (the Instant Gap Analysis scanner) needs a pre-signup scan, and rather
+than restoring the retired product, ADR 0046/0047/0048 re-derive a much narrower
+one. The build sequence is `doc/18-GAP-ANALYSIS-BUILD-PLAN.md`.
+
+| | Back | Still gone |
+|---|---|---|
+| **Route** | `POST/GET/DELETE /public/scans` | `POST /preview` — and `test_the_preview_endpoint_is_gone` still asserts it 404s |
+| **Module** | `app/scan/` — its own budget, its own allowlist boundary test | nothing under `app/routes/preview.py` |
+| **Fetch** | one page, SSRF-guarded, via `research/crawler.fetch_page` | the 20-page D20 research run on an anonymous path |
+| **Rate limits** | per-IP, per-domain and a global daily ceiling, re-keyed for the scan | the per-workspace bucket is unchanged and still serves research |
+| **Address trust** | `client-address.ts` and `trusted_proxy_ips`, derived from `request.ip` / `x-real-ip` only | trusting the browser's own `X-Forwarded-For` — see `AUDIT-FINDINGS.md` |
+| **Storage** | `public_scan` — computed check results, 7 days, deletable (ADR 0048) | `preview_session`, `preview_ttl_hours`, and any storage of HTML, page text or scraped addresses |
+| **Content** | the top three failed checks from `calculators/audit.py`'s 23 (ADR 0047) | any metered source. D2 stays locked; no DataForSEO, Instagram or Meta Ads |
+
+**The boundary rule changed shape, not strength.** ADR 0016's *"no anonymous route
+may reach `app.research`"* becomes *"no anonymous route may reach a metered or
+credentialed fetch"* — which now also catches `app/ai/` and `app/connectors/`,
+which it never did — plus a second, tighter allowlist test pinning `app/scan/`.
 
 ### 3.2 One person, one company — the M:N reversal
 
@@ -291,7 +319,7 @@ renewal step in Q2 is built.
 | D6 — six directors for non-executives | ✅ Superseded by Q63 — directors follow department selection, and Chief of Staff stays Owner/Executive only |
 | D7 — Finance | ✅ **Manual entry, visibly labelled self-reported** |
 | D8 — capability count | ✅ **Derived from a capability registry** |
-| D9 — preview TTL and third-party deletion | ✅ **Void** — no preview data is retained |
+| D9 — preview TTL and third-party deletion | ~~✅ **Void**~~ **Reopened and answered by ADR 0048** — `public_scan` retains computed check results (never HTML, page text or scraped addresses) for **7 days**, domain-keyed, with an unauthenticated deletion control. Void was correct only while nothing was retained |
 | D10 — which CRM | ⚠ **Zoho, provisional** — confirm with the first design partner |
 | D11 — non-Claude model | ✅ Claude only |
 | D12 — deals-lite | Out of MVP |
@@ -300,7 +328,7 @@ renewal step in Q2 is built.
 | D15 — member onboarding | ✅ Per-department, for invited members |
 | D16 — who may administer | ✅ Widened to Department Managers, own department only |
 | D17 — doc 08's precedence | ✅ **Doc 08 outranks doc 06 §2.5** on the question set and the department model |
-| D18 — pre-signup audit | ✅ **Removed** |
+| D18 — pre-signup audit | ~~✅ **Removed**~~ **Partially superseded by ADR 0046** — the *product* stays removed; a narrow anonymous scan (`app/scan/`, `/public/scans`, crawl-only per ADR 0047) is built for `doc/17` Phase 1. See Q1 and §3.1a |
 | D19 — where verification gates | ✅ **Exclusive claim, invitations, company-data tools** |
 | D20 — research budget | ✅ 20 pages, 5-minute soft cap, hard stop at 10 |
 | D21 — department selection | ✅ **Restricts which directors exist** |

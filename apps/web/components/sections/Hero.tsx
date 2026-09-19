@@ -206,6 +206,19 @@ export function Hero() {
               <IconCheck className="mt-0.5 h-4 w-4 shrink-0 text-steel-500" />
               {hero.note}
             </p>
+
+            {/* G10, ADR 0046. Deliberately `quiet` — sign-up stays the one
+                primary action per Q1/D18's own reasoning above; this is a
+                second door for a visitor not ready to create an account yet,
+                not a second competing call to action. Not the retired hero
+                URL form: that fed the unauthenticated Preview audit directly
+                on this page; this is a link to `/scan`, its own screen with
+                its own narrow, rate-limited, robots-respecting crawl. */}
+            <div style={{ animationDelay: '1.1s' }} className="animate-fade-in mt-3">
+              <Button href="/scan" variant="quiet" size="sm">
+                Or see 3 real gaps on your own site first
+              </Button>
+            </div>
           </div>
 
           {/* ── Illustration ─────────────────────────────────── */}

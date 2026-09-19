@@ -51,6 +51,22 @@ D:\Projects\NEXUS_OS
 └── doc/                           01–08 specs · adr/ · archive/ · exports/ · prototype/ · source/
 ```
 
+> ⚠ **Stale, 18 September 2026.** This tree is the 25 August shape and has not been
+> reconciled since. Read it as history, not as the working tree: `connectors/` no
+> longer holds `ssrf · crawler · extract` (they moved to `app/research/` in P2) and
+> `routes/` no longer holds `preview`. `app/` also now carries `grounding/`,
+> `ops/`-facing calculators, `connectors/` credentials and OAuth, and several route
+> modules not listed. Reconciling the whole block is its own piece of work and is
+> not done here.
+>
+> **One addition made in place, because `doc/18` depends on it being findable:**
+>
+> ```
+> │   │   ├── scan/          budget · robots · engine · store   ← ADR 0046 ○ not built
+> │   │   │                  the only package permitted to fetch from an
+> │   │   │                  anonymous route. Bounded by tests/test_scan_boundary.py
+> ```
+
 **Target additions**, per doc 07 §4, none of which exist yet:
 `services/api/app/grounding/` (context assembler, schema validation, generation
 logging) · `services/api/app/agents/` (agent definitions, MCP tool servers) ·
@@ -231,6 +247,17 @@ Linear, single head, no branches. `0001 → 0002 → … → 0009`.
 | 0008 | `workspace_own_memberships` SELECT policy — login can find your workspaces |
 | 0009 | `invitation_by_token_hash` SELECT policy — accept by token without a workspace |
 
+> ⚠ **Stale, 18 September 2026.** The chain above stops at `0009`; **head is
+> `0036`** and Neon is at it. `0011` dropped `preview_session`; `0028` added
+> `page_signals`; `0030`–`0036` added connection credentials, `crm_deal` and the
+> seven `ops_*` tables. `CLAUDE.md`'s Neon section is the current record. The row
+> below is added because `doc/18` G2 writes it and it must not be planned against
+> a head of `0009`.
+>
+> | Rev | Adds |
+> |---|---|
+> | **0037** | `public_scan` — **○ not built**, `doc/18` G2, ADR 0048. Domain-keyed pre-signup scan results, 7-day TTL, soft-deletable. **No RLS, and no `workspace_id` to write one against** — see §4.7 |
+
 `migrations/env.py` sets `target_metadata = None`, so **autogenerate drift
 detection does not exist**. CI runs no migration at all. Those two facts together
 are why §4.4's constraint violations reached `main`.
@@ -260,6 +287,14 @@ alone makes login impossible:
 (pre-account). **`domain_claim` is the problem case** — it carries `workspace_id`
 and `disputes_workspace_id`, is the most-queried table in the codebase, and has no
 policy. Tracked as `H7`.
+
+> *18 September 2026:* `preview_session` was dropped by migration `0011`.
+> **`public_scan` (`0037`, ○ not built) joins this list and is a different case
+> from `domain_claim`:** it has no `workspace_id` at all, so the isolation
+> predicate cannot be written for it rather than having been forgotten. Its
+> protection is that exactly one module — `app/scan/store.py` — opens a connection
+> for it. That is a convention, not a database guarantee, and it makes two tables
+> in that position. ADR 0048 names a third being proposed as its revisit trigger.
 
 ### 4.3 The two load-bearing tables
 
@@ -328,6 +363,52 @@ needs a statement timeout before it ships. Tracked as `C12`.
 The pooler branch matching on the literal `"-pooler"` is fragile: a PgBouncer at
 any other hostname keeps prepared-statement caching on and fails intermittently.
 
+### 4.7 `public_scan` — the tenantless table ○ — ADR 0048
+
+*Added 18 September 2026. Not built; `doc/18` G2 writes it as migration `0037`.*
+
+The first table holding data derived from the outside world that has **no tenant
+column**. That is not an oversight: the row is created before any account exists,
+which is the entire point of the surface it serves (§4.7 of the HLD).
+
+```
+public_scan
+  id             uuid        PK · gen_random_uuid()
+  domain         text        NOT NULL   lowercased host — the cache key
+  scanned_url    text        NOT NULL   the final URL after redirects
+  checks         jsonb       NOT NULL   Check[] — id · label · passed · weight · evidence
+  scores         jsonb       NOT NULL   per-category score / max_score
+  pages_read     integer     NOT NULL   1 today. Stored, never assumed
+  created_at     timestamptz NOT NULL   DEFAULT now()
+  expires_at     timestamptz NOT NULL   created_at + 7 days, written at insert
+  deleted_at     timestamptz NULL       visitor-requested erasure
+
+  ix_public_scan__domain_created  (domain, created_at DESC)
+  ix_public_scan__expires_at      (expires_at) WHERE deleted_at IS NULL
+```
+
+Four properties that are decisions rather than shape, each with its reason:
+
+- **`checks` holds the calculator's output and nothing else.** No HTML, no
+  `text_sample`, no `PageSignals` blob, no email address. This is
+  `page_signals.py`'s `SIGNALS_NOT_STORED` precedent applied to a table with
+  *weaker* protection than the one that set it — that table declines to store
+  scraped addresses for a workspace's own site, behind RLS, under a contract. A
+  test asserts the serialised payload contains no `@`.
+- **`expires_at` is written, not computed on read.** Shortening the TTL later must
+  not retroactively change what an already-stored row promised. Expiry is enforced
+  **in the read query**; the sweep (`jobs/expiry.py:expire_public_scans`) only
+  reclaims space, so a row past its date is never served whether or not the sweep
+  has run.
+- **No unique index on `domain`.** A partial unique cannot express "unexpired"
+  because `now()` is not immutable, and a plain unique would collide the first
+  time an expired row outlived the sweep. The freshest live row wins, found by
+  `(domain, created_at DESC)` with the expiry predicate.
+- **`deleted_at` is a soft delete on a table where soft deletes are otherwise a
+  tax.** It is here so a re-scan creates a new row rather than resurrecting one,
+  and so the sweep — not the request — does the hard delete. The filter is applied
+  in `store.py`, which is the only reader.
+
 ---
 
 ## 5. API contracts
@@ -341,7 +422,10 @@ every state-changing route that has a session.
 |---|---|---|
 | `GET` | `/health` | ● liveness, touches nothing |
 | `GET` | `/health/ready` | ● 5 probes: DB+pgvector (one query), storage write, LLM, embedder. 503 when a `required_now` check fails. Leaks no DSN |
-| `POST` | `/preview` | ● the most complete endpoint. SSRF validate → cache lookup → 3 rate-limit counters → pinned crawl → extract → `build_preview_audit` → persist. No `GET /preview/{id}` exists |
+| ~~`POST`~~ | ~~`/preview`~~ | **Deleted by P2** (`doc/11` Q1/D18, `doc/12` Phase 2). `tests/test_no_unauthenticated_crawl.py:test_the_preview_endpoint_is_gone` asserts it 404s, and ADR 0046 does **not** restore it. Row kept struck through rather than removed because the flow below at §6.1 still diagrams it |
+| `POST` | `/public/scans` | ○ not built — ADR 0046, `doc/18` G7. Rate limit → SSRF validate → cache lookup → one pinned fetch → extract → `build_preview_audit` → rank → persist. **201** crawled, **200** cached, **429** limited, **422** malformed or refused. §5.5 |
+| `GET` | `/public/scans/{id}` | ○ not built. **200**, or **404** for expired, deleted *and* unknown alike — one code for all three, so an id is not an oracle |
+| `DELETE` | `/public/scans/{id}` | ○ not built. **204**, idempotent, soft (`deleted_at`). Unauthenticated by design — ADR 0048 |
 | `POST` | `/auth/register` | ◐ creates the user; **sends no email** |
 | `POST` | `/auth/login` | ● mints a fresh session, sets `nexus_session` (HttpOnly) + `nexus_csrf` (readable). Auto-selects a workspace only when there is exactly one membership. **No rate limit** |
 | `POST` | `/auth/verify-email` | ○ reachable, but no token can exist |
@@ -395,11 +479,76 @@ routes, the review queue, `/auth/verify-email`.
 the browser's own header was forwarded verbatim and made the per-IP limit
 bypassable.
 
+> *18 September 2026:* `/api/preview` and `lib/client-address.ts` were deleted in
+> P2. `doc/18` G6/G8 restore the **address derivation** under
+> `/api/public/scans`, for the same reason and with the same rule —
+> `request.ip` / `x-real-ip` only — plus an acceptance test asserting that a
+> browser-supplied `X-Forwarded-For` lands in the *same* bucket as a request
+> without one. That assertion is what stops the restoration re-introducing the
+> defect above.
+>
+> **Two files, not one:** `app/api/public/scans/route.ts` and
+> `app/api/public/scans/[scanId]/route.ts`. App Router resolves a handler per
+> path segment, so a missing `route.ts` is a 404 that neither the Python suite
+> nor Vitest can see.
+
+### 5.5 The anonymous scan contract ○ — ADR 0046/0047/0048
+
+The only routes in the system serving a caller with no session and no cookie.
+`app/routes/scan.py` declares no session dependency, and says so in its docstring
+with the reason **CSRF does not apply**: nothing is set, nothing is read, and a
+cross-site POST achieves nothing the caller could not do directly.
+
+```
+POST /public/scans
+  request   { "url": "https://example.com" }
+  201       crawled now.  Location: /public/scans/{id}
+  200       served from a live cache row for this domain — no fetch was made
+  422       malformed URL, refused by the SSRF guard, not a web page, or robots-disallowed
+  429       Retry-After. One of three buckets: per-IP · per-domain · global daily
+
+  response  { id, domain, scanned_url, pages_read, measured_on, state,
+              gaps: [ { check_id, label, evidence, weight } ],   # 0..3
+              checks_passed, checks_total, points_held, points_total,
+              expires_at, cached }
+```
+
+Four things about that body, each load-bearing:
+
+- **`gaps` is 0 to 3 items, and 0 is a state rather than an empty list to render.**
+  `state` is `findings` / `all_held` / `refused`, mirroring `BriefState`'s three —
+  a scan that found nothing must not be mistakable for a scan that did not run
+  (I10).
+- **`label` is `Check.label` verbatim and `evidence` is `Check.evidence`.** Not
+  negated, not rewritten, and evidence is never advice. ADR 0029 settled this for
+  the brief and ADR 0047 binds this surface to the same rule; `doc/18` G3's
+  acceptance test asserts the two orderings are identical over the same checks.
+- **`pages_read` is sent, not assumed.** It is `1`. The UI renders what the API
+  sent rather than a hard-coded word.
+- **No total count, no score out of 100 as a headline.** The figure the reader
+  gets is *what failed and what it was worth* — the same posture as ADR 0033/0034.
+
+The 422 for an SSRF refusal carries **no reason**. `research/crawler.py` already
+makes this distinction — the reason is logged and not returned, because it
+confirms internal network shape to whoever supplied the URL — and it must survive
+onto this path, where the supplier is by definition a stranger.
+
 ---
 
 ## 6. Key sequences
 
-### 6.1 Preview audit — the one complete flow ●
+### 6.1 Preview audit — ~~the one complete flow ●~~ **retired, kept as history**
+
+> ⚠ **Corrected 18 September 2026.** This flow no longer exists. `POST /preview`,
+> `preview_session`, the 24-hour cache, the per-IP and per-domain buckets and
+> `clientAddress()` were all deleted in P2 (`doc/11` §3.1, `doc/12` Phase 2).
+>
+> **§6.5 is the flow that replaces it, and it is deliberately not the same one.**
+> Read the differences before building from either: one page instead of a full
+> audit crawl, seven days instead of twenty-four hours, computed check results
+> instead of `audit_json`, a deletion path, and three ranked gaps instead of three
+> category scores. The diagram below is kept because deleting it would leave §5.1's
+> struck-through row pointing at nothing — not because any of it is current.
 
 ```mermaid
 sequenceDiagram
@@ -517,6 +666,55 @@ sequenceDiagram
     PG-->>RT: rows the caller may see — RLS is the second net
     RT-->>R: typed inputs, or Locked(capability, source, role)
 ```
+
+### 6.5 The anonymous scan ○ — ADR 0046/0047/0048
+
+Replaces §6.1. The differences from it are the decisions, not the details.
+
+```mermaid
+sequenceDiagram
+    participant B as Browser (no session)
+    participant W as web /api/public/scans
+    participant A as API POST /public/scans
+    participant DB as Postgres
+    participant S as Target site
+
+    B->>W: { url }
+    W->>W: clientAddress() — request.ip or x-real-ip only
+    W->>A: POST + X-Forwarded-For
+    A->>DB: SCAN_PER_IP · SCAN_PER_DOMAIN · SCAN_GLOBAL_DAILY — atomic upsert
+    alt limited
+        A-->>B: 429 + Retry-After
+    else allowed
+        A->>DB: freshest public_scan for domain, expires_at > now(), deleted_at IS NULL
+        alt cache hit
+            DB-->>A: checks + scores
+            A-->>B: 200 cached — no fetch was made
+        else miss
+            A->>A: validate_url — scheme, IP class, port, literals
+            A->>S: GET /robots.txt   (doc/18 G5 — confirm)
+            A->>S: ONE page — resolve-then-pin, per-hop re-validation
+            Note over A,S: 1 page · 1 MB · 10 s · 3 hops.<br/>Not D20's 20-page research budget
+            A->>A: extract_signals → build_preview_audit → gaps.top(3)
+            Note over A: 23 checks. Labels verbatim, evidence never advice.<br/>0 failures is a state, never an empty list
+            A->>DB: INSERT public_scan — checks + scores only<br/>no HTML, no text, no addresses, no workspace_id
+            A-->>B: 201 + Location
+        end
+    end
+```
+
+| vs §6.1 | Preview (retired) | Scan (ADR 0046) |
+|---|---|---|
+| Fetch | an audit crawl | **one page**, capped separately from D20 |
+| Cache | `preview_session`, 24 h | `public_scan`, **7 days**, domain-keyed |
+| Stored | `audit_json` | **computed `Check` results only** — ADR 0048 |
+| Deletion | `delete_previews_for_domain`, no caller | `DELETE /public/scans/{id}`, on the screen |
+| Output | 3 category scores + 7 named unlocks | **3 ranked failed checks**, same order as the morning brief |
+| Guarded by | the endpoint's own tests | two structural tests — HLD §4.7 |
+
+The rate limit is consumed **before** the cache lookup, not after. A cache hit
+still costs a database round trip that a caller can drive in a loop, and checking
+the cache first would make the limit a limit on *fetching* rather than on *asking*.
 
 ---
 

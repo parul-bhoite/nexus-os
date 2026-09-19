@@ -255,6 +255,74 @@ what was removed.
   effect of sharing.
 - The morning brief is **generated per recipient**, never once and broadcast.
 
+### 4.7 The narrow anonymous surface ○ — ADR 0046
+
+*Added 18 September 2026.* Everything above §4.6 describes callers who have a
+`ScopedSession`. There is now one surface that has none, and it is drawn here
+rather than left implicit, because the whole value of §4.1–§4.6 is that a reader
+can tell from this document what may reach what.
+
+**One module, `app/scan/`, may perform a server-side fetch from a route with no
+session** — the pre-signup Instant Gap Analysis scan (`doc/17` Phase 1,
+`doc/18`). It fetches **one page** of a domain a visitor typed, scores it with
+`calculators/audit.py`, and shows the three highest-cost failed checks.
+
+This is a deliberate, partial reversal of `doc/11` Q1/D18, which had removed the
+pre-signup audit from the product. `POST /preview`, `preview_session` and the hero
+URL form stay deleted; what comes back is the crawl, narrowed.
+
+**The rule that replaced the old one.** ADR 0016 forbade any anonymous route from
+reaching `app.research` at all. That rule named the package that was dangerous in
+2026 rather than the property that makes anything dangerous, and the two have since
+diverged — `app/connectors/` now holds provider credentials (ADR 0032) and
+`app/ai/` a metered key, and neither was covered. The rule is now:
+
+> **No anonymous route may reach a metered or credentialed fetch.**
+> Forbidden at any import depth: `app.connectors.*` (except `rate_limit`),
+> `app.ai.*`, `app.embeddings.*`, `app.retrieval.*` — it takes a `ScopedSession`,
+> so an anonymous route reaching it is a tenancy failure whatever it costs — and
+> `app.research.runner` / `app.research.worker_loop`, the budgeted 20-page run
+> that belongs to a workspace.
+
+Broader than the old rule in the direction that matters, and strictly weaker about
+crawling, which was the old rule's subject. **Two tests, because of that trade:**
+
+| Test | Asserts |
+|---|---|
+| `tests/test_no_unauthenticated_crawl.py` | the rule above, over every route the app serves, by `ast` walk |
+| `tests/test_scan_boundary.py` | an **allowlist** for `app.scan.*` — it may import the SSRF guard, the fetcher, the extractor, the calculators, `page_signals`, config, logging and the rate limiter, and nothing else. Plus: exactly one anonymous route module may reach the crawler, and it is `app.routes.scan`, by name |
+
+An allowlist rather than a denylist for the second, because it fails on things
+nobody thought of. The general rule catches the mistake ADR 0016 was written for;
+the allowlist catches the mistake this decision creates the room for.
+
+**What crosses the boundary in each direction.**
+
+| Direction | Carries | Never carries |
+|---|---|---|
+| In | a URL the visitor typed | a session, a cookie, a tenant id, an email |
+| Out (to the site) | one GET, SSRF-validated at every redirect hop, capped at 1 page / 1 MB / 10 s / 3 hops | anything authenticated, anything metered |
+| Out (to storage) | computed `Check` results and category totals, domain-keyed, 7 days (ADR 0048) | HTML, page text, scraped addresses, a `workspace_id` |
+| Out (to the visitor) | up to three failed checks, in the calculator's own words | anything the calculator did not compute (ADR 0047) |
+
+**Three things this surface deliberately does not have**, each because the rest of
+the trust model depends on them being scarce:
+
+- **No tenant.** `public_scan` has no `workspace_id`, so no RLS policy can be
+  written for it. It is protected by being reachable through exactly one named
+  module rather than by the database — a convention, and the second table in the
+  system in that position after `domain_claim` (tracked as `H7`).
+- **No identity.** No cookie is set and none is read, which is also why CSRF does
+  not apply: a cross-site POST here achieves nothing the caller could not do
+  directly.
+- **No second module.** Two modules with anonymous fetch is not "narrow"; ADR 0046's
+  first revisit trigger is a second one being proposed.
+
+The residual risk, stated because there is no mitigation for it: a caller rotating
+addresses across many target domains stays under every per-key rate limit while our
+user agent touches many third-party sites. The global daily ceiling bounds the load;
+nothing bounds the reputational exposure.
+
 ---
 
 ## 5. The untrusted-content boundary (I7)
@@ -475,6 +543,13 @@ production shape survives the local one:
 | 0010 | All seven directors get a dashboard | Six have real content with nothing connected; Finance is the exception |
 | 0011 | **The language model is optional** | No key is a supported state; `anthropic_api_key` bypasses `require()` |
 | 0012 | One HNSW index with `iterative_scan` | Plain HNSW gives **5% recall** at Contributor selectivity; `ef_search` does not fix it. **Not yet set in any application query** |
+| 0016 | No server-side fetch without a session | **Narrowed by 0046** — the rule is now *metered or credentialed*, not *`app.research`* |
+| 0046 | **A narrow anonymous crawl surface** | §4.7. Partially supersedes `doc/11` Q1/D18. One module may fetch anonymously; two tests bound it |
+| 0047 | Pre-signup gaps come from the crawl only | The three gaps are the top failed checks of `calculators/audit.py`'s 23. No DataForSEO, no Meta, no new vendor — and a weaker hook, accepted |
+| 0048 | Seven-day domain-keyed scan retention | Reopens `doc/11` D9. `public_scan` holds computed check results only: no tenant, no RLS, no page content |
+
+*Rows 0013–0045 are not in this table; it has never been complete. `doc/adr/` is
+the record.*
 
 ---
 

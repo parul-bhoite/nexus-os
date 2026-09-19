@@ -106,6 +106,30 @@ REGISTER_PER_IP = Limit("register_ip", max_count=5, window=timedelta(hours=1))
 CHECK_PER_USER = Limit("domaincheck_user", max_count=30, window=timedelta(hours=1))
 CHECK_PER_DOMAIN = Limit("domaincheck_domain", max_count=60, window=timedelta(hours=24))
 
+# ── The anonymous scanner (ADR 0046, `doc/18` G6) ──────────────
+#
+# `app/scan/` is the one anonymous surface permitted a server-side fetch, and
+# these are the three buckets that bound it — the same shape the retired
+# preview audit used (`app/routes/preview.py`, deleted at `dc287dd`), because
+# each still stops a different abuse and neither the shape nor the numbers
+# were wrong the first time:
+#
+# - **per IP** — one client hammering the endpoint.
+# - **per domain** — the reflected-DoS shape a per-IP limit does not stop,
+#   since each attacker address stays under its own allowance while the
+#   target absorbs requests from all of them combined.
+# - **global daily** — the ceiling. The only one that bounds the total load
+#   this scanner generates against the wider internet, whatever the other two
+#   allow.
+#
+# Values carried over unchanged from the retired preview audit — a scan reads
+# one page rather than up to twenty, so if anything these are generous, and a
+# number nobody has re-measured for the new shape should not pretend to be
+# freshly tuned.
+SCAN_PER_IP = Limit("scan_ip", max_count=20, window=timedelta(hours=1))
+SCAN_PER_DOMAIN = Limit("scan_domain", max_count=5, window=timedelta(hours=24))
+SCAN_GLOBAL_DAILY = Limit("scan_global", max_count=500, window=timedelta(days=1))
+
 # Doubling from a quarter of a second, capped. The cap matters: an uncapped
 # curve turns the twentieth attempt into a request that holds a worker for
 # minutes, so the backoff becomes a way to exhaust the server it protects.
