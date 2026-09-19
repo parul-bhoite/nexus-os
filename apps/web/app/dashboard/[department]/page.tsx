@@ -1,11 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { DirectorPage } from '@/components/dashboard/DirectorPage'
-
-export const metadata: Metadata = {
-  title: 'Dashboard',
-  robots: { index: false, follow: false },
-}
+import { departmentLabel } from '@/lib/onboarding-client'
 
 /** The seven department keys, mirroring `Department` in `app/domain/scopes.py`. */
 const DEPARTMENTS = [
@@ -20,6 +16,19 @@ const DEPARTMENTS = [
 
 export function generateStaticParams() {
   return DEPARTMENTS.map((department) => ({ department }))
+}
+
+// A static `metadata` literal here always read "Dashboard", whichever of the
+// seven directors was actually open — every tab in a founder's browser looked
+// the same. `params.department` is only known per-request, so it takes the
+// async form.
+export function generateMetadata({ params }: { params: { department: string } }): Metadata {
+  return {
+    title: DEPARTMENTS.includes(params.department as (typeof DEPARTMENTS)[number])
+      ? departmentLabel(params.department)
+      : 'Dashboard',
+    robots: { index: false, follow: false },
+  }
 }
 
 /**
