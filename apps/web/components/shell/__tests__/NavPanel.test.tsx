@@ -70,9 +70,12 @@ describe('what the panel lists', () => {
     // claim was checked the way this comment asks: the page was loaded against
     // a running stack in both states, and a decision made through it persisted
     // as `approved`/`L3` with a reviewer and timestamp.
+    // '/documents' joined when H4's upload half was built —
+    // app/documents/page.tsx, checked against a running stack the same way.
     const built = new Set([
       '/dashboard',
       '/work',
+      '/documents',
       '/review-queue',
       '/onboarding',
       '/settings',
