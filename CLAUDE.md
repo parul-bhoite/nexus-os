@@ -137,6 +137,7 @@ Windows machine again. Do not apply these on macOS.
 | `doc/13-DASHBOARD-DESIGN.md` | **The dashboard, settings and agents.** Sections, blocks, states, the day-one surface per department, the settings portal, the tool ledger, and every director as a skill. Shape only — `doc/12` still owns sequence |
 | `doc/14-DASHBOARD-BUILD-PLAN.md` | **The dashboard's own sequence.** The common surface, the left panel, the source map, and eleven steps each with an acceptance test. Narrows `doc/13`; `doc/12` still owns product-wide phase numbering |
 | `doc/15-OPS-LAYER-PLAN.md` | **The ops layer.** `doc/14` step 10, which blocks 23 capabilities. Seven record types, not one, and the first source that fails on adoption rather than on an API |
+| `doc/21-PEOPLE-LAYER-PLAN.md` | **The people layer.** The second `Origin.OURS` source, and the six `people.*` capabilities the roster cannot answer — *"the roster is who uses NEXUS, not who works here"*. Same shape as `doc/15`. **Plan only; blocked on D33 and D36** |
 | `ARCHITECTURE-HLD.md` | System shape, trust model, untrusted boundary, execution modes, deployment |
 | `ARCHITECTURE-LLD.md` | Modules, schema, RLS, endpoint contracts, sequences, failure paths |
 | `BUILD-STATUS.md` | Where the code actually stands, with the prioritised work list. Regenerated per phase |

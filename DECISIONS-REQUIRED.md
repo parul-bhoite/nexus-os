@@ -529,6 +529,46 @@ called something else in code (`domain/brief.py`, `BriefItem` — never `Morning
 
 ---
 
+
+### D33 — How does one `person` row hold fields at three scopes? *(blocks `doc/21` S11.1)*
+
+A name is L2, a salary is L4 (`sources.py` already promises *"salaries, which
+stay L4 whoever is asking"*), a passport scan is L4 or L5. Every other table in
+this product keeps scope **on the row**, where the predicate can see it.
+
+- **A. One table, column-level scope enforced in code.** A `SELECT *` anywhere
+  leaks a salary, and RLS cannot express it.
+- **B. `person` (L2) + `person_sensitive` (L4), one-to-one.** Scope is a
+  property of the row again, so the predicate is unchanged. Two reads, and a
+  join to get wrong.
+- **C. Per-field rows in an existing scoped store.** Most flexible, least
+  readable; a salary becomes a string.
+
+**Recommended: B**, because it keeps the guarantee where the rest of the product
+keeps it — in a policy, not in remembering which columns to select.
+
+### D34 — Is a passport or visa scan L4 or L5? *(blocks `doc/21` S11.3)*
+
+L4 is restricted-and-reachable-by-being-named; L5 is uploader-only. A visa scan
+is *about* an employee, *held by* the company and *read by* whoever handles
+renewals — L4 by the lattice's definition, L5 by instinct. **The tile that needs
+it only needs the expiry date**, never the scan, so this may be narrower than it
+looks: decide whether scans are stored at all before deciding their scope.
+
+### D35 — Does the people layer answer headcount? *(blocks `doc/21` S11.2 and every rate)*
+
+The roster's `cannot_answer` says no. Once `person` exists the honest answer
+becomes *"yes, for the people somebody recorded"* — which is the half-adoption
+problem wearing a number, and the reason accrued leave over eleven of forty
+staff is wrong in a document somebody signs. D29's confirmation mechanism
+(ADR 0035) is the candidate; this decides whether headcount is gated on it.
+
+### D36 — Who may record and edit a person? *(blocks `doc/21` S11.1)*
+
+Not a permission that exists today. Owner-only is safe and makes a forty-person
+list one person's job. A department manager editing their own reports is the
+obvious shape and is also how somebody grants themselves a reporting line.
+
 ### D24 — How does somebody reach a human? *(blocks two of the three pricing CTAs)*
 
 The Growth and Enterprise tiers are priced **"Let's talk"** and their buttons read
