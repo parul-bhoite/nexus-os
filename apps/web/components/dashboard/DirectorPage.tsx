@@ -318,7 +318,9 @@ function Ready({ director, all }: { director: Director; all: Dashboards | null }
         </Section>
       ) : null}
 
-      {director.assistant ? <AssistantPanel assistant={director.assistant} /> : null}
+      {director.assistant ? (
+        <AssistantPanel assistant={director.assistant} department={director.department} />
+      ) : null}
     </PageBody>
   )
 }

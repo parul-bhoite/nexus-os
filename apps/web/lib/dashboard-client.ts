@@ -488,6 +488,100 @@ export type Assistant = {
   available: boolean
 }
 
+/**
+ * One passage an answer came from. `doc/20` A11.
+ *
+ * Every field is what a reader needs to **check** the claim: `documentId` and
+ * `chunkId` open it, the label and page make it recognisable before they do.
+ * A citation nobody can follow is decoration, and the numeral rule behind the
+ * answer is only meaningful if the passage can be read.
+ */
+export type AssistantCitation = {
+  chunkId: string
+  documentId: string
+  sourceLabel: string | null
+  sourcePage: number | null
+}
+
+/**
+ * What came back from asking. **One shape for both outcomes.**
+ *
+ * A refusal is a 200, not an error: `answered` false carries `sentence` — copy
+ * the API wrote — and no prose. The client never composes its own wording for
+ * a refusal, because the sentence is the one part of this feature that must not
+ * vary with who is asking or what exists (`doc/20` §5 Q6.2).
+ */
+export type AssistantReply = {
+  answered: boolean
+  prose: string
+  citations: AssistantCitation[]
+  reason: string | null
+  sentence: string | null
+}
+
+type AskWire = {
+  answered?: boolean
+  prose?: string
+  citations?: {
+    chunk_id?: string
+    document_id?: string
+    source_label?: string | null
+    source_page?: number | null
+  }[]
+  reason?: string | null
+  sentence?: string | null
+}
+
+/**
+ * Ask one director a question.
+ *
+ * **Never throws for a refusal**, because a refusal is an answer. It throws
+ * only when the exchange itself failed — and even then the caller shows a
+ * sentence rather than a stack, because "we could not reach the assistant" and
+ * "your documents do not cover that" are different facts a founder must be able
+ * to tell apart.
+ */
+export async function askDirector(
+  department: string,
+  question: string,
+): Promise<AssistantReply> {
+  // Read here rather than taken as an argument, matching `settings-client`,
+  // `ops-client` and `agent-onboarding-client`. A token passed down through
+  // props is a token a server component has to fetch and a page has to thread.
+  // The same shape `narrateBlock` uses below: the token is nullable, and
+  // omitting the header is what lets the API's own 403 be the refusal rather
+  // than a `null` reaching the wire as the string "null".
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  const token = csrfToken()
+  if (token) headers['X-CSRF-Token'] = token
+
+  const response = await fetch(`/api/dashboards/${encodeURIComponent(department)}/ask`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ question }),
+    credentials: 'same-origin',
+    cache: 'no-store',
+  })
+
+  if (!response.ok) {
+    throw new Error('Cannot reach the assistant right now.')
+  }
+
+  const wire = (await response.json()) as AskWire
+  return {
+    answered: Boolean(wire.answered),
+    prose: wire.prose ?? '',
+    citations: (wire.citations ?? []).map((c) => ({
+      chunkId: c.chunk_id ?? '',
+      documentId: c.document_id ?? '',
+      sourceLabel: c.source_label ?? null,
+      sourcePage: c.source_page ?? null,
+    })),
+    reason: wire.reason ?? null,
+    sentence: wire.sentence ?? null,
+  }
+}
+
 export type Offering = {
   /** Doc 05's own numbering — `3.4` is the Growth Plan. What the tile shows as
    * its traceability label, because it points at the paragraph that specified it. */

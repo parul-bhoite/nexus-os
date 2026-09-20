@@ -1,29 +1,97 @@
-import type { Assistant } from '@/lib/dashboard-client'
+'use client'
+
+import { useState } from 'react'
+import type { Assistant, AssistantReply } from '@/lib/dashboard-client'
+import { askDirector } from '@/lib/dashboard-client'
 
 /**
- * The panel P15 reserves and P20 fills. Q67.
+ * The panel P15 reserved and P20 fills. Q67.
  *
- * **Reserved is a design, not a placeholder.** A blank region where a feature
- * is coming reads as a bug; a fake one reads as a lie. So this names the
- * director and lists the questions it will answer — `doc/08` §2E–§8E, in the
- * words a founder would actually type — and says plainly that it is not
- * available yet.
+ * **The argument that kept this box out survives it.** For five phases this
+ * component rendered a question list and the sentence "not available yet",
+ * because *"an input that accepts a question and cannot answer it is worse than
+ * none: somebody types the thing they most want to know and gets silence, and
+ * the next thing they conclude is that the product does not work."* That is
+ * still true. It is recorded here rather than deleted because it is the reason
+ * the box took this long, and because it is the argument that should be made
+ * again the next time a surface is tempted to ship ahead of its guarantees.
  *
- * The questions come from the API rather than from a list here, because they
- * are per-department and they are specification: *"Why are we shipping late?"*
- * is what the Operations Director is **for**, and a browser inventing a
- * plausible-sounding question would be describing a product nobody built.
+ * What changed is that the guarantees arrived, and they are specific
+ * (`doc/20` §5 Q7):
  *
- * There is no input box. An input that accepts a question and cannot answer it
- * is worse than none: somebody types the thing they most want to know and gets
- * silence, and the next thing they conclude is that the product does not work.
+ * 1. Evals that fail when the assistant is wrong — a payload that dictates a
+ *    figure, a fabricated citation, a scope leak — not ten assertions over a
+ *    dataclass.
+ * 2. Refusals authored by us, which the model cannot reword: there is no
+ *    free-text reason field in the schema for it to fill.
+ * 3. A refusal identical whether or not the content exists, so the wording
+ *    cannot be used to probe.
+ * 4. A question list the assistant can actually answer (ADR 0052) — documents,
+ *    not computed figures.
+ *
+ * **The questions still come from the API**, not from a list here: they are
+ * per-department and they are specification, and a browser inventing a
+ * plausible-sounding one would be describing a product nobody built.
+ *
+ * **A refusal is rendered with no citations and no prose.** The sentence is the
+ * whole response — `doc/20` §5 Q6.2 makes it the one string that must not vary
+ * with who is asking, so this component must not decorate it, prefix it, or
+ * pair it with a "try rephrasing" of its own invention.
  */
-export function AssistantPanel({ assistant }: { assistant: Assistant }) {
-  if (assistant.available) {
-    // P20's job. Rendering a chat here before the injection evals are green
-    // would be the one shortcut this product cannot take — a tainted turn with
-    // an unconfirmed action is the failure the whole boundary exists to stop.
-    return null
+export function AssistantPanel({
+  assistant,
+  department,
+}: {
+  assistant: Assistant
+  department?: string
+}) {
+  const [question, setQuestion] = useState('')
+  const [reply, setReply] = useState<AssistantReply | null>(null)
+  const [pending, setPending] = useState(false)
+  const [failed, setFailed] = useState<string | null>(null)
+
+  // A0's pin, still green: with `available` false there is no input, no
+  // textarea and no form in the tree at all.
+  if (!assistant.available) {
+    return (
+      <aside className="mt-8 rounded-2xl border border-ink-100 bg-white px-5 py-5 shadow-paper">
+        <p className="font-mono text-2xs uppercase tracking-[0.12em] text-ink-400">
+          Ask the {assistant.director}
+        </p>
+        <ul className="mt-3 flex flex-col gap-2">
+          {assistant.questions.map((q) => (
+            <li key={q} className="text-[0.95rem] leading-relaxed text-ink-700">
+              &ldquo;{q}&rdquo;
+            </li>
+          ))}
+        </ul>
+        <p className="mt-4 border-t border-ink-100 pt-3 text-sm leading-relaxed text-ink-500">
+          Not available yet. When it is, it will answer from the documents this workspace has
+          uploaded — every answer quoting the passage it came from, and a question your documents
+          cannot answer refused with the reason rather than answered thinly.
+        </p>
+      </aside>
+    )
+  }
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault()
+    const asked = question.trim()
+    if (!asked || pending || !department) return
+
+    setPending(true)
+    setFailed(null)
+    setReply(null)
+    try {
+      setReply(await askDirector(department, asked))
+    } catch {
+      // Distinct from a refusal on purpose. "We could not reach the assistant"
+      // and "your documents do not cover that" are different facts, and
+      // collapsing them would teach a founder to distrust the second.
+      setFailed('Cannot reach the assistant right now. Nothing was spent — try again.')
+    } finally {
+      setPending(false)
+    }
   }
 
   return (
@@ -31,25 +99,85 @@ export function AssistantPanel({ assistant }: { assistant: Assistant }) {
       <p className="font-mono text-2xs uppercase tracking-[0.12em] text-ink-400">
         Ask the {assistant.director}
       </p>
-      <ul className="mt-3 flex flex-col gap-2">
-        {assistant.questions.map((question) => (
-          <li key={question} className="text-[0.95rem] leading-relaxed text-ink-700">
-            &ldquo;{question}&rdquo;
-          </li>
-        ))}
-      </ul>
-      {/* **What it will read, said before it can read anything.** ADR 0052:
-          the first assistant answers from documents the workspace has uploaded,
-          not from figures — the questions above are chosen on that basis, and
-          naming the source here is what stops the list reading as a general
-          promise. A founder who expects a runway figure and gets a quotation
-          from a PDF was told the wrong thing by this panel, not by the
-          assistant. */}
-      <p className="mt-4 border-t border-ink-100 pt-3 text-sm leading-relaxed text-ink-500">
-        Not available yet. When it is, it will answer from the documents this workspace has
-        uploaded — every answer quoting the passage it came from, and a question your documents
-        cannot answer refused with the reason rather than answered thinly.
-      </p>
+
+      <form onSubmit={submit} className="mt-3 flex flex-col gap-2">
+        <label htmlFor="assistant-question" className="sr-only">
+          Ask a question about this workspace&rsquo;s documents
+        </label>
+        <textarea
+          id="assistant-question"
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          rows={2}
+          maxLength={1000}
+          placeholder={assistant.questions[0] ?? 'Ask about an uploaded document'}
+          className="w-full resize-none rounded-xl border border-ink-200 px-3 py-2 text-[0.95rem] leading-relaxed text-ink-800 focus:border-ink-400 focus:outline-none"
+        />
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-2xs text-ink-400">
+            Answers come from documents this workspace has uploaded, quoting the passage.
+          </p>
+          <button
+            type="submit"
+            disabled={pending || !question.trim()}
+            className="rounded-lg bg-ink-900 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+          >
+            {pending ? 'Reading…' : 'Ask'}
+          </button>
+        </div>
+      </form>
+
+      {!reply && !pending && !failed ? (
+        <ul className="mt-4 flex flex-col gap-2 border-t border-ink-100 pt-3">
+          {assistant.questions.map((q) => (
+            <li key={q}>
+              <button
+                type="button"
+                onClick={() => setQuestion(q)}
+                className="text-left text-[0.95rem] leading-relaxed text-ink-600 hover:text-ink-900"
+              >
+                &ldquo;{q}&rdquo;
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {failed ? (
+        <p className="mt-4 border-t border-ink-100 pt-3 text-sm leading-relaxed text-ink-500">
+          {failed}
+        </p>
+      ) : null}
+
+      {reply && !reply.answered ? (
+        /* The sentence, alone. No citations, no prose, nothing added. */
+        <p
+          data-testid="assistant-refusal"
+          className="mt-4 border-t border-ink-100 pt-3 text-sm leading-relaxed text-ink-500"
+        >
+          {reply.sentence}
+        </p>
+      ) : null}
+
+      {reply?.answered ? (
+        <div className="mt-4 border-t border-ink-100 pt-3">
+          <p className="text-[0.95rem] leading-relaxed text-ink-800">{reply.prose}</p>
+          <ul className="mt-3 flex flex-col gap-1">
+            {reply.citations.map((citation) => (
+              <li key={citation.chunkId}>
+                <a
+                  href={`/documents/${citation.documentId}`}
+                  data-testid="assistant-citation"
+                  className="font-mono text-2xs text-ink-500 underline underline-offset-2 hover:text-ink-900"
+                >
+                  {citation.sourceLabel ?? 'Source'}
+                  {citation.sourcePage !== null ? `, page ${citation.sourcePage}` : ''}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </aside>
   )
 }
