@@ -120,6 +120,40 @@ discounts.
 - `doc/08` §2E–§8E is now aspirational rather than current for this surface, and
   `sections.py` says so beside the constant rather than in this file alone.
 
+## Addition, 20 September 2026 — a refusal names the capability
+
+**Not a change of decision; the part this ADR left implicit.** `doc/20` A1 could
+not define its contracts without it, because the answer decides whether
+`AssistantRefusal` carries a capability at all.
+
+**A refusal names the capability that would answer the question, where one
+exists.** Asked *"how long is our runway?"*, the assistant does not stop at "I
+cannot answer that from your documents" — it says which capability would, and
+what that capability is waiting on.
+
+The reason is consistency with every other surface. A locked tile already says
+*"Needs projects and tasks in NEXUS"* rather than going blank; `doc/04` §6 rule 1
+makes it a rule — *"every locked tile states its unlock… the tile is a call to
+action, not a failure"*. An assistant that refused without naming the unlock
+would be the one place in the product that goes quiet, and it would be the place
+a founder is most likely to be asking precisely because they could not find the
+figure anywhere else.
+
+**What this does not license.** Naming a capability requires knowing which one
+would answer, and mapping free text to a capability is not something the first
+assistant can do reliably. So the contract carries `capability_id` as
+**optional**: named when the question is one the product already knows about,
+absent when it is not, and never guessed. A wrong capability in a refusal is
+worse than no capability — it sends somebody to connect a system that would not
+have helped.
+
+**Where the sentence comes from.** `domain/dashboards.unlock_for_sources`
+already turns a capability's missing sources into *"Needs X and Y."* The
+assistant carries the id; the route renders the sentence with that existing
+function. This keeps one wording for unlocks across the product and keeps
+`app/assistant/` out of the dashboard domain, which its import allowlist
+(`tests/test_assistant_boundary.py`) enforces.
+
 ## Revisit trigger
 
 When the first computed-figure capability a listed question depends on becomes

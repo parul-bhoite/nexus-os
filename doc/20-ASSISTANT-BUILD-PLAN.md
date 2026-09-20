@@ -608,7 +608,25 @@ fails the pin. Both reverted before committing. `ruff`/`mypy`/`tsc` clean.
 
 **Blocked on:** nothing. **Agent:** backend + frontend (one test file each).
 
-### A1 — `app/assistant/` exists and changes no behaviour
+### A1 — `app/assistant/` exists and changes no behaviour ✅ 20 September 2026
+
+**Done.** `app/assistant/{__init__,contracts}.py`: `Question`, `Citation`,
+`AssistantAnswer`, `AssistantRefusal`. No route, no skill, no model, no database,
+and product behaviour is byte-identical to before.
+
+**The blocking decision is taken** — ADR 0052's addition of 20 September: a
+refusal names the capability that would answer, where one is known.
+`capability_id` is therefore optional and never guessed, because a wrong
+capability sends somebody to connect a system that would not have helped. The
+*sentence* is rendered by `dashboards.unlock_for_sources` at the route, not built
+here, which keeps one wording for unlocks and keeps this package out of the
+dashboard domain.
+
+**Verified:** A0's allowlist now binds to a real package — planting
+`from app.research import crawler` in `contracts.py` failed it naming the edge.
+`mypy --strict` clean over 163 files.
+
+
 
 The package: `contracts.py` (`Question`, `Citation`, `AssistantAnswer`,
 `AssistantRefusal`), and nothing else. No route, no skill, no model, no
