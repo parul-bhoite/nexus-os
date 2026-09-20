@@ -569,6 +569,41 @@ Not a permission that exists today. Owner-only is safe and makes a forty-person
 list one person's job. A department manager editing their own reports is the
 obvious shape and is also how somebody grants themselves a reporting line.
 
+### D37 — M22: pay for correctness, suppress the symptom, or scope the fix? *(blocks a clean full test run)*
+
+**Not a bug to find any more.** The cause is proven (`BUILD-STATUS` §7, commit
+`ef27a71`): a pooled asyncpg connection is created on one event loop and closed
+on another, asyncpg's graceful close arms a timer on the dead loop, raises
+`RuntimeError: Event loop is closed`, and falls back to `_abort()` — which on
+CPython 3.12 leaves a TLS socket open. SQLAlchemy swallows and logs that at
+DEBUG, which is why it hid for so long.
+
+It costs one false failure on every full run, and the test it is reported
+against is a **bystander** — pytest attributes an unraisable warning to whichever
+test triggered GC.
+
+- **A. `NullPool` suite-wide in tests.** Verified: warnings to zero. Also
+  verified: the two reproducing tests go **100s → 186s**, because every checkout
+  becomes a fresh TLS connect to `us-east-2`. Across ~470 database tests that is
+  hours on every run, which is a worse problem than the one it solves.
+- **B. A narrow `filterwarnings` ignore** for the unclosed-socket trio. Free, and
+  precedent exists in `pyproject.toml` for a narrow, commented, message-matched
+  ignore. **It would also hide a genuine socket leak anywhere else** — and
+  `filterwarnings = ["error"]` has already caught two real defects in this
+  repository (an unpinned `anyio` deprecation and a fastembed pooling warning).
+- **C. `NullPool` for the one module that reproduces it.** Buys A's correctness
+  for roughly ninety extra seconds instead of hours, and keeps `error` meaning
+  what it says everywhere else. The cost is a special case somebody must
+  understand before moving tests between files.
+
+**Recommended: C**, on the grounds that it is the only option that neither slows
+every run nor blinds the suite to a class of real defect. B is the right answer
+only if the special case in C proves confusing in practice.
+
+**Not urgent, and worth saying so:** this is a harness artefact. Production runs
+one event loop for the life of the process, so the cross-loop close cannot occur
+there.
+
 ### D24 — How does somebody reach a human? *(blocks two of the three pricing CTAs)*
 
 The Growth and Enterprise tiers are priced **"Let's talk"** and their buttons read
