@@ -32,7 +32,7 @@ drifted.
 |---|---|
 | Backend tests | **1,751 collected** across 137 files |
 | Frontend tests | **271 passing** across 33 files, plus 2 Playwright specs |
-| Last full backend run | 1,734 passed / 1 failed in 1h52m — the one failure is **M22**, a known asyncpg flake that passes alone. Tests have been added since; targeted suites are green |
+| Last full backend run | **1,873 passed / 4 failed in 2:09:44** (20 September). Three were the assistant not being registered in the guards that enumerate skills and settings — `.env.example`, `test_every_skill_has_a_caller`, and the scripted fixtures — all fixed. The fourth is **M22**, now localised to `test_onboarding_agent_e2e.py` |
 | Migrations | **40 on disk, head `0040`; Neon is at `0040`** — in sync. `0040` is `generation_citation` (ADR 0056), applied, reversed and re-applied 20 September |
 | ADRs | **59.** 0052–0059 are the assistant: what it answers from, the numeral rule, the refusal vocabulary split, the taint boundary, citations as rows, the scope a generation inherits, the budget, and the route module |
 | End-to-end walkthrough | `scripts/goal_walkthrough.py` — **64 passed, 0 failed** against a running API and Neon |
@@ -563,7 +563,7 @@ long ago and never struck.
 | **M10** | **37** `as <Type>` casts across `apps/web/lib/*.ts`, not "four", and no runtime validator in `package.json` |
 | **M13** | No `loading.tsx`, no `global-error.tsx`. `error.tsx` and `not-found.tsx` do exist, so the gap is narrower than stated |
 | **M15** | The embedding pass still runs in the API process (`jobs/scheduler.py:111`, started at `main.py:91`) |
-| **M22** | **Nothing has been done**, and it recurred today: one failure in a 1h52m run, passing alone in 75s. No `filterwarnings` entry, no loop/engine handling in `conftest.py` |
+| **M22** | **Nothing has been done**, and it recurred on the 20 September run — but it is now **localised**. The failure is `test_onboarding_agent_e2e.py::test_a_failed_assembly_stage_does_not_claim_nothing_was_saved`, and the error is `ResourceWarning: unclosed transport` promoted to an error by `filterwarnings = ["error"]`, not an assertion. **It reproduces from that one file alone** (2:09:44 full run, and again in a 20:03 run of just that file), so the leaking connection belongs to an earlier test in the same module rather than to cross-file pollution — which is a much smaller thing to find than "somewhere in 1,877 tests". Confirmed independent of the assistant work by re-running the file at its pre-change revision: same failure. Still no `filterwarnings` entry and no loop/engine handling in `conftest.py` |
 | **M25** | Both halves confirmed: `GET /audit-log` is Executive-readable where `doc/08` §8C says Owner-only, and it returns a raw actor UUID |
 | **M26** | `BrainCard.tsx:175` renders "Read-only here"; no delete or per-item sensitivity |
 | **M27** | **10 requests on load, not eight** — every panel mounts at once and fetches, plus one per running department. The parallel-mount fix the row describes is present |
@@ -668,7 +668,12 @@ Ordered by what the evidence in §7 actually supports, not by filing priority.
    to be measured against, which is what `doc/19` §7 recommends doing *before*
    answering D13.
 5. **M22, the asyncpg flake.** It costs a false failure on every full run and
-   nothing has been done about it.
+   nothing has been done about it. **It is now localised to one module** —
+   `test_onboarding_agent_e2e.py`, reproducing from that file alone in 20
+   minutes rather than needing a 2-hour run — so the next person has a
+   twenty-minute loop instead of a two-hour one. The error is an unclosed
+   transport promoted by `filterwarnings = ["error"]`, so the fix is a
+   connection somebody forgot to close, not a race.
 
 **Two things that are decisions, not work:** D13's tier-per-mode half, and D3's
 credentials. Both are named in §6.
