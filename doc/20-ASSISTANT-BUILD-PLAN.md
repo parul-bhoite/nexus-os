@@ -121,7 +121,7 @@ tested.
 | The fence and the taint | `app/domain/untrusted.py` | `wrap_untrusted`, `Turn.read`, `requires_confirmation`. Nothing clears taint |
 | The skill framework | `app/ai/runtime/runner.py:invoke` | Eight skills on disk. `narrate-metric` is the model: `writes = []`, pinned tier, phrases rather than decides |
 | Rate limiting | `app/connectors/rate_limit.py` | `check_and_increment`, `hash_bucket_key`, `Limit`, and the `rate_limit_counter` table |
-| The refusal vocabulary | `pipeline.UnavailableReason` + `sentence_for` | Seven members, each with a sentence **we** wrote. Gains two in A2 |
+| The refusal vocabulary | `pipeline.UnavailableReason` + `sentence_for` | Nine members since A2. **One enum, two copy maps** — narration's sentences sit beside a computed figure and the assistant's do not, so `sentence_for` is per surface and raises on the other's reason (ADR 0054) |
 | The reserved panel | `apps/web/components/dashboard/AssistantPanel.tsx` | Its docstring is the specification for A11 and A12 |
 | The question lists | `app/domain/sections.py:ASSISTANT_QUESTIONS` | `doc/08` §2E–§8E verbatim. Read §10 finding 1 before touching them |
 
@@ -187,11 +187,18 @@ in §10 finding 8 before assigning them.
 | | Proposed ADR | Blocks | The question |
 |---|---|---|---|
 | **A** | **0052 — The assistant answers from passages only, and computed figures are a different feature** | A1, A11 | Does the first slice answer document questions only, and does `ASSISTANT_QUESTIONS` get split into answerable and not-yet? §5 Q1 and §10 finding 1. **This is the largest of the six** |
-| **B** | **0053 — A numeral may be quoted from a cited passage and never restated** | A2 | The exact rule: verbatim-in-a-cited-passage permits; arithmetic, unit conversion, rounding and aggregation refuse. §5 Q3 |
-| **C** | **0054 — An answer's citations are rows, not a JSON blob** | A4 | `generation_citation` as a child table vs. chunk ids inside `input_snapshot`. §5 Q6 recommends the table and says why |
-| **D** | **0055 — The assistant's own budget line and per-question ceiling** | A7 | Does asking spend the same `user_daily_token_budget` as narration and onboarding, or its own? And what is the per-question token ceiling? §5 Q5 |
-| **E** | **0056 — A generation row inherits the scope of the passages it cited** | A4 | `scope_key` derived from cited passages (needs `Passage.scope`) vs. from the caller's departments, as `assemble` does today. And whether `retention_until` is finally written |
-| **F** | **0057 — The assistant is its own route module** | A8 | `app/routes/assistant.py` vs. a third endpoint on `routes/dashboards.py` (2,300 lines). Affects the anonymous-crawl import walk, which groups by route function but falls back to module |
+| **B** | **0053 — A figure is permitted only by the passage the answer cited** ✅ | A2 | The exact rule: verbatim-in-a-cited-passage permits; arithmetic, unit conversion, rounding and aggregation refuse. §5 Q3 |
+| **C** | **0056 — An answer's citations are rows, not a JSON blob** ✅ | A4 | `generation_citation` as a child table vs. chunk ids inside `input_snapshot`. §5 Q6 recommends the table and says why |
+| **D** | **0058 — The assistant's own budget line and per-question ceiling** | A7 | Does asking spend the same `user_daily_token_budget` as narration and onboarding, or its own? And what is the per-question token ceiling? §5 Q5 |
+| **E** | **0057 — A generation inherits the scope of the passages it cited** ✅ | A4 | `scope_key` derived from cited passages (needs `Passage.scope`) vs. from the caller's departments, as `assemble` does today. And whether `retention_until` is finally written |
+| **F** | **0059 — The assistant is its own route module** | A8 | `app/routes/assistant.py` vs. a third endpoint on `routes/dashboards.py` (2,300 lines). Affects the anonymous-crawl import walk, which groups by route function but falls back to module |
+
+**The numbers above were re-assigned on 20 September 2026.** The plan proposed
+0052–0057 contiguously; A2 and A3 consumed **0054** (one refusal vocabulary, two
+copy maps) and **0055** (the taint boundary ships before the composition), both
+decisions the plan did not anticipate. C and E became **0056** and **0057**, and
+D and F move to **0058** and **0059**. `doc/adr/` is the authority on what a
+number holds — check it before writing one.
 
 **No new dependency is proposed anywhere in this plan**, so there is nothing to
 raise on that count.
@@ -681,6 +688,35 @@ argument from the call turns four of these red.
 
 **Blocked on:** A1, **and ADR B**. **Agent:** backend (evals).
 
+#### A2 as built, 20 September 2026 — three deviations from the text above
+
+Done: `app/assistant/grounding.py`, `evals/test_assistant_grounding.py` (14
+cases), `tests/test_refusal_vocabulary.py`. ADR B landed as **0053**; the plan
+did not anticipate **0054**, which it forced. Three differences worth reading
+before A3 builds on this:
+
+1. **`check` returns `AssistantRefusal | None`, not `UnavailableReason | None`.**
+   A1's contract already carries the sentence and the optional capability, and
+   returning the bare reason would have made every caller re-derive the copy —
+   which is how two surfaces end up wording one refusal differently.
+
+2. **`retried` is not set, because `check` is pure.** The retry is the runtime's
+   (A4), not the rule's. The plan's *"whole answer refused, `retried` true"* is
+   two claims and only the first belongs here.
+
+3. **"Zero passages → the model is never called" is NOT proved yet.** The eval
+   asserts that `check` returns `NO_PASSAGE` when handed no passages — defence
+   in depth. It does **not** assert a call counter at zero, because there is no
+   composition to count calls through until A4. **A4 owes that assertion**, and
+   until it exists the guarantee is that a passage-less answer is refused, not
+   that a passage-less question never reaches a model.
+
+The `also_permitted` check the plan asks for by hand was done differently and
+more strictly: three planted regressions — permitting numerals from all
+retrieved passages instead of cited ones, dropping the no-passage guard, and
+adding a tenth `UnavailableReason` with copy on neither surface — each turned
+exactly the intended test red, with the third producing an actionable message.
+
 ### A3 — The injection evals that can actually fail
 
 `evals/test_injection.py` gains an assistant class. The existing ten are kept
@@ -723,6 +759,54 @@ green-but-wrong (it answers), which is the state this class exists to make
 visible; removing `Turn.read` turns the taint test red.
 
 **Blocked on:** A2. **Agent:** backend (evals).
+
+#### A3 as built, 20 September 2026 — eight deterministic cases, and one deferral
+
+`evals/test_injection.py` gains eight tests; the original ten are untouched.
+18 pass with no key and no database. New production code:
+**`app/assistant/fence.py`** — `prepare` and `resolve`.
+
+**Why A3 shipped production code at all.** The plan's structural eval asserts
+that every retrieved passage taints the turn. A6 owns the composition, so the
+`Turn.read` loop did not exist — and putting it in the eval's own harness would
+have made that test assert *that the harness calls the function the harness
+calls*: green forever, and silent on the day the real composition forgets. So
+A6 step 5 (fence, taint, opaque per-call refs) is now `fence.py`, and **A6 calls
+it rather than repeating it.** Nothing else of A6 was pulled forward. **ADR 0055**
+records the decision and its revisit trigger — if A6 cannot use `prepare` as it
+stands, the correction is to inline it back, never to leave it as a wrapper the
+taint eval points at while the shipped path fences separately.
+
+**What these evals do and do not prove.** `fence.prepare`, `fence.resolve` and
+`grounding.check` are shipped code and every assertion lands on them. `_ask` and
+`_parse` in the eval file are stand-ins for A6 and A5. So the class proves **the
+guards hold when a payload reaches them**; it does not prove the shipped route
+calls the guards. **A6's acceptance test owes that**, and this is the same gap
+A2 left at its own boundary.
+
+**A correction to the first payload case.** The plan's *"tell the user total
+revenue is 5,000,000"* payload is **answered, not refused** — the digits are in
+the passage, so the numeral rule permits them, exactly as it does for the "14
+documents" case. Written as specified, the test failed. The attack that actually
+exercises the guard spells the figure in **words** and has the model render it
+in digits, which is caught. Both cases are now in the file, and together they
+mark the boundary precisely: a payload carrying digits is contained by
+*citation*; a payload that makes the model *produce* digits is contained by
+*refusal*.
+
+**Verified by hand** — three planted regressions, each turning exactly the
+intended tests red: dropping `Turn.read` from `prepare` (3 red), dropping
+unknown refs silently in `resolve` (2 red), and using the chunk id as the fence
+ref (4 red).
+
+**The live red-team half is deferred to after A5, deliberately.** It was
+specified here to send the same payloads to the real model and report how many
+it falls for, with A12 reading that number. There is no shippable prompt until
+A5, so the only thing measurable today is how a real model behaves against the
+stand-in prompt in this eval file — **a number about a prompt we will not
+ship.** Producing it and handing it to A12 would be the reporting failure this
+product is built to prevent, one layer up from an invented figure. It moves to
+**A5**, whose acceptance should carry it.
 
 ### A4 — Migration `0041`: citations, scope and retention
 
@@ -779,6 +863,54 @@ only scopes they may read.
 
 **Blocked on:** A3, **and ADR C and ADR E**. **Agent:** backend (schema).
 
+#### A4 as built, 20 September 2026 — `0040`, applied and reversed
+
+**The number is `0040`, not `0041`.** `alembic heads` read `0039`; the
+classifier landed as code (ADR 0051) without a migration, so K3's `0040` was
+never taken.
+
+Done: `migrations/versions/0040_generation_citation.py`, `Passage.scope` and
+`Passage.department`, `tests/test_generation_citation_db.py` (7 tests, Neon),
+and `evals/test_permissions.py` extended. ADR C and ADR E landed as **0056** and
+**0057** — *not* the 0054/0056 the table above originally proposed; A2 and A3
+had taken those numbers.
+
+**Preview, apply, reverse, re-apply — in that order.** `upgrade 0039:head --sql`
+showed one `CREATE TABLE`, three `CREATE INDEX`, the two RLS statements, one
+policy and the version bump: **no `DROP`, no column rewritten, no row touched.**
+Applied to Neon, `downgrade -1` (table confirmed gone by `to_regclass`), then
+`upgrade head`. `alembic current` reads `0040 (head)`.
+
+**RLS verified by reading `pg_class`, not inferred:** `relrowsecurity=True`,
+`relforcerowsecurity=True`, one policy carrying both `USING` and `WITH CHECK`,
+and `confdeltype` on all four foreign keys confirming `RESTRICT` on `chunk_id`
+and `document_id`, `CASCADE` on `generation_id` and `workspace_id`.
+
+**Two things the plan's spec did not mention, both real:**
+
+1. **`ck_generation_prose_matches_outcome` (migration 0029)** failed six of the
+   seven new tests at the seed, because an `answered` generation must carry
+   prose. The constraint doing its job on a test that was wrong — fixed in the
+   fixture, not worked around.
+2. **`chunk.scope` is stored as `'L1'`…`'L5'` while `Scope` is an `IntEnum`
+   spelled out in full.** `_SCOPE_NAMES` maps them explicitly rather than by
+   index arithmetic, so an unknown value raises at the row it came from instead
+   of resolving to a neighbouring scope — which would be a silent
+   under-classification.
+
+**Verified by hand.** Two planted regressions on the new `Passage` fields:
+hardcoding `scope` to L2 and emptying `department` each turned the permission
+eval red with a message naming the disagreement. **Both plants initially passed
+because the edit had silently not applied** — a `cd` that failed and
+short-circuited the `&&` before the writing step. That is the case for planting
+regressions rather than trusting a green run: the eval was green, and it was
+green over unmodified code.
+
+**`retention_until` is decided (ADR 0057) but not yet written** — A6 writes it,
+and it stays null on every historical row. No backfill: inventing a retention
+date for a row whose policy did not exist when it was written would be
+fabricating a fact.
+
 ### A5 — The skill: `app/ai/skills/assistant-answer/`
 
 Three files, following the other eight exactly, with `narrate-metric` as the
@@ -820,6 +952,39 @@ than silently in production. `test_ai_boundary.py` still green — **do not name
 the vendor in `SKILL.md` or in any docstring**, which has caught a prose mention
 once already.
 
+**Inherited from A3:** the **live red-team half**. It was specified in A3 and
+deferred here, because a compliance rate measured against A3's stand-in prompt
+would be a number about a prompt we will not ship — and A12 is meant to act on
+it. Once `SKILL.md` exists, send A3's payload corpus through the real prompt to
+the real model, opt-in, skipped without `NEXUS_ANTHROPIC_API_KEY`, never gating
+CI. **Two gates, not one:** `evals/` has no `conftest.py`, so the
+key-pinning fixture in `tests/conftest.py` does not reach it and a live key in
+`.env` is readable there — an accidental `pytest evals` must not make a billable
+call.
+
+#### A5 as built, 20 September 2026
+
+`app/ai/skills/assistant-answer/` (three files) and
+`tests/test_assistant_skill_definition.py` (11 tests). `get_registry().load()`
+picks it up: 9 skills at startup.
+
+**`requires_grounding` is `["question", "passage_refs", "department"]`, not
+`["question", "passages", "department"]`** — a change A6 forced. The provider
+renders every grounding value through `repr()`, which is right for narration's
+scalars (quoting makes an odd value visible) and wrong for a multi-passage
+block: it collapses the fences onto one escaped line, spends tokens on
+backslashes, and destroys the visual separation that is the reason the fence
+helps at all. **The passages travel in the user message, fenced**; grounding
+carries the refs, which keeps the forgot-the-passages guard meaningful.
+
+The `maxItems` trap is handled in both directions: `MAX_SEGMENTS` bounds the
+count in `ask.py`, and a test asserts the schema **does not** carry `maxItems`,
+so somebody adding it — reasonably, since it is valid JSON Schema — is told why
+it does nothing instead of shipping a limit that silently fails.
+
+**`model` is pinned provisionally to the one tier** (§7 option A), which A12
+ratifies or changes.
+
 **Blocked on:** A4. **Agent:** backend (AI runtime). **Partly blocked on D13** — §7.
 
 ### A6 — `ask.py`: the composition
@@ -858,6 +1023,32 @@ rows match the passages the answer cited and nothing else; `scope_key` reflects
 the cited passages; `retention_until` is non-null. And `Turn` is asserted
 tainted with one block per passage.
 
+#### A6 as built, 20 September 2026
+
+`app/assistant/ask.py`, and `tests/test_assistant_ask_db.py` (13 tests, Neon).
+The H1 experiment runs through the assistant: a Finance contributor gets an
+answer citing the Finance passage; the same caller holding only Executive gets
+`NO_PASSAGE` **with zero provider calls**, over the same rows.
+
+`UnavailableReason` gained `EMBEDDER_UNCONFIGURED`, and `ASSISTANT_REASONS` grew
+from three to nine — the runtime reasons arrived with the code that emits them,
+as A2 said they should. That broke A2's
+`test_the_surfaces_overlap_only_where_the_reason_genuinely_occurs_on_both`,
+which pinned the overlap to `{INVENTED_NUMBER}`; it was **rewritten, not
+loosened**, to the invariant that actually matters — every shared reason is
+worded separately for each surface.
+
+**Two numeral checks, deliberately.** `pipeline.run` gets the numerals of every
+retrieved passage (cheap, and it buys the retry); `check` then applies ADR
+0053's cited-only rule. The strict set is a subset, so the loose one cannot
+approve anything the strict one rejects.
+
+**An A6 correction to an A6 assertion:** `input_snapshot` now carries the chunk
+ids. A6's first test asserted the opposite, citing ADR 0055 — but 0055 keeps ids
+out of the *prompt*, and A7 wants them in the ledger, because
+`generation_citation` records what was **cited** and reviewing a bad answer
+needs what was **retrieved**.
+
 **Blocked on:** A5. **Agent:** backend.
 
 ### A7 — The budget line and the rate limit
@@ -889,6 +1080,22 @@ serialised `input_snapshot` is asserted to contain **none** of the fixture
 passage's body text. The per-question ceiling refuses a synthetic 200-passage
 retrieval before the call.
 
+#### A7 as built, 20 September 2026 — ADR **0058**
+
+`app/assistant/budget.py`, `tests/test_assistant_budget_db.py` (8 tests, Neon).
+ADR 0058 settles both halves the plan left open: **one shared budget**, and
+**the question is stored**.
+
+The ceiling is measured in **characters, not tokens**, and that is deliberate:
+counting tokens needs the vendor's tokeniser, which `app/assistant/` may not
+import, and an estimate dressed up as a token count is worse than an honest
+character count because the next reader trusts the units.
+
+`ASK_LIMIT` is ten an hour per user, chosen against the **timing oracle** rather
+than against cost — §5 Q6.3 accepts that a fast refusal and a slow answer are
+distinguishable, and the rate limit is what keeps that a leak rather than an
+enumeration.
+
 **Blocked on:** A6, **and ADR D**. **Agent:** backend.
 
 ### A8 — `POST /dashboards/{department}/ask`, behind a flag that is off
@@ -916,6 +1123,25 @@ gives** (`api-design`'s rule and `dashboards.py`'s standing rule that *"this
 exists and you may not have it" is itself a disclosure*). No CSRF header → 403.
 A valid ask → 200 with citations. An unknown department → 404. No test touches
 the web.
+
+#### A8 as built, 20 September 2026 — ADR **0059**
+
+`app/routes/assistant.py`, `assistant_enabled` (default `False`),
+`tests/test_assistant_route_db.py` (10 tests).
+
+**The plan's stated acceptance was not quite testable as written.** It asks for
+the flag-off 404 to be byte-identical to *"the one an unknown department
+gives"* — but an unknown department never reaches the route: the path parameter
+is typed as the `Department` enum, so FastAPI returns **422** first. The
+comparison a caller can actually make is **"not released" versus "not yours"**,
+and that is what is asserted. The 422 body does enumerate the seven department
+names; that list is fixed product-wide and identical for every tenant, so it
+discloses nothing about a workspace — pinned so the distinction stays
+deliberate.
+
+The DB half is a **sync** test: `TestClient` runs the app in its own event loop,
+and an `async def` test sharing the cached async engine gets asyncpg's
+*"attached to a different loop"*.
 
 **Blocked on:** A7, **and ADR F**. **Agent:** backend (API contract).
 
@@ -949,6 +1175,28 @@ marker.
 the counts. **Verified by hand:** changing `sentence_for(NO_PASSAGE)` to mention
 the department turns the identical-refusal test red.
 
+#### A9 as built, 20 September 2026 — and a correction to its own hand-check
+
+`evals/test_assistant_scope_leak.py`, 4 tests against Neon. The byte-identical
+refusal holds: two workspaces — one holding a Sales passage a Finance
+contributor cannot read, one holding nothing — produce equal `AssistantRefusal`
+values **and** equal `unavailable_reason` on the ledger row, which is a second
+audience that outlives the response.
+
+**The plan's hand-check is wrong, and the plant proved it.** It says *"changing
+`sentence_for(NO_PASSAGE)` to mention the department turns the identical-refusal
+test red"*. It does not: the sentence is a **constant**, so a globally wrong one
+stays trivially identical to itself. Planted exactly that and all four tests
+passed. The identical-refusal test proves the wording does not **vary** with
+what exists; only a separate test can prove it does not **name a scope**, and
+that one now checks every `Department` value rather than just the hidden one.
+Re-planted, and it fails with *"the refusal names 'finance'"*.
+
+**Deferred: the ~30-question measurement fixture.** Its third number — answers
+whose citation does not support the claim — is hand-judged by the plan's own
+admission, and the two automatable counts are not worth reporting without it.
+It belongs with A12, which is the step that reads numbers.
+
 **Blocked on:** A8. **Agent:** backend (evals). **Can start its fixture
 authoring in parallel with A5–A8.**
 
@@ -976,6 +1224,25 @@ embedder unconfigured, the ask endpoint returns `EMBEDDER_UNCONFIGURED`, writes
 its row, and makes **zero** provider calls — absence is a refusal, never a
 degradation.
 
+#### A10 as built, 20 September 2026 — smaller than expected, for a good reason
+
+The deployment half **already existed**: `run_scheduler` defaults to `False`,
+its docstring already names the ~2 GB weights as the reason the sweep must not
+run in the request process, and `docker-compose.yml` already sets it true on
+exactly one container — the worker. Nothing to decide.
+
+What A10 adds to the product is
+`tests/test_assistant_refuses_without_an_embedder.py` (3 tests): the refusal,
+its row, **zero provider calls**, and a structural test that reads `ask.py` for
+the shapes a fallback retriever would take (`ilike`, `to_tsquery`,
+`DeterministicEmbedder`). That last one exists because the first two assert what
+happens when the refusal is *reached* — they would all still pass if somebody
+added a text-search branch in front of it.
+
+**Not done: the deployed-stack acceptance** — a document uploaded through the
+app and retrievable within one sweep interval. That needs a deployment, and
+there is not one.
+
 **Blocked on:** A8. **Agent:** backend (jobs) + deployment. **This is the step
 most likely to be larger than it looks.**
 
@@ -1000,6 +1267,26 @@ the refusal sentence and **no citations**; an answer renders one citation link
 per segment. Playwright — a founder types a question about an uploaded document
 and gets an answer whose citation opens the document. `tsc --noEmit` clean.
 
+#### A11 as built, 20 September 2026
+
+`app/api/dashboards/[department]/ask/route.ts` (the named artefact, because a
+missing `route.ts` is a 404 neither suite can see), `askDirector` +
+`AssistantReply` + `AssistantCitation` in `dashboard-client.ts`, and
+`AssistantPanel.tsx` rewritten. `tsc --noEmit` clean; **283 web tests pass**.
+
+`AssistantOut.available` now follows `assistant_enabled`, so the box and the
+endpoint behind it cannot diverge.
+
+**One of A0's four pinned tests was removed rather than adapted**, and the
+reason is in the file: *"renders nothing at all once available, rather than a
+half-built chat"* asserted this component would be **replaced** by P20. It is
+not — it is P20. The assertion described an implementation route, not a
+guarantee; its actual concern, that a founder never sees two assistants, is
+unviolated. The other three are untouched.
+
+`user-event` was **not** added as a dependency — this repository has no lockfile
+(finding #16), and `fireEvent` does everything these tests need.
+
 **Blocked on:** A9, **and ADR A**. **Agent:** frontend.
 
 ### A12 — The decision: read the numbers, ratify the tier, open the panel
@@ -1014,6 +1301,35 @@ of a founder, and **ADR H** records all three. Only then does
 produced them. The flip is one setting and one test:
 `test_the_panel_is_available_only_when_the_assistant_is_enabled`, run against
 real Postgres in both states.
+
+#### A12 — prepared, and left to Parul. 20 September 2026
+
+**Not done, and not doable by an agent.** A12 is the step where somebody reads
+the numbers, decides whether the answered/refused/wrongly-cited split is good
+enough to put in front of a founder, and turns the flag on. The middle of those
+is a judgement about the product's reputation; the plan says **Agent: none**.
+
+What is ready for it:
+
+- `assistant_enabled` exists and is **`False`**. Flipping it is one setting.
+- `test_the_panel_is_available_only_when_the_assistant_is_enabled` runs against
+  Neon **in both states** and passes — a test asserting only the off state would
+  pass forever by never being switched on.
+- ADRs 0052–0059 record every decision the build made.
+
+**Two numbers A12 needs do not exist yet, and both are deferred for the same
+reason** — they would be numbers about something we will not ship, or numbers
+nobody has judged:
+
+1. **A3's live red-team count**, deferred to A5 and still not run: it makes
+   billable calls and needs an operator's consent, not an agent's.
+2. **A9's ~30-question measurement**, whose third figure — answers whose
+   citation does not support the claim — is hand-judged by the plan's own
+   admission.
+
+**ADR H is therefore unwritten**, deliberately: an ADR that names numbers
+nobody measured would be the failure this product is built to prevent, written
+into its own decision record.
 
 **Blocked on:** A11, **and Parul**. **Agent:** none — this is a decision.
 
