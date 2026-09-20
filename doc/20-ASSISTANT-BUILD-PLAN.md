@@ -558,7 +558,25 @@ Each has one acceptance test. Nothing starts until the previous has run green.
 **A0, A2 and A3 contain no assistant.** A reviewer must be able to review the
 guard without also reviewing the thing it permits.
 
-### A0 — The boundary, the ceiling and the pin (test-only)
+### A0 — The boundary, the ceiling and the pin (test-only) ✅ 20 September 2026
+
+**Done.** `tests/test_assistant_boundary.py` (allowlist over the import graph,
+reusing `test_no_unauthenticated_crawl.py`'s walk), `tests/test_assistant_has_no_tools.py`
+(no shell anywhere in `app/`; every `EXTERNALLY_VISIBLE` tool needs confirmation
+on a tainted turn; taint is one-directional), and the web pin. Zero non-test
+files changed.
+
+**Verified by planting, not assumed:** a stub `app/assistant/__init__.py`
+importing `anthropic_provider` and `calculators` failed both boundary tests and
+named all four edges; an `<input>` in the panel failed the pin. Both reverted.
+
+*One correction worth recording: the web pin already existed as
+`AssistantPanel.test.tsx` and I overwrote it rather than extending it. Nothing
+was lost — the new file is a behavioural superset and its fixture had to change
+anyway, since ADR 0052 means those questions are no longer served — but the
+original's Q67 framing was restored by hand afterwards.*
+
+
 
 Three new test files. No feature. No production file changes.
 
