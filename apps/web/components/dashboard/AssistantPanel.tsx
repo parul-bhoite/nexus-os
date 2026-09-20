@@ -38,10 +38,17 @@ export function AssistantPanel({ assistant }: { assistant: Assistant }) {
           </li>
         ))}
       </ul>
+      {/* **What it will read, said before it can read anything.** ADR 0052:
+          the first assistant answers from documents the workspace has uploaded,
+          not from figures — the questions above are chosen on that basis, and
+          naming the source here is what stops the list reading as a general
+          promise. A founder who expects a runway figure and gets a quotation
+          from a PDF was told the wrong thing by this panel, not by the
+          assistant. */}
       <p className="mt-4 border-t border-ink-100 pt-3 text-sm leading-relaxed text-ink-500">
-        Not available yet. When it is, every answer will cite what it was drawn from, and a
-        question outside this department will be refused with the reason rather than answered
-        thinly.
+        Not available yet. When it is, it will answer from the documents this workspace has
+        uploaded — every answer quoting the passage it came from, and a question your documents
+        cannot answer refused with the reason rather than answered thinly.
       </p>
     </aside>
   )

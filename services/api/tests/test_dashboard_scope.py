@@ -392,15 +392,28 @@ def test_the_catalogue_is_served_apart_from_the_rail(client: TestClient) -> None
 def test_the_assistant_panel_is_reserved_and_names_what_it_will_answer(
     client: TestClient,
 ) -> None:
-    """Q67. A blank region where a feature is coming reads as a bug and a fake
-    one reads as a lie, so the panel names the director and lists the questions
-    it will answer — `doc/08` §4E, in the customer's own words."""
+    """Q67, narrowed by ADR 0052.
+
+    A blank region where a feature is coming reads as a bug and a fake one reads
+    as a lie, so the panel names the director and lists what it will answer.
+
+    **What changed is which list.** This used to assert `doc/08` §4E verbatim —
+    *"What is our cash position?"* — and that question needs a computed figure
+    from a connected accounting source. The first assistant reads uploaded
+    documents, so serving `doc/08`'s list would put 28 unkeepable promises under
+    an input box the moment one appears. Both halves are asserted here because
+    the absence is the decision: the figure question must be gone, not merely
+    the document question present.
+    """
     as_role(client, caller(Role.OWNER, {Department.FINANCE}))
     assistant = client.get("/dashboards/finance").json()["assistant"]
 
     assert assistant["available"] is False
     assert assistant["director"] == "AI Finance Advisor"
-    assert "What is our cash position?" in assistant["questions"]
+    assert "What are our payment terms?" in assistant["questions"]
+    assert "What is our cash position?" not in assistant["questions"], (
+        "a figure question reached the panel — the first assistant cannot answer it"
+    )
 
 
 def test_a_department_the_caller_cannot_reach_serves_no_rail(client: TestClient) -> None:

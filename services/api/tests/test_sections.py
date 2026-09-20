@@ -23,7 +23,9 @@ import pytest
 from app.domain.registry import BY_ID, CAPABILITIES, CapabilityKind
 from app.domain.scopes import Department
 from app.domain.sections import (
+    ASSISTANT_QUESTIONS,
     BY_DEPARTMENT_AND_KEY,
+    DOCUMENT_QUESTIONS,
     EMPTY_SECTIONS,
     NOT_ASKED,
     PLACEMENT,
@@ -325,3 +327,67 @@ def test_no_question_is_both_asked_and_declared_unaskable() -> None:
             assert entry.what.lower() not in asked, (
                 f"{department.value} both asks for and refuses to ask for {entry.what!r}"
             )
+
+
+# ── ADR 0052: the panel promises only what it can keep ────────
+
+
+def test_the_panel_advertises_the_document_questions_not_doc_08s() -> None:
+    """The split, asserted where it can be checked.
+
+    `ASSISTANT_QUESTIONS` is `doc/08` verbatim and almost every entry is about a
+    computed figure — a runway, a pipeline, a stock level. None is answerable by
+    an assistant that reads uploaded documents, so serving that list would put
+    28 unkeepable promises under an input box the moment one appears.
+
+    Both lists are kept: one is the destination, the other is the product. This
+    pins which one reaches a screen.
+    """
+    import ast
+    import inspect
+
+    from app.routes import dashboards
+
+    # Read the call rather than the import: `ASSISTANT_QUESTIONS` being absent
+    # from the module's namespace would also satisfy an identity check, and so
+    # would a route that imported the right constant and passed the wrong one.
+    source = inspect.getsource(dashboards)
+    built = [
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "AssistantOut"
+    ]
+    assert built, "AssistantOut is no longer constructed in dashboards.py"
+
+    names = {n.id for call in built for n in ast.walk(call) if isinstance(n, ast.Name)}
+    assert "DOCUMENT_QUESTIONS" in names, "the panel must be served the document list"
+    assert "ASSISTANT_QUESTIONS" not in names, (
+        "doc/08's figure questions reached the panel — ADR 0052 split them for a reason"
+    )
+    assert DOCUMENT_QUESTIONS != ASSISTANT_QUESTIONS
+
+
+def test_every_department_with_a_director_can_be_asked_something() -> None:
+    """A department whose panel lists nothing reads as a broken load — the same
+    reason the nav drops an empty Directors heading rather than heading it."""
+    for department in ASSISTANT_QUESTIONS:
+        assert DOCUMENT_QUESTIONS.get(department), f"{department.value} has no askable question"
+
+
+def test_no_document_question_asks_for_a_figure() -> None:
+    """The rule that decides membership, made mechanical.
+
+    A document-grounded answer is a quotation with a citation. These words are
+    how the figure questions above are phrased — "how long", "how many", "what
+    is our cash position" — and one appearing here means a question crossed back
+    over the line this split exists to draw.
+    """
+    asks_for_a_number = ("how long", "how many", "how much", "what is our cash", "runway")
+
+    for department, questions in DOCUMENT_QUESTIONS.items():
+        for question in questions:
+            lowered = question.lower()
+            offending = [phrase for phrase in asks_for_a_number if phrase in lowered]
+            assert not offending, f"{department.value}: {question!r} asks for {offending}"

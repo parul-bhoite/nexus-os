@@ -75,7 +75,7 @@ from app.domain.registry import (
 )
 from app.domain.scopes import Department
 from app.domain.sections import (
-    ASSISTANT_QUESTIONS,
+    DOCUMENT_QUESTIONS,
     NOT_ASKED,
     WATCH_ITEMS,
     Section,
@@ -2028,7 +2028,13 @@ async def director_dashboard(
         catalogue=[block_out(c) for c in tiles if not c.section],
         assistant=AssistantOut(
             director=director.title,
-            questions=list(ASSISTANT_QUESTIONS.get(director.department, ())),
+            # `DOCUMENT_QUESTIONS`, not `ASSISTANT_QUESTIONS` — ADR 0052. The
+            # latter is `doc/08`'s specification and is almost entirely about
+            # computed figures, which the first assistant cannot answer; serving
+            # it would put a list of unkeepable promises under an input box the
+            # moment one appears. The two lists converge as capabilities become
+            # reachable.
+            questions=list(DOCUMENT_QUESTIONS.get(director.department, ())),
         ),
     )
 

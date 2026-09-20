@@ -390,6 +390,69 @@ ASSISTANT_QUESTIONS: Final[dict[Department, tuple[str, ...]]] = {
         "What is holding us back?",
     ),
 }
+"""**`doc/08`'s specification, and not what the panel advertises today.**
+
+Almost every question above is about a *computed figure* — a runway, a pipeline,
+a stock level — and answering one needs a calculator and a connected source. The
+registry has 23 reachable capabilities and none of those is among them, so this
+list describes the assistant the product is heading towards rather than the one
+being built (ADR 0052).
+
+Kept verbatim rather than edited down: these are `doc/08` 2E-8E, written as
+what a founder would actually type, and they are the record of what the
+assistant is *for*. `DOCUMENT_QUESTIONS` below is what it can do first. The two
+converge as capabilities become reachable, one question at a time, and the day
+they are identical this split is spent.
+"""
+
+
+# ── What the first assistant can actually answer (ADR 0052) ───
+
+DOCUMENT_QUESTIONS: Final[dict[Department, tuple[str, ...]]] = {
+    Department.EXECUTIVE: (
+        "What did we commit to in the board pack?",
+        "What does our strategy document say we are prioritising?",
+    ),
+    Department.MARKETING: (
+        "What does our brand guideline say about tone?",
+        "What claims are we allowed to make about the product?",
+    ),
+    Department.SALES: (
+        "What discount can I offer at this volume?",
+        "What does our standard proposal say about scope?",
+    ),
+    Department.FINANCE: (
+        "What are our payment terms?",
+        "What does the contract say about late payment?",
+    ),
+    Department.OPERATIONS: (
+        "What lead time did we promise this customer?",
+        "What does the supplier agreement say about delays?",
+    ),
+    Department.HR: (
+        "What does our leave policy say?",
+        "What is the notice period in our standard contract?",
+    ),
+    Department.STRATEGY: (
+        "What did we say about this market in our plan?",
+        "What assumptions is our forecast built on?",
+    ),
+}
+"""What a passages-only assistant can honestly offer, per department.
+
+**Every one of these is answerable from a document a founder uploaded**, which
+is the whole test for belonging here: the answer is a quotation with a citation,
+not a calculation. Two per department rather than four, because a shorter list
+of keepable promises reads better than a longer list with a hedge under it.
+
+They are deliberately *not* rewrites of the questions above. "How long is our
+runway?" has no document-grounded equivalent — the honest version is not a
+softer phrasing of it, it is a different question about a different thing.
+
+A question here is a promise the product will be held to the moment the panel
+grows an input box, so adding one means checking that a founder's own file could
+plausibly answer it — not that the model could produce a sentence.
+"""
 
 
 # ── Step D: the two sections that are ours ────────────────────
