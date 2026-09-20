@@ -1,0 +1,32 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["answered", "segments"],
+  "properties": {
+    "answered": {
+      "type": "boolean",
+      "description": "False when the passages do not answer the question. False with empty segments is a complete, valid response."
+    },
+    "segments": {
+      "type": "array",
+      "description": "The answer, split so each part carries the refs it came from.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["text", "cited_refs"],
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "description": "One claim, in plain words."
+          },
+          "cited_refs": {
+            "type": "array",
+            "description": "Refs from the supplied set that this text came from.",
+            "items": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,35 @@
+name = "assistant-answer"
+version = "1"
+description = "Answer a question from passages the caller may read. Quotes; never calculates."
+
+# **Provisional, pending D13 and A12.** `doc/20` §7 option A: one tier
+# everywhere, matching `narrate-metric`. It is the only option that needs no
+# evidence to start — and `doc/06` §8.4 forbids a cheaper tier until this
+# module's own evals pass, which is A9. A12 ratifies or changes this.
+model = "claude-sonnet-5"
+effort = "low"
+
+# A short answer with its citations. Sized as a design constraint rather than a
+# saving, the same argument `narrate-metric` makes: a model given room for an
+# essay writes one, and a truncated answer reads as a complete one.
+max_output_tokens = 1024
+cache_system = true
+
+# Well under the BFF's 90 s, so a slow model surfaces here as a refusal we
+# worded rather than as a gateway timeout the reader has to interpret.
+timeout_seconds = 45.0
+
+# The question, the refs issued for the passages it may quote, and the director
+# answering. All three are assembled in deterministic code. **`passage_refs`
+# rather than the passage text**: the text is customer content and travels in
+# the user message, fenced; grounding is rendered through `repr()`, which is
+# right for a computed scalar and wrong for kilobytes of prose. Declaring the
+# refs still means a caller cannot reach a model with nothing retrieved.
+requires_grounding = ["question", "passage_refs", "department"]
+
+# Writes nothing. The `generation` row and its citations are written by us
+# after the answer has been checked — a skill that could persist would be
+# persisting output that has not passed A2's guard yet.
+writes = []
+
+tags = ["assistant", "retrieval"]

@@ -7,14 +7,21 @@ in Python rather than in the TSX: the score was computed by
 must never read as doubt about the *figure*. "Something went wrong" beside 45
 out of 65 makes a reader distrust the 45.
 
-Total over the enum on purpose. An eighth reason added later fails this file
-rather than shipping as a blank space where a sentence belongs — the same
-mechanism `test_render_states.py` uses on `WidgetState`.
+Total over **`NARRATION_REASONS`**, which is no longer the whole enum. `doc/20`
+A2 added `NO_PASSAGE` and `UNCITED_CLAIM` for the assistant, and the assistant
+has no computed figure on screen — so `test_no_sentence_puts_the_score_in_doubt`
+below, which is the whole point of this file, cannot apply to them without
+demanding copy that describes a score the reader is not looking at.
+
+**That is a narrowing of scope, not of the guarantee.** A reason with no copy on
+any surface still fails a test: `test_refusal_vocabulary.py` asserts that
+`NARRATION_REASONS` and the assistant's set together cover every member, so a
+ninth reason must be assigned to a surface before it can ship.
 """
 
 from __future__ import annotations
 
-from app.domain.narration import sentence_for
+from app.domain.narration import NARRATION_REASONS, sentence_for
 from app.grounding.pipeline import UnavailableReason
 
 # Words that describe a broken product. ADR 0011 makes an absent model a
@@ -25,7 +32,7 @@ BROKEN = ("error", "failed", "broken", "crash", "unavailable service", "problem 
 def test_every_reason_has_a_sentence() -> None:
     """Totality. A reason with no copy renders as an empty paragraph, which
     reads as a rendering bug rather than as an answer."""
-    for reason in UnavailableReason:
+    for reason in NARRATION_REASONS:
         sentence = sentence_for(reason)
         assert sentence, reason.value
         assert sentence.strip() == sentence
@@ -35,12 +42,12 @@ def test_every_reason_has_a_sentence() -> None:
 def test_no_two_reasons_say_the_same_thing() -> None:
     """Two reasons producing one sentence means one of them is not worth
     distinguishing — the same rule `STATE_LABEL` is held to."""
-    sentences = {sentence_for(reason) for reason in UnavailableReason}
-    assert len(sentences) == len(list(UnavailableReason))
+    sentences = {sentence_for(reason) for reason in NARRATION_REASONS}
+    assert len(sentences) == len(NARRATION_REASONS)
 
 
 def test_every_sentence_is_short_enough_to_read_on_a_tile() -> None:
-    for reason in UnavailableReason:
+    for reason in NARRATION_REASONS:
         assert len(sentence_for(reason)) <= 220, reason.value
 
 
@@ -50,7 +57,7 @@ def test_no_sentence_puts_the_score_in_doubt() -> None:
     The figure beside the refusal was computed in pure Python from a crawled
     page and no model touched it. Every sentence has to leave that standing.
     """
-    for reason in UnavailableReason:
+    for reason in NARRATION_REASONS:
         sentence = sentence_for(reason).lower()
         assert "score" in sentence or "figure" in sentence or "number" in sentence, (
             f"{reason.value} does not mention the figure at all, so a reader "
@@ -143,7 +150,7 @@ def test_missing_input_defers_to_the_tiles_own_unlock() -> None:
 def test_no_sentence_is_cheerful_about_a_refusal() -> None:
     """`SKILL.md`'s voice rule, applied to our own copy: no exclamation marks,
     and the reader decides what matters about their own business."""
-    for reason in UnavailableReason:
+    for reason in NARRATION_REASONS:
         sentence = sentence_for(reason)
         assert "!" not in sentence, reason.value
         assert "sorry" not in sentence.lower(), reason.value

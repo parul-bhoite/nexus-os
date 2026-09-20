@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Final
 
 from app.grounding.compute import Computation
 from app.grounding.pipeline import UnavailableReason
@@ -154,11 +155,35 @@ _SENTENCES: dict[UnavailableReason, str] = {
 }
 
 
-def sentence_for(reason: UnavailableReason) -> str:
-    """The copy for one refusal.
+NARRATION_REASONS: Final[frozenset[UnavailableReason]] = frozenset(_SENTENCES)
+"""The reasons a narration tile can produce, which is **not** the whole enum.
 
-    Total over the enum, and `tests/test_narration_copy.py` proves it: an
-    eighth reason added later fails that file rather than shipping as a blank
-    space where a sentence belongs.
+This set exists because `UnavailableReason` acquired two members a tile can
+never emit — `NO_PASSAGE` and `UNCITED_CLAIM` are the assistant's, and the
+assistant has no computed figure beside it. Writing "the score above is
+unaffected" under an assistant refusal would be describing a score that is not
+on the screen.
+
+**The totality guarantee is not weakened, it is split.** `NARRATION_REASONS`
+and the assistant's own set must together cover every member, and
+`tests/test_refusal_vocabulary.py` is what makes adding a ninth reason without
+copy anywhere a red test rather than a blank space.
+"""
+
+
+def sentence_for(reason: UnavailableReason) -> str:
+    """The copy for one refusal **on a narration tile.**
+
+    Total over `NARRATION_REASONS`, and `tests/test_narration_copy.py` proves
+    it. Called with an assistant-only reason this raises rather than returning
+    a plausible sentence, because the wrong surface's copy is the failure the
+    split was made to prevent — see `app/assistant/grounding.py` for the other
+    map.
     """
-    return _SENTENCES[reason]
+    try:
+        return _SENTENCES[reason]
+    except KeyError:
+        raise KeyError(
+            f"{reason.value} is not a narration reason — a tile cannot produce it. "
+            f"Assistant refusals take their copy from app/assistant/grounding.py."
+        ) from None

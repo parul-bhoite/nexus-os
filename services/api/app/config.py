@@ -389,6 +389,19 @@ class Settings(BaseSettings):
     8.7). Per-skill rather than global so one misbehaving prompt can be stopped
     without taking down every AI feature in the product."""
 
+    assistant_enabled: bool = False
+    """The Nexus Assistant's input box. **Off, and off is the shipped default.**
+
+    `doc/20` A8: with this false the ask endpoint returns **404, not 403** —
+    the existence of an unreleased endpoint is itself information, and a 403
+    would confirm it to anyone who guessed the URL.
+
+    Turning it on is A12's decision and has preconditions (`doc/20` §5 Q7): an
+    eval that fails when the assistant is wrong, a refusal we author that the
+    model cannot reword, a refusal identical whether or not the content exists,
+    and a panel advertising only questions it can answer.
+    """
+
     # ── Guardrails (doc 06 §8.4) ──────────────────────────────
     tenant_daily_token_budget: int = 2_000_000
     user_daily_token_budget: int = 200_000

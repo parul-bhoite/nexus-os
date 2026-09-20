@@ -33,6 +33,34 @@ class UnavailableReason(StrEnum):
     """Why there is no answer. Always specific — "unavailable" alone tells a
     founder nothing about whether to wait, connect something, or ask us."""
 
+    EMBEDDER_UNCONFIGURED = "embedder_unconfigured"
+    """There is no embedding model, so the question cannot be turned into a
+    query. **Assistant only, and a supported state** — ADR 0003 plus ADR 0011's
+    pattern.
+
+    The assistant **refuses rather than degrading to text search.** `CLAUDE.md`
+    makes the argument against `DeterministicEmbedder` and it applies whole: a
+    worse retriever does not fail, it *ranks* — producing confident citations to
+    the wrong passages with no visible symptom at all."""
+
+    NO_PASSAGE = "no_passage"
+    """Nothing the caller may read matched the question. **Assistant only.**
+
+    Distinct from `MISSING_INPUT`, and the difference is the whole first
+    assistant: a missing input is a fact nobody supplied to a calculator, this
+    is a question the uploaded documents do not cover. It is also not an error —
+    ADR 0052 makes answering from documents the product, so a question outside
+    them is a supported outcome, not a failure to answer."""
+
+    UNCITED_CLAIM = "uncited_claim"
+    """The answer pointed at a passage that was never sent to it. **Assistant
+    only.**
+
+    The same shape as `INVENTED_NUMBER`, one level up: an invented *source*
+    rather than an invented figure. Worth its own reason because the remedy is
+    not the same — a fabricated citation means the retrieval set and the answer
+    disagree about what was read, and no part of that answer can be trusted."""
+
     MISSING_INPUT = "missing_input"
     """A calculation needed a fact nobody supplied. Renders as the named state —
     "we need your fiscal year start" — never as a blank tile."""

@@ -860,7 +860,12 @@ class AssistantOut(BaseModel):
     director: str
     questions: list[str]
     available: bool = False
-    """False everywhere today. The panel is reserved, not built (P20)."""
+    """**Follows `assistant_enabled`, and that setting is off by default.**
+
+    A11 built the input box; A12 decides whether it opens. The two must move
+    together — a panel that renders an input while the route 404s would be the
+    exact failure the reserved state existed to prevent, arrived at from the
+    other side."""
 
 
 class DirectorOut(BaseModel):
@@ -1953,6 +1958,7 @@ async def director_dashboard(
     director: ReachableDirector,
     scope: CurrentScope,
     observed: ObservedSources,
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> DirectorOut:
     """One director's page.
 
@@ -2035,6 +2041,8 @@ async def director_dashboard(
             # moment one appears. The two lists converge as capabilities become
             # reachable.
             questions=list(DOCUMENT_QUESTIONS.get(director.department, ())),
+            # One flag for the box and the endpoint behind it.
+            available=settings.assistant_enabled,
         ),
     )
 
