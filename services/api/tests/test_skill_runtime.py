@@ -255,11 +255,17 @@ def test_every_skill_has_a_caller(registry: SkillRegistry) -> None:
     `NARRATOR` is **imported rather than spelled**, so renaming the skill breaks
     this test at the import and not at the assertion. A string here would let
     the guard keep passing over a skill that no longer exists.
+
+    `assistant-answer` is the third kind of caller: not a command and not the
+    narrator, but `app/assistant/ask.py`, reached from
+    `POST /dashboards/{department}/ask`. It is imported for the same reason —
+    and the guard caught it on the full run, which is what it is for.
     """
     from app.ai.runtime.commands import get_commands
+    from app.assistant.ask import SKILL as ASSISTANT
     from app.grounding.answer import NARRATOR
 
-    reachable = get_commands().skills_used() | {NARRATOR}
+    reachable = get_commands().skills_used() | {NARRATOR, ASSISTANT}
     orphans = sorted(set(registry.names()) - reachable)
     assert not orphans, f"skills on disk that nothing invokes: {orphans}"
 

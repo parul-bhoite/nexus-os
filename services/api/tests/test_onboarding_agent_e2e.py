@@ -249,6 +249,25 @@ def _context() -> str:
     )
 
 
+def _assistant_answer() -> str:
+    """`assistant-answer` (`doc/20` A5).
+
+    Segments rather than one blob, because each carries the refs it came from —
+    and the fixture cites `p1`, an **opaque per-call ref**, never a chunk id
+    (ADR 0055). A fixture using an id would teach the shape the fence exists to
+    prevent.
+
+    The prose quotes its passage and states no figure of its own, which is the
+    skill's contract: every numeral it writes must appear in a passage it cited.
+    """
+    return json.dumps(
+        {
+            "answered": True,
+            "segments": [{"text": "Payment is due within 30 days.", "cited_refs": ["p1"]}],
+        }
+    )
+
+
 def _narration() -> str:
     """`narrate-metric` (`doc/13` step B).
 
@@ -274,12 +293,15 @@ def _provider(**overrides: Any) -> ScriptedProvider:
         "persona-builder": _persona(),
         "company-brain-builder": _brain(),
         "context-personalization": _context(),
-        # Not used by any onboarding journey — a metric is narrated on a
-        # dashboard, not during setup. It is scripted anyway because
-        # `ScriptedProvider` raises on an unscripted skill, and a provider that
-        # cannot answer for a skill the registry holds is a trap for whoever
-        # writes the first tile test.
+        # Neither of these is used by any onboarding journey — a metric is
+        # narrated on a dashboard and a question is answered from documents,
+        # not during setup. Both are scripted anyway because `ScriptedProvider`
+        # raises on an unscripted skill, and a provider that cannot answer for a
+        # skill the registry holds is a trap for whoever writes the first tile
+        # test. `assistant-answer` walked into exactly that trap on the run that
+        # added it.
         "narrate-metric": _narration(),
+        "assistant-answer": _assistant_answer(),
     }
     script.update(overrides)
     return ScriptedProvider(script)
@@ -309,6 +331,7 @@ def test_the_scripted_fixtures_match_the_real_skill_schemas() -> None:
         "company-brain-builder": _brain(),
         "context-personalization": _context(),
         "narrate-metric": _narration(),
+        "assistant-answer": _assistant_answer(),
     }
     assert set(scripted) == set(registry.names()), "a skill has no scripted fixture"
 
