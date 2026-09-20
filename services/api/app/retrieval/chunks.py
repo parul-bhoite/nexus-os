@@ -21,12 +21,25 @@ from uuid import UUID
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.scopes import Department, Scope
 from app.domain.session import ScopedSession
 
 # `review_state` is checked here as well as in the predicate below because a
 # chunk still waiting for review is not yet a workspace fact — the review gate
 # exists to stop unconfirmed content being retrieved as though it were.
 READABLE_STATES: Final = ("auto_approved", "approved")
+
+# `chunk.scope` is stored as the lattice's short name; `Scope` is an `IntEnum`
+# whose members are spelled out. Mapped explicitly rather than by index
+# arithmetic so that a value the lattice does not have raises here, at the row
+# it came from, instead of resolving to a neighbouring scope.
+_SCOPE_NAMES: Final = {
+    "L1": "L1_COMPANY_PUBLIC",
+    "L2": "L2_COMPANY_INTERNAL",
+    "L3": "L3_DEPARTMENT",
+    "L4": "L4_RESTRICTED",
+    "L5": "L5_PERSONAL",
+}
 
 # The predicate, spelled once. `ARCHITECTURE-LLD.md` §3.1.
 #
@@ -63,6 +76,25 @@ class Passage:
     source_page: int | None
     source_label: str | None
 
+    scope: Scope
+    """**Read from the row, never asserted about the caller** (ADR 0057).
+
+    A generation is tagged with the scope of what it cited, not of who asked —
+    migration 0023's rule, and `context.py`'s argument for it: *"a snapshot of
+    Finance facts is a Finance artefact whoever asked for it."* Without this on
+    the passage, that tag would have to come from the caller's departments,
+    which inverts it.
+
+    This cannot widen what comes back. It is a column on a row `PREDICATE`
+    already returned, so a passage carrying a scope the caller may not read
+    would mean the predicate was wrong — which is why
+    `evals/test_permissions.py` asserts these fields rather than a unit test.
+    """
+
+    department: tuple[Department, ...]
+    """Empty for scopes that are not department-keyed. `chunk.department` is
+    `text[]` and a chunk can sit in more than one."""
+
 
 def _params(scope: ScopedSession, extra: dict[str, object]) -> dict[str, object]:
     return {
@@ -97,7 +129,8 @@ async def search(
     rows = (
         await db.execute(
             text(
-                "SELECT id, content, document_id, source_page, source_label"  # noqa: S608
+                "SELECT id, content, document_id, source_page, source_label,"  # noqa: S608
+                "       scope, department"
                 "  FROM chunk"
                 " WHERE workspace_id = :ws"
                 "   AND review_state = ANY(:states)"
@@ -129,6 +162,8 @@ async def search(
             document_id=row.document_id,
             source_page=row.source_page,
             source_label=row.source_label,
+            scope=Scope[_SCOPE_NAMES[row.scope]],
+            department=tuple(Department(d) for d in row.department),
         )
         for row in rows
     ]

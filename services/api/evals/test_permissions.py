@@ -216,6 +216,28 @@ async def test_the_eight_permission_specs(app_db: None) -> None:
                 assert "l3_sales" not in passage.content
                 assert "l5_other" not in passage.content
 
+            # ── 3b. The scope a passage reports is one the caller may read ─
+            # **ADR 0057 adds `scope` and `department` to `Passage`, and this is
+            # where they are held honest.** A6 tags the `generation` row with
+            # them, so a field disagreeing with the predicate would not just be
+            # a wrong label — it would mis-classify the stored artefact, and the
+            # scope lattice would have a side door exactly where migration 0023
+            # says it must not.
+            #
+            # Asserted here rather than in a unit test because the claim is
+            # about agreement between two things: what the `WHERE` let through
+            # and what the `SELECT` reported. Only a real query has both.
+            for passage in await search(db, contributor, embedding=QUERY, limit=50):
+                assert passage.scope is not Scope.L4_RESTRICTED, (
+                    "an unnamed Contributor must never hold an L4 passage"
+                )
+                if passage.scope is Scope.L3_DEPARTMENT:
+                    assert Department.FINANCE in passage.department, (
+                        f"{passage.id} reports departments {passage.department}, none of which "
+                        "this caller holds — the predicate and the row disagree"
+                    )
+                    assert Department.SALES not in passage.department
+
             # ── 4. A spoofed identity argument ────────────────────
             # There is nowhere to put one. `search` takes a `ScopedSession` and
             # no `user_id`, so a bug two layers up cannot become a cross-tenant
@@ -263,6 +285,13 @@ async def test_the_eight_permission_specs(app_db: None) -> None:
             await _as(db, named)
             with_name = {p.id for p in await search(db, named, embedding=QUERY, limit=50)}
             assert ids["l4_named"] in with_name, "naming the caller is what opens an L4 item"
+            # …and only then may a passage report L4. The pair matters: 3b above
+            # would also pass if `scope` were hardcoded to anything that is not
+            # L4, which is the false green worth excluding.
+            named_passages = await search(db, named, embedding=QUERY, limit=50)
+            assert any(p.scope is Scope.L4_RESTRICTED for p in named_passages), (
+                "a named L4 item must report its real scope, not a safe-looking one"
+            )
         finally:
             await _cleanup(db, (ws, other_ws))
             await db.execute(sa.text("DELETE FROM app_user WHERE id = :u"), {"u": str(owner)})
