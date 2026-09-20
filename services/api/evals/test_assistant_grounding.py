@@ -233,3 +233,28 @@ def test_the_no_passage_sentence_says_what_would_make_it_answerable() -> None:
 
     assert "upload" in sentence
     assert "document" in sentence
+
+
+def test_one_chunk_cited_by_three_segments_yields_one_citation() -> None:
+    """**A regression test for a 500 that a real model produced.**
+
+    Asked a question whose answer rests on one passage, a model answers in
+    several segments and cites that passage in each — which is correct of it.
+    `resolve` returned a citation per mention, `generation_citation` holds one
+    row per (answer, chunk) by ADR 0056, and the insert failed on the unique
+    constraint. The constraint was right; the caller was the bug.
+
+    Deduplication is not cosmetic here. The panel keys its citation list on the
+    chunk id, so duplicates were also a broken list in the browser.
+    """
+    from app.assistant.fence import prepare, resolve
+
+    passages = [_passage("Payment is due within 30 days."), _passage("Delivery is FOB origin.")]
+    grounding = prepare(passages)
+
+    citations, unknown = resolve(grounding, ["p1", "p1", "p2", "p1"])
+
+    assert unknown == ()
+    assert [c.chunk_id for c in citations] == [passages[0].id, passages[1].id], (
+        "first mention wins, and order is the answer's rather than the retrieval's"
+    )

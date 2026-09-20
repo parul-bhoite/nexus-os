@@ -35,6 +35,7 @@ from httpx2 import Response
 from sqlalchemy import Connection
 
 from app.assistant import ask as ask_module
+from app.assistant.budget import ASK_LIMIT
 from app.config import get_settings
 from app.db import get_engine, get_sessionmaker
 from app.domain.scopes import Department, Role
@@ -398,6 +399,93 @@ def test_the_panel_is_available_only_when_the_assistant_is_enabled(
         assert (asked.status_code != 404) is enabled
         # And the questions are the ones it can answer either way (ADR 0052).
         assert panel["questions"], "a panel with no questions is a blank region"
+    finally:
+        with engine.begin() as c:
+            c.execute(
+                sa.text("SELECT set_config('nexus.workspace_id', :w, false)"),
+                {"w": str(ids["workspace"])},
+            )
+            c.execute(sa.text("DELETE FROM workspace WHERE id = :w"), {"w": str(ids["workspace"])})
+            c.execute(sa.text("DELETE FROM tenant WHERE id = :t"), {"t": str(ids["tenant"])})
+            c.execute(sa.text("DELETE FROM app_user WHERE id = :u"), {"u": str(ids["user"])})
+        engine.dispose()
+        for cache in (get_settings, get_engine, get_sessionmaker):
+            cache.cache_clear()
+
+
+@pytest.mark.requires_db
+def test_exhausting_the_rate_limit_is_a_429_with_retry_after(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """**A regression test for a 500 that shipped.**
+
+    `test_assistant_budget_db.py` asserts that `ask` *raises* `RateLimitedError`,
+    and its docstring justifies that by saying the route renders it as a 429 —
+    but nothing drove the route at the limit, so nothing noticed that the route
+    did not catch it. An end-to-end run did, as an unhandled exception and a 500
+    body reading "Something went wrong on our side."
+
+    **Needs a database**, which is why it is not in the hermetic half above:
+    `check_and_increment` is an upsert on a bucket table, and the hermetic
+    client pins `NEXUS_DATABASE_URL` empty. That is also why the gap existed —
+    the cheap tests could not have covered this one.
+
+    The header is the point. A 429 without `Retry-After` tells a client to back
+    off by an amount it has to guess, and the guess is usually "immediately".
+    """
+    assert ASYNC_DB_URL is not None
+    monkeypatch.setenv("NEXUS_DATABASE_URL", ASYNC_DB_URL)
+    monkeypatch.setenv("NEXUS_STORAGE_SIGNING_SECRET", "test-secret")
+    monkeypatch.setenv("NEXUS_ASSISTANT_ENABLED", "true")
+    for cache in (get_settings, get_engine, get_sessionmaker):
+        cache.cache_clear()
+
+    # Stubbed even though the limit bites before retrieval matters: the first
+    # calls under the limit still reach the embedder, and on a machine with
+    # `[embeddings]` installed that loads ~2 GB of weights to prove something
+    # about a counter. It also trips `filterwarnings = ["error"]` on a
+    # fastembed pooling warning, which reads as a product failure and is not.
+    monkeypatch.setattr(ask_module, "get_embedder", _StubEmbedder)
+
+    # A real workspace, because **every outcome writes a ledger row** — the
+    # refusals included — and `generation.workspace_id` is a foreign key. An
+    # invented id fails on it, which is the ledger rule doing its job.
+    ids = {k: uuid4() for k in ("tenant", "user", "workspace", "document", "chunk")}
+    sync_url = database_url()
+    assert sync_url is not None
+    engine = sa.create_engine(sync_url)
+    with engine.begin() as c:
+        _seed_sync(c, ids)
+
+    app = create_app()
+    _override_departments(app)
+
+    try:
+        with TestClient(app) as tc:
+            from app.deps import current_scope
+
+            app.dependency_overrides[current_scope] = lambda: ScopedSession(
+                user_id=ids["user"],
+                tenant_id=ids["tenant"],
+                workspace_id=ids["workspace"],
+                role=Role.OWNER,
+                departments=frozenset(Department),
+            )
+            tc.cookies.set("nexus_csrf", CSRF)
+
+            seen: list[int] = []
+            for _ in range(ASK_LIMIT.max_count + 2):
+                seen.append(ask_http(tc, "finance").status_code)
+                if seen[-1] == 429:
+                    break
+
+            assert 500 not in seen, f"the rate limit surfaced as a server error: {seen}"
+            assert 429 in seen, f"the limit never bit: {seen}"
+
+            limited = ask_http(tc, "finance")
+            assert limited.status_code == 429
+            assert limited.headers.get("Retry-After"), "a 429 without Retry-After is a guess"
+            assert int(limited.headers["Retry-After"]) > 0
     finally:
         with engine.begin() as c:
             c.execute(

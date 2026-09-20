@@ -227,7 +227,11 @@ export function DocumentLibrary() {
             return (
               <li
                 key={document.document_id}
-                className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-bone-300 bg-white/90 px-4 py-3"
+                // The anchor an assistant citation lands on. Without it a
+                // citation is decoration — which is the one thing the answer's
+                // sources must not be.
+                id={`doc-${document.document_id}`}
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 scroll-mt-24 rounded-xl border border-bone-300 bg-white/90 px-4 py-3 target:border-gold-500 target:bg-gold-100"
               >
                 <span className="text-sm font-medium text-ink-800">{document.filename}</span>
                 <span

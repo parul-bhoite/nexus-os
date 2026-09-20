@@ -86,6 +86,10 @@ would read as a limit while enforcing nothing. `tests/test_assistant_skill_defin
 asserts the schema does *not* carry it, so this stays the only bound.
 """
 
+DECLINED: Final = "The model declined to answer from these passages."
+"""Stands in for the empty prose of a well-formed `answered: false`. Never
+rendered — see `_read_output`."""
+
 RETENTION_DAYS: Final = 365
 """How long an assistant generation is kept.
 
@@ -110,6 +114,12 @@ class _ModelOutput:
     refs: tuple[str, ...] = ()
     segments: int = 0
     answered: bool = True
+    parsed: bool = False
+    """Whether a well-formed response was read at all.
+
+    Distinguishes *"the model said no"* from *"the model returned something we
+    could not read"*, which produce the same empty prose and must not produce
+    the same sentence."""
     tokens_in: int = 0
     tokens_out: int = 0
     raw: dict[str, Any] = field(default_factory=dict)
@@ -246,7 +256,16 @@ async def ask(
         )
 
     if answer.outcome is not Outcome.ANSWERED or not output.answered:
-        reason = answer.reason or UnavailableReason.NO_PASSAGE
+        # **A parsed "no" is `NO_PASSAGE`, whatever the pipeline made of it.**
+        # The model read the passages and said they do not answer the question,
+        # which is the outcome this design produces on purpose — reporting it as
+        # a malformed response would tell a founder something is broken on the
+        # most ordinary path in the product.
+        reason = (
+            UnavailableReason.NO_PASSAGE
+            if output.parsed and not output.answered
+            else (answer.reason or UnavailableReason.NO_PASSAGE)
+        )
         return await _refuse(db, scope, question, reason, passages=passages, grounding=grounding)
 
     if output.segments > MAX_SEGMENTS:
@@ -309,13 +328,25 @@ def _read_output(result: SkillResult, into: _ModelOutput) -> str:
 
     segments = payload.get("segments") or []
     into.answered = bool(payload.get("answered"))
+    into.parsed = True
     into.segments = len(segments)
     into.refs = tuple(ref for segment in segments for ref in segment.get("cited_refs", []))
     into.raw = payload
     into.tokens_in = result.completion.usage.input_tokens
     into.tokens_out = result.completion.usage.output_tokens
 
-    return " ".join(str(segment.get("text", "")) for segment in segments).strip()
+    prose = " ".join(str(segment.get("text", "")) for segment in segments).strip()
+
+    # **`answered: false` is a complete, valid response, and its prose is
+    # empty.** `pipeline.run` reads empty prose as malformed, retries, and
+    # returns `SCHEMA_INVALID` — so the assistant's *most common correct
+    # outcome* cost two model calls and told the reader "the answer came back in
+    # a shape we could not read", blaming our pipeline for an honest no. Found
+    # end to end, asking a runway question of a supplier agreement.
+    #
+    # The marker carries no numerals, so the guard has nothing to reject, and it
+    # never reaches a reader: `ask` sees `answered` false and refuses.
+    return prose or (DECLINED if into.parsed else "")
 
 
 def _cited_passages(

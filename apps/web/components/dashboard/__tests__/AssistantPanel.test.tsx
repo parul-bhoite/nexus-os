@@ -118,7 +118,10 @@ describe('AssistantPanel once the assistant is available', () => {
     // Followable, which is the whole reason a citation exists. A link that does
     // not open the passage is decoration, and the numeral rule behind the
     // answer is only meaningful if a reader can check it.
-    expect(links[0].getAttribute('href')).toBe('/documents/d1')
+    // `#doc-<id>`, because there is no per-document page. Pinned as the exact
+    // string: the first version of this linked to `/documents/d1` and every
+    // citation 404ed in the browser while this test stayed green.
+    expect(links[0].getAttribute('href')).toBe('/documents#doc-d1')
     expect(links[0].textContent).toContain('terms.pdf')
     expect(links[0].textContent).toContain('page 4')
   })

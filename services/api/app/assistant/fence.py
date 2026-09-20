@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
+from uuid import UUID
 
 from app.assistant.contracts import Citation
 from app.domain.untrusted import Turn, UntrustedSource, wrap_untrusted
@@ -90,15 +91,30 @@ def resolve(
 
     Dropping them silently is the tempting bug, because the answer usually still
     reads fine with one citation removed.
+
+    **Deduplicated by chunk, first mention winning.** A model answering in three
+    segments that all rest on the same passage cites it three times, which is
+    correct of it and wrong as a list of sources: `generation_citation` holds one
+    row per answer per chunk (ADR 0056), and the panel keys its citation list on
+    the chunk id. Both broke here before this existed — a real answer from a real
+    model returned a 500 on the unique constraint, which is that constraint doing
+    exactly what its comment says it is for.
+
+    Order is the answer's own, not the retrieval's: a reader follows citations in
+    the order the prose raised them.
     """
     citations: list[Citation] = []
     unknown: list[str] = []
+    seen: set[UUID] = set()
 
     for ref in cited:
         passage = grounding.by_ref.get(ref)
         if passage is None:
             unknown.append(ref)
             continue
+        if passage.id in seen:
+            continue
+        seen.add(passage.id)
         citations.append(
             Citation(
                 chunk_id=passage.id,

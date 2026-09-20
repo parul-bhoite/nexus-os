@@ -521,3 +521,42 @@ def test_llm_availability_is_imported_to_keep_the_boundary_honest() -> None:
     """`test_ai_boundary.py` forbids naming the vendor; importing the contract's
     own enum is how a test says "a provider" without saying which."""
     assert LlmAvailability.AVAILABLE
+
+
+async def test_a_parsed_no_is_no_passage_and_not_a_malformed_response(app_db: None) -> None:
+    """**A regression test for the most common outcome getting the wrong words.**
+
+    `answered: false` is a complete, valid response and its prose is empty.
+    `pipeline.run` reads empty prose as malformed, retries, and returns
+    `SCHEMA_INVALID` — so a founder asking a runway question of a supplier
+    agreement was told *"the answer came back in a shape we could not read"*,
+    which blames our pipeline for the assistant working exactly as designed.
+
+    Found end to end against a real model, not by any unit test: the scripted
+    provider returns whatever a test hands it, and every earlier test handed it
+    something that parsed **and** answered.
+    """
+    async with _unscoped_session() as db:
+        seed = await _seed(db)
+        provider = _provider('{"answered": false, "segments": []}')
+
+        result = await ask(
+            db,
+            _scope(seed, Department.FINANCE),
+            QUESTION,
+            provider=provider,
+            settings=get_settings(),
+        )
+        await db.flush()
+
+        assert isinstance(result, AssistantRefusal)
+        assert result.reason is UnavailableReason.NO_PASSAGE, (
+            "a model that read the passages and said no is not a malformed response"
+        )
+        assert "shape we could not read" not in result.sentence
+        # And it cost one call, not two: the retry existed only because empty
+        # prose looked like a failure.
+        assert len(provider.calls) == 1, f"declining cost {len(provider.calls)} model calls"
+
+        row = await _generation(db, seed.workspace_id)
+        assert row.unavailable_reason == UnavailableReason.NO_PASSAGE.value

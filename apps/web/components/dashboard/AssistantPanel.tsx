@@ -166,7 +166,12 @@ export function AssistantPanel({
             {reply.citations.map((citation) => (
               <li key={citation.chunkId}>
                 <a
-                  href={`/documents/${citation.documentId}`}
+                  // **`/documents#doc-<id>`, not `/documents/<id>`.** There is
+                  // no per-document page: the first version of this linked to
+                  // one and every citation 404ed, which a unit test could not
+                  // see and a browser found immediately. The library highlights
+                  // the row it lands on.
+                  href={`/documents#doc-${citation.documentId}`}
                   data-testid="assistant-citation"
                   className="font-mono text-2xs text-ink-500 underline underline-offset-2 hover:text-ink-900"
                 >

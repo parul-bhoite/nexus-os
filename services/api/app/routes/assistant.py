@@ -24,6 +24,7 @@ from app.assistant.ask import ask
 from app.assistant.contracts import AssistantAnswer, Question
 from app.auth.csrf import require_csrf
 from app.config import Settings, get_settings
+from app.connectors.rate_limit import RateLimitedError
 from app.deps import CurrentScope
 from app.retrieval.scoped import scoped_connection
 from app.routes.dashboards import ReachableDirector
@@ -63,14 +64,20 @@ class AskOut(BaseModel):
     sentence: str | None = None
 
 
-NOT_FOUND: dict[int | str, dict[str, object]] = {
+RESPONSES: dict[int | str, dict[str, object]] = {
+    429: {
+        "description": (
+            "Too many questions in the window. Carries `Retry-After` so a client "
+            "can back off politely rather than guessing."
+        )
+    },
     404: {
         "description": (
             "The department does not exist, the caller does not hold it, or the "
             "assistant is not enabled. **Deliberately indistinguishable** — "
             "'this exists and you may not have it' is itself a disclosure."
         )
-    }
+    },
 }
 
 
@@ -80,7 +87,7 @@ NOT_FOUND: dict[int | str, dict[str, object]] = {
     status_code=status.HTTP_200_OK,
     summary="Ask this director a question about the workspace's own documents",
     dependencies=[Depends(require_csrf)],
-    responses=NOT_FOUND,
+    responses=RESPONSES,
 )
 async def ask_director(
     body: AskIn,
@@ -103,6 +110,14 @@ async def ask_director(
     **A refusal is a 200.** It is an outcome, not an error: the reader gets a
     sentence we wrote, and a 4xx would push the client into an error path and
     tempt it to render wording of its own.
+
+    **The rate limit is the exception to that, and it is a 429.** It is not a
+    statement about the workspace's documents, it is a statement about this
+    caller's pace, and the `Retry-After` header is the part a client acts on —
+    wrapping it in a 200 refusal bubble would throw that away. `scan.py` renders
+    `RateLimitedError` the same way, and this route reached production as a
+    **500** until an end-to-end run hit the limit: `ask` raises, and nothing
+    here caught it.
     """
     if not settings.assistant_enabled:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
@@ -112,16 +127,23 @@ async def ask_director(
     # `generation_citation` — reads it. Without it `nexus_app` is `NOBYPASSRLS`
     # and the retrieval returns **zero rows rather than an error**, which would
     # surface as a permanent, plausible "nothing in your documents covers that".
-    async with scoped_connection(scope) as db:
-        result = await ask(
-            db,
-            scope,
-            Question(text=body.question, department=director.department),
-            provider=get_provider(),
-            settings=settings,
-            disabled_skills=settings.disabled_ai_skills_set,
-        )
-        await db.commit()
+    try:
+        async with scoped_connection(scope) as db:
+            result = await ask(
+                db,
+                scope,
+                Question(text=body.question, department=director.department),
+                provider=get_provider(),
+                settings=settings,
+                disabled_skills=settings.disabled_ai_skills_set,
+            )
+            await db.commit()
+    except RateLimitedError as exc:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "Too many questions right now — try again shortly.",
+            headers={"Retry-After": str(exc.retry_after_seconds)},
+        ) from exc
 
     if isinstance(result, AssistantAnswer):
         return AskOut(
