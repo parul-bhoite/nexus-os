@@ -1237,7 +1237,8 @@ It belongs with A12, which is the step that reads numbers.
 customer data, for a company that does not exist. Plus
 `evals/test_assistant_measurement.py`, deterministic, no key.
 
-**It measures retrieval, not answers, and the distinction is the point.** A9
+**It measures retrieval, not answers — a departure from this section, recorded
+as ADR 0061.** The distinction is the point. A9
 asks for three counts — answered, wrongly refused, wrongly cited — and **none is
 computable without a model**; scripting one would measure the script. What is
 computable is the thing all three rest on: *did the document holding the answer
