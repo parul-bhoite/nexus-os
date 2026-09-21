@@ -569,7 +569,9 @@ Not a permission that exists today. Owner-only is safe and makes a forty-person
 list one person's job. A department manager editing their own reports is the
 obvious shape and is also how somebody grants themselves a reporting line.
 
-### D37 — M22: pay for correctness, suppress the symptom, or scope the fix? *(blocks a clean full test run)*
+### D37 — M22: pay for correctness, suppress the symptom, or scope the fix? ✅ **Decided 21 September 2026 — ADR 0060**
+
+**Chose C**, `NullPool` scoped to `test_onboarding_agent_e2e.py`. A was a verified fix that made every run hours slower; B was free and would have blinded the suite to real socket leaks. Implemented so that **only the pool class changes** — not `NEXUS_DB_TRANSACTION_POOLER`, which would also have dropped the prepared-statement caches and the pre-ping and left this module testing a driver configuration production never uses.
 
 **Not a bug to find any more.** The cause is proven (`BUILD-STATUS` §7, commit
 `ef27a71`): a pooled asyncpg connection is created on one event loop and closed

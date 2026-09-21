@@ -31,6 +31,7 @@ import pytest
 import sqlalchemy as sa
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.pool import NullPool
 
 from app.ai.providers import ScriptedProvider
 from app.config import get_settings
@@ -359,11 +360,49 @@ def test_every_scripted_target_is_a_declared_field() -> None:
 # ── Fixtures ──────────────────────────────────────────────────
 
 
+def _unpooled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Give this module's engine a `NullPool`, and change nothing else. **M22.**
+
+    The flake this closes, proven on 21 September: a pooled asyncpg connection
+    gets created on one event loop and closed on another. asyncpg's graceful
+    close arms a timeout timer on the loop that made the connection; that loop
+    is gone, so `loop.call_later` raises `RuntimeError: Event loop is closed`,
+    asyncpg falls back to `_abort()`, and aborting a **TLS** transport on
+    CPython 3.12 leaves the socket open. `Pool._close_connection` swallows and
+    logs that at DEBUG, so nothing surfaced except a `ResourceWarning` that
+    `filterwarnings = ["error"]` later turned into a failure — **on whichever
+    test happened to trigger GC**, which is why it looked random.
+
+    `NullPool` closes each connection at checkin, inside the loop that opened
+    it, so the cross-loop window never exists. **Scoped to this module** (D37,
+    option C): suite-wide it is a verified fix and costs ~1.9x on every database
+    test, which is hours per run. Here it costs about ninety seconds.
+
+    **Only the pool class changes.** Not `NEXUS_DB_TRANSACTION_POOLER`, which
+    would have been one line — it also drops the prepared-statement caches and
+    the pre-ping, so these tests would exercise a driver configuration
+    production never uses. Every other kwarg, and every connect hook including
+    `_apply_session_timeouts`, is production's.
+    """
+    from sqlalchemy.ext.asyncio import create_async_engine as original
+
+    def _no_pool(url: object, **kwargs: object) -> object:
+        kwargs["poolclass"] = NullPool
+        # `NullPool` holds nothing, so the sizing knobs are not merely unused —
+        # it rejects them.
+        for sized in ("pool_size", "max_overflow", "pool_timeout", "pool_recycle"):
+            kwargs.pop(sized, None)
+        return original(url, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr("app.db.create_async_engine", _no_pool)
+
+
 @pytest.fixture
 async def app_db(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
     assert ASYNC_DB_URL is not None
     monkeypatch.setenv("NEXUS_DATABASE_URL", ASYNC_DB_URL)
     monkeypatch.setenv("NEXUS_STORAGE_SIGNING_SECRET", "test-secret")
+    _unpooled(monkeypatch)
     for cache in (get_settings, get_engine, get_sessionmaker):
         cache.cache_clear()
     yield

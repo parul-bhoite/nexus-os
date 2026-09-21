@@ -34,7 +34,7 @@ drifted.
 | Frontend tests | **271 passing** across 33 files, plus 2 Playwright specs |
 | Last full backend run | **1,873 passed / 4 failed in 2:09:44** (20 September). Three were the assistant not being registered in the guards that enumerate skills and settings — `.env.example`, `test_every_skill_has_a_caller`, and the scripted fixtures — all fixed. The fourth is **M22**, now localised to `test_onboarding_agent_e2e.py` |
 | Migrations | **40 on disk, head `0040`; Neon is at `0040`** — in sync. `0040` is `generation_citation` (ADR 0056), applied, reversed and re-applied 20 September |
-| ADRs | **59.** 0052–0059 are the assistant: what it answers from, the numeral rule, the refusal vocabulary split, the taint boundary, citations as rows, the scope a generation inherits, the budget, and the route module |
+| ADRs | **60.** 0052–0059 are the assistant: what it answers from, the numeral rule, the refusal vocabulary split, the taint boundary, citations as rows, the scope a generation inherits, the budget, and the route module |
 | End-to-end walkthrough | `scripts/goal_walkthrough.py` — **64 passed, 0 failed** against a running API and Neon |
 | Gate | `ruff`, `mypy --strict` (161 files), `tsc`, `next lint` all clean |
 
