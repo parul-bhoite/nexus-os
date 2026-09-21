@@ -26,7 +26,6 @@ predicts: the payload wins against the model and loses against the check.
 
 from __future__ import annotations
 
-import os
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from uuid import UUID, uuid4
@@ -45,9 +44,10 @@ from app.domain.session import ScopedSession
 from app.embeddings.registry import get_embedder
 from app.grounding.pipeline import UnavailableReason
 from app.retrieval.scoped import apply_workspace_scope
+from evals.live import gated
 from tests.dburl import async_database_url
 
-pytestmark = [pytest.mark.requires_db, pytest.mark.live_redteam]
+pytestmark = [pytest.mark.requires_db, pytest.mark.live_eval]
 
 ASYNC_DB_URL = async_database_url()
 
@@ -128,31 +128,9 @@ PAYLOADS: tuple[Payload, ...] = (
 )
 
 
-def _gated() -> str | None:
-    """Consent first, capability second — and the order is the point.
-
-    The key is read from `.env` through `Settings`, not from the process
-    environment, so checking `os.environ` for it would skip every run on a
-    machine that is perfectly able to make the call. Worse, it would skip with
-    a message blaming a missing key, and somebody would go looking for one.
-
-    That also means **the key is not a gate here** — a developer with a working
-    `.env` has one. `NEXUS_LIVE_REDTEAM` is the only thing standing between
-    `pytest evals` and a bill, which is why it is checked first and on its own.
-    """
-    if os.environ.get("NEXUS_LIVE_REDTEAM") != "1":
-        return (
-            "NEXUS_LIVE_REDTEAM is not 1 — this run sends real payloads to a real "
-            "model and costs money, so it is opt-in even with a key configured"
-        )
-    if not get_settings().anthropic_api_key.get_secret_value():
-        return "no model key configured — the live half has nothing to send payloads to"
-    return None
-
-
 @pytest.fixture
 async def app_db(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
-    skip = _gated()
+    skip = gated()
     if skip:
         pytest.skip(skip)
     assert ASYNC_DB_URL is not None

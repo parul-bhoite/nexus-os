@@ -606,6 +606,46 @@ only if the special case in C proves confusing in practice.
 one event loop for the life of the process, so the cross-loop close cannot occur
 there.
 
+
+### D38 — Do numerals the customer typed count as invented? *(found by A9's first live run)*
+
+**A real answer was thrown away, and the reader was told their own number was
+fabricated.** Asked *"Who can approve a purchase of 3,000 rial?"* over a policy
+stating *"purchases from 500 to 5,000 OMR require department head approval"*,
+the assistant refused with `INVENTED_NUMBER` and the sentence *"it stated a
+figure that appears in none of the passages it quoted."*
+
+The figure was **3,000**, and it came from the question. ADR 0053 builds the
+permitted set from the cited passages alone, so a numeral the customer typed is
+indistinguishable from one the model made up.
+
+- **A. Permit numerals from the question.** Fixes this class outright, and it
+  is a small change — `numerals_supplied(question.text)` folded into
+  `also_permitted`.
+- **B. Leave it.** The refusal is safe, and a founder rephrasing without the
+  figure gets an answer. It is also the product calling the customer a liar
+  about their own input, on a question shape ("can I approve *X*?") that is
+  among the most natural to ask.
+- **C. Permit them only when the answer also cites a passage containing a band
+  the figure falls within.** Precise, and needs range parsing this product does
+  not have.
+
+**The argument against A, which is why this is a decision and not a fix:** a
+question is attacker-reachable in one specific way — *"Is our revenue
+5,000,000?"* would permit the model to echo 5,000,000 back as though it were
+grounded. The citation requirement still applies, so the answer must point at a
+passage; but the numeral check, which is I1's teeth, would no longer bite on the
+echo.
+
+**Recommended: A, narrowed** — permit a question's numerals only in an answer
+that carries at least one citation, which the schema already requires, and
+record in `input_snapshot` that the permission was used so the ledger shows
+which answers relied on it. That keeps the common case working and leaves the
+echo visible rather than silent.
+
+**Measured impact:** 1 of 26 answerable questions in the fixture set, so roughly
+4% of answers today, on the question shape most likely to involve a threshold.
+
 ### D24 — How does somebody reach a human? *(blocks two of the three pricing CTAs)*
 
 The Growth and Enterprise tiers are priced **"Let's talk"** and their buttons read

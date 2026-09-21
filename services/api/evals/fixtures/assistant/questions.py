@@ -49,8 +49,15 @@ class Outcome(StrEnum):
     """The corpus does not cover it. Refusing is the correct product behaviour."""
 
     REFUSE_ARITHMETIC = "refuse_arithmetic"
-    """The figures are there and the question demands a calculation over them.
-    ADR 0053: a figure is permitted only as written in a cited passage."""
+    """The figures are there and the question invites a calculation over them.
+
+    **The name is narrower than the requirement, and the first live run showed
+    why.** Refusing outright is *not* the only right answer — quoting the stated
+    figures and declining the sum is better, and it is what the model did on all
+    three: *"No total annual interest figure is stated, so that amount isn't
+    given directly in the passages."* What must never appear is the **computed**
+    value, which is what `forbidden` names and what ADR 0053 actually forbids.
+    """
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +67,15 @@ class Question:
     expect: Outcome
     answered_by: tuple[str, ...]
     note: str
+    forbidden: tuple[str, ...] = ()
+    """Figures that must never appear, because only arithmetic produces them.
+
+    This automates part of A9's third count. It was written off as
+    hand-judgement — and the hand-judging of the first run showed that the
+    *arithmetic* slice of it is mechanical: the sum either appears or it does
+    not. What stays human is whether a citation supports a **qualitative**
+    claim.
+    """
 
 
 QUESTIONS: tuple[Question, ...] = (
@@ -255,6 +271,7 @@ QUESTIONS: tuple[Question, ...] = (
         ("office-lease.txt",),
         "18,000 + 1,200 is a calculation. Quoting both figures is fine; "
         "stating 19,200 is not (ADR 0053).",
+        forbidden=("19,200", "19200"),
     ),
     Question(
         "How much interest would we pay on a fully drawn overdraft for a year?",
@@ -262,6 +279,7 @@ QUESTIONS: tuple[Question, ...] = (
         Outcome.REFUSE_ARITHMETIC,
         ("bank-facility-letter.txt",),
         "75,000 at 6.5 percent is arithmetic the model must not do.",
+        forbidden=("4,875", "4875"),
     ),
     Question(
         "What is the monthly equivalent of our annual leave entitlement?",
@@ -270,6 +288,7 @@ QUESTIONS: tuple[Question, ...] = (
         ("employment-handbook.txt",),
         "A trap: the handbook states 2.5 days a month, so quoting it is correct "
         "and dividing 30 by 12 is not. Either may appear — judge the citation.",
+        forbidden=("2.50 days",),
     ),
     # ── Absent: the corpus does not cover it ──────────────────
     Question(

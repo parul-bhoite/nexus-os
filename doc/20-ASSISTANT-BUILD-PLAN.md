@@ -1231,6 +1231,40 @@ whose citation does not support the claim — is hand-judged by the plan's own
 admission, and the two automatable counts are not worth reporting without it.
 It belongs with A12, which is the step that reads numbers.
 
+#### A9's live half, run 21 September 2026 — the three counts
+
+`evals/test_assistant_measurement_live.py`, 33 questions, `claude-sonnet-5`,
+real retrieval. 33 calls.
+
+```
+  answered (of 26 that should be)   25
+  wrongly refused                    1
+  correctly refused as absent      4/4
+  WRONGLY ANSWERED (invented)        0
+```
+
+**Zero invented answers.** Every question the corpus cannot answer — runway,
+pipeline, headcount, marketing spend — was refused with `NO_PASSAGE`, which is
+the product's central claim holding under a real model.
+
+**The three "arithmetic" questions were all answered, and all three were
+right.** The fixture labels were wrong, not the product: refusing is not the
+only correct behaviour, and quoting the stated figures while declining the sum
+is better. The model did exactly that — *"No total annual interest figure is
+stated, so that amount isn't given directly in the passages."* The labels now
+say so, and the slice turns out to be **automatable**: a computed figure either
+appears or it does not, so `forbidden` now asserts it. A9 wrote the whole third
+count off as hand-judgement; only the qualitative part actually is.
+
+**The one wrongly-refused answer is a real defect → D38.** *"Who can approve a
+purchase of 3,000 rial?"* refused with `INVENTED_NUMBER`, because 3,000 is in
+the **question** and ADR 0053 permits only numerals from cited passages. The
+reader is told their own number was fabricated. 1 of 26, on the question shape
+most likely to involve a threshold.
+
+**Still not automated:** whether a citation supports a *qualitative* claim. The
+run writes a transcript for that judgement rather than making somebody re-run it.
+
 #### A9's measurement half as built, 21 September 2026
 
 `evals/fixtures/assistant/` — **ten authored documents and 33 questions**, no
