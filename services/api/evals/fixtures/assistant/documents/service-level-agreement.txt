@@ -1,0 +1,18 @@
+SERVICE LEVEL AGREEMENT — Managed IT Services
+
+Availability. The supplier guarantees 99.5 percent monthly availability of the
+hosted platform, measured over each calendar month excluding scheduled
+maintenance.
+
+Scheduled maintenance. Up to 4 hours per month, notified at least 5 working
+days in advance, performed between 00:00 and 04:00 Gulf Standard Time.
+
+Response times. Priority 1 incidents are acknowledged within 30 minutes and
+resolved within 4 hours. Priority 2 incidents are acknowledged within 2 hours
+and resolved within 1 working day.
+
+Service credits. Availability below 99.5 percent in a month entitles the
+customer to a service credit of 5 percent of the monthly fee, rising to 15
+percent if availability falls below 98 percent.
+
+Reporting. A service report is issued within 5 working days of each month end.

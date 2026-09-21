@@ -1197,6 +1197,40 @@ whose citation does not support the claim — is hand-judged by the plan's own
 admission, and the two automatable counts are not worth reporting without it.
 It belongs with A12, which is the step that reads numbers.
 
+#### A9's measurement half as built, 21 September 2026
+
+`evals/fixtures/assistant/` — **ten authored documents and 33 questions**, no
+customer data, for a company that does not exist. Plus
+`evals/test_assistant_measurement.py`, deterministic, no key.
+
+**It measures retrieval, not answers, and the distinction is the point.** A9
+asks for three counts — answered, wrongly refused, wrongly cited — and **none is
+computable without a model**; scripting one would measure the script. What is
+computable is the thing all three rest on: *did the document holding the answer
+reach the model at all?* A refusal with the passage missing is retrieval's
+failure; a refusal with it present is generation's. The counts are useless
+without knowing which.
+
+**First run:** recall@8 **31/31 (100%)**, recall@3 **28/31 (90%)**, rank 1
+**25/31 (81%)**. The floor asserted is 70% — set below the measurement on
+purpose, to catch a regression rather than to freeze today's score.
+
+**The one weak row is worth reading.** *"What are all the notice periods we are
+committed to?"* retrieves its two documents at **@4 and @8** — the second only
+just inside `PASSAGE_LIMIT`. Multi-document synthesis is at the edge of the
+window, and a ninth better-matching passage would push it out. That is an
+argument for measuring N rather than assuming 8.
+
+**Blocked the whole thing for an hour:** `filterwarnings = ["error"]` made the
+real embedder **unloadable across the entire suite** — fastembed warns at
+construction and the provider reports it as a transient failure. Fixed with a
+narrow ignore, and the warning turned out to matter on its own account: the
+model's pooling changed, so two library versions produce different vectors under
+the same `embedding_model_id`. Recorded in `AUDIT-FINDINGS.md` as open.
+
+**Still outstanding for A12:** the live half — answered / wrongly refused /
+wrongly cited — which needs a key, consent, and a human for the third count.
+
 **Blocked on:** A8. **Agent:** backend (evals). **Can start its fixture
 authoring in parallel with A5–A8.**
 

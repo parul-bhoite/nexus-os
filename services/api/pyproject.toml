@@ -178,6 +178,22 @@ filterwarnings = [
   # stops using the alias; the suite will not tell you it has become redundant,
   # so check it when starlette is next upgraded.
   "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning",
+  # `fastembed` warns at model construction that
+  # `intfloat/multilingual-e5-large` now uses **mean pooling instead of CLS**.
+  # Under `error` that exception surfaces as `EmbeddingTransientError`, which
+  # made the real embedder unloadable in the whole suite — so every test that
+  # needed one skipped or failed, and the message blamed a download.
+  #
+  # **The warning is not cosmetic and ignoring it is not the end of it.** Two
+  # fastembed versions produce different vectors for the same text under the
+  # same `model_name`, and `ck_chunk_embedding_provenance` records only the
+  # model id and the dimension — both unchanged. A workspace embedded across an
+  # upgrade would hold two incompatible vector spaces with nothing on the row to
+  # say so, and the symptom is worse retrieval rather than an error. Tracked as
+  # a finding; this line only stops it blocking the suite.
+  #
+  # Narrow on purpose: the message is matched, not the category.
+  "ignore:The model intfloat/multilingual-e5-large now uses mean pooling:UserWarning",
 ]
 
 # --strict-markers: a misspelled marker is an error, not a silent no-op. Nine

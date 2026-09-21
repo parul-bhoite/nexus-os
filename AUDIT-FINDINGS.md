@@ -6,6 +6,47 @@ fixed silently and one deferred silently look identical six weeks later.
 
 ---
 
+## Open — found 21 September 2026, while building `doc/20` A9
+
+### Two fastembed versions produce different vectors under the same model id
+
+`fastembed` warns at model construction:
+
+> *"The model `intfloat/multilingual-e5-large` now uses **mean pooling instead
+> of CLS embedding**. …consider either pinning fastembed version to 0.5.1 or
+> using `add_custom_model`."*
+
+**The pooling strategy changed, so the vectors changed.** Text embedded by the
+older library and text embedded by the current one are not in the same space,
+and nothing on the row says which produced it: `ck_chunk_embedding_provenance`
+records `embedding_model_id` and `embedding_dim`, and **both are identical
+across the change.**
+
+A workspace embedded across an upgrade therefore holds two incompatible vector
+spaces, mixed, with no marker. The symptom is not an error — it is **worse
+retrieval**, which is the failure mode `CLAUDE.md` singles out as the dangerous
+one: *"a fake embedding ranks… confident citations beside a real answer with no
+visible symptom at all."* Same symptom, arrived at by a different route.
+
+**How it surfaced.** `filterwarnings = ["error"]` turned the warning into an
+exception inside `TextEmbedding(...)`, which `fastembed_provider` wraps as
+`EmbeddingTransientError` — so the real embedder was **unloadable in the entire
+test suite**, and the message blamed a download. A9's measurement could not run
+at all until a narrow ignore was added.
+
+**Done:** the narrow ignore, message-matched, in `pyproject.toml`, so the suite
+can load an embedder. That is all it does.
+
+**Not done, and this is the finding:** provenance does not capture pooling, so
+nothing can detect or repair a mixed corpus. Options are to record a library
+version alongside the model id, to pin `fastembed`, or to re-embed on upgrade —
+the first is cheap and makes the other two decidable. No chunk is known to be
+affected today because `run_scheduler` defaults off and few chunks have ever
+been embedded, which is luck rather than design and will stop being true the
+moment the assistant ships.
+
+---
+
 ## Fixed in this pass
 
 ### No workspace could be created, and no member could see one
