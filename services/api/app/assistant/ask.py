@@ -56,13 +56,25 @@ from app.assistant.budget import (
 )
 from app.assistant.contracts import AssistantAnswer, AssistantRefusal, Citation, Question
 from app.assistant.fence import Grounding, prepare, resolve
-from app.assistant.grounding import check, permitted_numerals, sentence_for
+from app.assistant.grounding import (
+    check,
+    echoed_from_question,
+    permitted_numerals,
+    sentence_for,
+)
 from app.config import Settings
 from app.domain.scopes import Department, Scope
 from app.domain.session import ScopedSession
 from app.embeddings.registry import get_embedder
 from app.grounding.ledger import budgets_for, record
-from app.grounding.pipeline import Answer, Computed, Outcome, UnavailableReason, run
+from app.grounding.pipeline import (
+    Answer,
+    Computed,
+    Outcome,
+    UnavailableReason,
+    numerals_supplied,
+    run,
+)
 from app.logging import get_logger
 from app.retrieval.chunks import Passage, search
 
@@ -175,6 +187,10 @@ async def ask(
 
     grounding = prepare(passages)
     output = _ModelOutput()
+    # ADR 0062. A figure the customer typed is not one the model invented —
+    # "who can approve 3,000 rial?" was refused for stating 3,000. Permitted
+    # only alongside a citation; `check` enforces that half.
+    asked_numerals = numerals_supplied(question.text)
     budgets = await budgets_for(
         db,
         workspace_id=scope.workspace_id,
@@ -222,7 +238,7 @@ async def ask(
             budgets=budgets,
             disabled_skills=disabled_skills,
             # The loose pre-filter. `check` below applies ADR 0053's cited-only rule.
-            also_permitted=permitted_numerals(passages),
+            also_permitted=frozenset(permitted_numerals(passages) | asked_numerals),
         )
     except LlmUnavailableError:
         # ADR 0011: no key is a documented configuration, not an outage.
@@ -291,7 +307,7 @@ async def ask(
         )
 
     candidate = AssistantAnswer(prose=answer.prose, citations=citations)
-    refusal = check(candidate, passages)
+    refusal = check(candidate, passages, question_numerals=asked_numerals)
     if refusal is not None:
         return await _refuse(
             db, scope, question, refusal.reason, passages=passages, grounding=grounding
@@ -303,7 +319,15 @@ async def ask(
         module=MODULE,
         prompt_version="1",
         answer=answer,
-        input_snapshot=_snapshot(question, grounding),
+        input_snapshot=_snapshot(
+            question,
+            grounding,
+            echoed=echoed_from_question(
+                candidate.prose,
+                _cited_passages(passages, citations),
+                asked_numerals,
+            ),
+        ),
         calculation_trace={"retrieved": len(passages), "cited": len(citations)},
         scope_key=scope_key_for_passages(_cited_passages(passages, citations)),
         input_tokens=output.tokens_in,
@@ -380,7 +404,9 @@ def scope_key_for_passages(passages: tuple[Passage, ...]) -> str:
     return f"{tag}:{','.join(departments)}" if departments else tag
 
 
-def _snapshot(question: Question, grounding: Grounding) -> dict[str, Any]:
+def _snapshot(
+    question: Question, grounding: Grounding, *, echoed: frozenset[str] = frozenset()
+) -> dict[str, Any]:
     """What was asked and what was shown. **Never the passage text.**
 
     `doc/06` §9 calls `input_snapshot` *"a second copy of customer content"*,
@@ -404,6 +430,11 @@ def _snapshot(question: Question, grounding: Grounding) -> dict[str, Any]:
         "refs": {ref: str(passage.id) for ref, passage in grounding.by_ref.items()},
         "passage_count": len(grounding.by_ref),
         "tainted": grounding.turn.tainted,
+        # **ADR 0062's visibility half.** Non-empty means the answer stated a
+        # figure that came from the question rather than from a cited passage.
+        # Almost always empty; when it is not, somebody reviewing this answer
+        # can see the permission was used instead of having to infer it.
+        "question_numerals_echoed": sorted(echoed),
     }
 
 

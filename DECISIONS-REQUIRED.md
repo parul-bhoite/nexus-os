@@ -607,7 +607,7 @@ one event loop for the life of the process, so the cross-loop close cannot occur
 there.
 
 
-### D38 — Do numerals the customer typed count as invented? *(found by A9's first live run)*
+### D38 — Do numerals the customer typed count as invented? ✅ **Decided 21 September 2026** — ADR 0062
 
 **A real answer was thrown away, and the reader was told their own number was
 fabricated.** Asked *"Who can approve a purchase of 3,000 rial?"* over a policy

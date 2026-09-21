@@ -161,7 +161,26 @@ def uncited(citations: Iterable[Citation], sent: Iterable[Passage]) -> set[UUID]
     return {citation.chunk_id for citation in citations if citation.chunk_id not in available}
 
 
-def check(answer: AssistantAnswer, passages: Iterable[Passage]) -> AssistantRefusal | None:
+def echoed_from_question(
+    prose: str, cited: Iterable[Passage], question_numerals: frozenset[str]
+) -> frozenset[str]:
+    """Figures the answer states that came from the **question**, not a passage.
+
+    Empty almost always. When it is not, the answer leaned on ADR 0062's
+    permission, and `ask.py` records that on the `generation` row — the whole
+    point of the narrowing is that an echo is visible afterwards rather than
+    indistinguishable from a quotation.
+    """
+    stated = numerals_supplied(prose)
+    return frozenset(stated & question_numerals) - permitted_numerals(cited)
+
+
+def check(
+    answer: AssistantAnswer,
+    passages: Iterable[Passage],
+    *,
+    question_numerals: frozenset[str] = frozenset(),
+) -> AssistantRefusal | None:
     """The gate. `None` means the answer may be shown, unchanged.
 
     Returns a refusal rather than raising because a refusal is a **product
@@ -173,6 +192,18 @@ def check(answer: AssistantAnswer, passages: Iterable[Passage]) -> AssistantRefu
     would answer it needs the question, which this function is not given, and
     ADR 0052's addition is explicit that a guessed capability is worse than
     none.
+
+    **`question_numerals` is ADR 0062, and it is narrower than it looks.** A
+    figure the customer typed is not an invention: asking *"who can approve
+    3,000 rial?"* over a policy banded *"500 to 5,000"* was refused with
+    *"it stated a figure that appears in none of the passages"* — the product
+    calling the reader's own number fabricated. Passing the question's numerals
+    here fixes that class.
+
+    It applies **only to an answer that cites something**. An answer with no
+    citation gets no permission at all, which is what stops the question
+    becoming a channel for laundering a figure: *"is our revenue 5,000,000?"*
+    cannot be echoed back by an answer that points at nothing.
     """
     sent = tuple(passages)
 
@@ -187,7 +218,12 @@ def check(answer: AssistantAnswer, passages: Iterable[Passage]) -> AssistantRefu
         return _refuse(UnavailableReason.UNCITED_CLAIM)
 
     cited = tuple(p for p in sent if p.id in {c.chunk_id for c in answer.citations})
-    if invented_numbers(answer.prose, NOTHING_COMPUTED, also_permitted=permitted_numerals(cited)):
+    permitted = permitted_numerals(cited)
+    if answer.citations:
+        # Only here. An uncited answer keeps ADR 0053's original, stricter set.
+        permitted = frozenset(permitted | question_numerals)
+
+    if invented_numbers(answer.prose, NOTHING_COMPUTED, also_permitted=permitted):
         return _refuse(UnavailableReason.INVENTED_NUMBER)
 
     return None

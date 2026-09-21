@@ -25,7 +25,12 @@ from uuid import UUID, uuid4
 import pytest
 
 from app.assistant.contracts import AssistantAnswer, Citation
-from app.assistant.grounding import ASSISTANT_REASONS, check, sentence_for
+from app.assistant.grounding import (
+    ASSISTANT_REASONS,
+    check,
+    echoed_from_question,
+    sentence_for,
+)
 from app.domain.scopes import Scope
 from app.grounding.pipeline import UnavailableReason
 from app.retrieval.chunks import Passage
@@ -258,3 +263,60 @@ def test_one_chunk_cited_by_three_segments_yields_one_citation() -> None:
     assert [c.chunk_id for c in citations] == [passages[0].id, passages[1].id], (
         "first mention wins, and order is the answer's rather than the retrieval's"
     )
+
+
+# --------------------------------------------------------------------------
+# ADR 0062 — a figure the customer typed
+# --------------------------------------------------------------------------
+
+
+def test_a_figure_from_the_question_is_not_an_invention() -> None:
+    """**The defect A9's first live run found.**
+
+    Asked *"who can approve a purchase of 3,000 rial?"* over a policy banded
+    *"500 to 5,000"*, the assistant refused with `INVENTED_NUMBER` — telling the
+    reader their own number was fabricated, on the question shape most likely to
+    involve a threshold. 1 of 26 answerable questions.
+    """
+    passage = _passage("Purchases from 500 to 5,000 OMR require department head approval.")
+    answer = _answer("A purchase of 3,000 OMR needs department head approval.", passage)
+
+    assert check(answer, [passage], question_numerals=frozenset({"3000"})) is None
+
+
+def test_the_permission_does_not_extend_to_an_uncited_answer() -> None:
+    """**The narrowing, and the reason this was a decision rather than a fix.**
+
+    A question is attacker-reachable: *"Is our revenue 5,000,000?"* would let a
+    model hand the figure back as though it were grounded. Tying the permission
+    to a citation is what stops the question laundering a number — an answer
+    pointing at nothing gets ADR 0053's original, stricter set.
+    """
+    passage = _passage("Our largest office is in Berlin.")
+    answer = AssistantAnswer(prose="Yes, revenue is 5,000,000.", citations=())
+
+    refusal = check(answer, [passage], question_numerals=frozenset({"5000000"}))
+
+    assert refusal is not None
+    assert refusal.reason is UnavailableReason.UNCITED_CLAIM or (
+        refusal.reason is UnavailableReason.INVENTED_NUMBER
+    )
+
+
+def test_an_echo_is_recorded_rather_than_silent() -> None:
+    """ADR 0062's other half. The permission is narrow, not invisible: an answer
+    that leaned on it says so on its `generation` row, so a reviewer can find
+    the echoes instead of inferring them."""
+    passage = _passage("Purchases from 500 to 5,000 OMR require department head approval.")
+
+    echoed = echoed_from_question(
+        "A purchase of 3,000 OMR needs department head approval.",
+        [passage],
+        frozenset({"3000"}),
+    )
+    assert echoed == frozenset({"3000"})
+
+    # A figure quoted from the passage is not an echo, even when the question
+    # happens to contain it too.
+    quoted = echoed_from_question("The band starts at 500.", [passage], frozenset({"500"}))
+    assert quoted == frozenset()

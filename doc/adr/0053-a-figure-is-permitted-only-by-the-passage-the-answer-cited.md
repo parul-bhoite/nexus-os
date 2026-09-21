@@ -88,3 +88,16 @@ rejection rate tolerable — measured, not guessed, over the eval set — the
 decision to revisit is between adding C's precision and relaxing to A. Relaxing
 to A should be argued against the Berlin-office case above, which is the
 concrete thing it gives up.
+
+
+## Addition, 21 September 2026 — amended by ADR 0062
+
+**Not a reversal; one class this rule caught wrongly.** A numeral the *customer
+typed into the question* was indistinguishable here from one the model invented,
+so *"who can approve a purchase of 3,000 rial?"* over a band of *"500 to 5,000"*
+was refused for stating 3,000 — the product calling the reader's own figure
+fabricated. Found by A9's first live run: 1 of 26 answerable questions.
+
+**ADR 0062** permits a question's numerals, but only for an answer that cites at
+least one passage, and records the echo on the `generation` row. Everything this
+ADR says about arithmetic, conversion, rounding and aggregation is unchanged.
