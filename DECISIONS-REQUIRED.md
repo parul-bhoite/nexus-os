@@ -571,7 +571,7 @@ obvious shape and is also how somebody grants themselves a reporting line.
 
 ### D37 — M22: pay for correctness, suppress the symptom, or scope the fix? ✅ **Decided 21 September 2026 — ADR 0060**
 
-**Chose C**, `NullPool` scoped to `test_onboarding_agent_e2e.py`. A was a verified fix that made every run hours slower; B was free and would have blinded the suite to real socket leaks. Implemented so that **only the pool class changes** — not `NEXUS_DB_TRANSACTION_POOLER`, which would also have dropped the prepared-statement caches and the pre-ping and left this module testing a driver configuration production never uses.
+**Chose C**, `NullPool` scoped to `test_onboarding_agent_e2e.py`. A was a verified fix that made every run hours slower; B was free and would have blinded the suite to real socket leaks. Implemented so that **only the pool class changes** — not `NEXUS_DB_TRANSACTION_POOLER`, which would also have dropped the prepared-statement caches and the pre-ping and left this module testing a driver configuration production never uses. **Measured 21 September: the module goes 20:03 to 31:42 (+11m39s, +58%), about +9% on the full run — not the "ninety seconds" estimated when the option was chosen. The estimate extrapolated a two-test reproduction onto a 34-test module. C still beats A's hours.**
 
 **Not a bug to find any more.** The cause is proven (`BUILD-STATUS` §7, commit
 `ef27a71`): a pooled asyncpg connection is created on one event loop and closed

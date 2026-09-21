@@ -59,8 +59,9 @@ defects here: an unpinned `anyio` deprecation, and a fastembed pooling warning
 that surfaced during this very build.
 
 ### C. `NullPool` scoped to the one module that reproduces it
-A's correctness where the problem is, at a fraction of A's cost, and `error`
-keeps meaning what it says everywhere else.
+A's correctness where the problem is, at part of A's cost, and `error` keeps
+meaning what it says everywhere else. **The cost was estimated at "about ninety
+seconds" when this was decided. It is not — see the addition below.**
 
 ## Decision
 
@@ -116,3 +117,29 @@ if CPython or asyncpg fixes the abort-leaves-TLS-socket-open behaviour, or if
 SQLAlchemy stops swallowing the close exception — either makes the underlying
 mismatch visible enough to fix properly, and this becomes unnecessary rather
 than merely narrow.
+
+
+## Addition, 21 September 2026 — the measured cost, and a correction
+
+**It works.** The module runs **34 passed, 0 failed, 0 `ResourceWarning`s**,
+against a baseline of 32 passed / 2 failed. M22 is closed.
+
+**It costs 11m39s, not the ninety seconds this ADR estimated.** The module goes
+**20:03 → 31:42, +58%**. On the full backend run that is roughly +9%, taking
+2:09:44 to about 2:21.
+
+The estimate was wrong because it was extrapolated from the two-test
+reproduction (100s → 186s, +86s) straight onto a **34-test** module, as though
+the penalty were per-run rather than per-checkout. It is per-checkout: every
+connection is a fresh TLS handshake to `us-east-2`. The arithmetic was there to
+do and was not done.
+
+**The decision still holds**, and now on real numbers rather than a guess:
+option A was ~1.9x across roughly 470 database tests — hours. C is eleven and a
+half minutes, in one module, buying a green full run for the first time in
+weeks.
+
+**What this does change** is the revisit trigger's urgency. A second module
+adopting this pattern would cost another double-digit slice of the run, so the
+shared-fixture question below should be answered *before* a second copy exists,
+not after.

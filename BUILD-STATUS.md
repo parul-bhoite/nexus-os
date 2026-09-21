@@ -563,7 +563,7 @@ long ago and never struck.
 | **M10** | **37** `as <Type>` casts across `apps/web/lib/*.ts`, not "four", and no runtime validator in `package.json` |
 | **M13** | No `loading.tsx`, no `global-error.tsx`. `error.tsx` and `not-found.tsx` do exist, so the gap is narrower than stated |
 | **M15** | The embedding pass still runs in the API process (`jobs/scheduler.py:111`, started at `main.py:91`) |
-| **M22** | **Root cause proven, 21 September. Not yet fixed — both candidate fixes have a cost worth a decision.** The chain, measured end to end: a pooled asyncpg connection is **created on one event loop and closed on another**. asyncpg's graceful `close()` arms a timeout timer on the loop that made the connection; that loop is gone, so `loop.call_later` raises **`RuntimeError: Event loop is closed`**, asyncpg falls back to `_abort()`, and aborting a TLS transport on CPython 3.12 leaves the socket open — hence the three warnings together (socket, `_SelectorSocketTransport`, `_SSLProtocolTransport`). SQLAlchemy's `Pool._close_connection` **swallows and logs** that exception, which is why it was invisible: `[SAPOOL] ERROR Exception closing connection`, only at DEBUG. **Measured:** the leaking teardown ran in 0.008s with no round trip and `aborted=True`; the clean one took 0.273s with `aborted=False`. Loop ids confirm it — the leaking test connects on one loop and tears down on another; the clean test uses one loop for both. **Reproduces in 100s from two named tests.** Ruled out: `terminate()` from SQLAlchemy's adapter (never called), pool `invalidate`/`detach` (never fire), draining the loop, `gc.collect()`, and `asyncio_default_fixture_loop_scope = "function"` (no effect — already the default). **A verified fix exists and is expensive:** `NullPool` in tests removes the cross-loop window and takes the warnings to zero, but the same two tests go 100s → 186s because every checkout becomes a fresh TLS connect to `us-east-2`. The alternative is a narrow, documented `filterwarnings` ignore — cheap, and it would mask genuine socket leaks elsewhere. **This is a trade-off to decide, not a bug to find — it is **D37** in `DECISIONS-REQUIRED.md`, with the options costed.** |
+| **M22** | ✅ **Closed 21 September 2026 — ADR 0060.** A pooled asyncpg connection was created on one event loop and closed on another; the graceful close armed a timer on the dead loop, raised `RuntimeError: Event loop is closed`, and asyncpg aborted instead — which on CPython 3.12 leaves a TLS socket open. `Pool._close_connection` swallowed and logged it at DEBUG, so only a `ResourceWarning` escaped, failing **whichever test triggered GC**. Fixed by giving `test_onboarding_agent_e2e.py` a `NullPool` (D37 option C), changing the pool class and nothing else. **Verified: 34 passed, 0 warnings.** Costs **+11m39s** on that module (20:03 → 31:42, +58%; ~+9% on the full run) — considerably more than the ninety seconds estimated when it was chosen, and still far less than the hours a suite-wide `NullPool` would have cost |
 | **M25** | Both halves confirmed: `GET /audit-log` is Executive-readable where `doc/08` §8C says Owner-only, and it returns a raw actor UUID |
 | **M26** | `BrainCard.tsx:175` renders "Read-only here"; no delete or per-item sensitivity |
 | **M27** | **10 requests on load, not eight** — every panel mounts at once and fetches, plus one per running department. The parallel-mount fix the row describes is present |
@@ -667,14 +667,11 @@ Ordered by what the evidence in §7 actually supports, not by filing priority.
 4. **The model-backed classifier (`doc/19` K0–K13).** Now has a live rules floor
    to be measured against, which is what `doc/19` §7 recommends doing *before*
    answering D13.
-5. **M22 — root cause proven, fix is now a decision.** A pooled asyncpg
-   connection is created on one event loop and closed on another; the
-   graceful close arms a timer on the dead loop, raises `RuntimeError:
-   Event loop is closed`, and asyncpg aborts instead — which on CPython
-   3.12 leaves a TLS socket open. SQLAlchemy swallows that exception and
-   logs it at DEBUG, which is why it went unfound for so long. `NullPool`
-   in tests fixes it and costs ~1.9x on database tests; a narrow
-   `filterwarnings` ignore is free and hides real leaks. Pick one.
+5. **M22 is closed** (ADR 0060). It cost a false failure on every full
+   run for weeks. A connection closed on the wrong event loop aborted
+   instead of closing, leaking a TLS socket that failed an unrelated
+   test. `NullPool` in the one module that crosses loops fixes it, for
+   +11m39s there and about +9% on the full run.
 
 **Two things that are decisions, not work:** D13's tier-per-mode half, and D3's
 credentials. Both are named in §6.
