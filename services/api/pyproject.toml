@@ -212,6 +212,12 @@ addopts = "--strict-markers --strict-config --cov=app --cov-report=term-missing:
 # nothing. tests/test_ci_contract.py asserts the other half.
 markers = [
   "requires_db: needs a real PostgreSQL, connected as the unprivileged app role",
+  # **Costs money and is never run by default.** Two gates, not one:
+  # `evals/` has no `conftest.py`, so the key-pinning fixture in
+  # `tests/conftest.py` does not reach it and a live key in `.env` is readable
+  # there — an accidental `pytest evals` must not make a billable call. So the
+  # marker needs `NEXUS_LIVE_REDTEAM=1` **as well as** a key.
+  "live_redteam: sends real payloads to the real model; opt-in, never gates CI",
 ]
 
 [tool.coverage.run]

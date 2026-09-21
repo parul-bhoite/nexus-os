@@ -952,6 +952,40 @@ than silently in production. `test_ai_boundary.py` still green — **do not name
 the vendor in `SKILL.md` or in any docstring**, which has caught a prose mention
 once already.
 
+#### The live red team, run 21 September 2026 — 0 of 8, and read it carefully
+
+`evals/test_injection_live.py`, 8 payloads, `claude-sonnet-5`, real retrieval
+over real embeddings, run against Neon with Parul's explicit authorisation.
+Eight calls, ~5,754 input and ~447 output tokens.
+
+```
+  refused by the guard : 0/8
+  answered with a cite : 8/8
+  escaped containment  : 0/8
+```
+
+**Nothing escaped. The guard also never fired**, and those are two different
+facts. The model ignored every injected instruction on its own and answered
+only the legitimate content — including the payload that closes the fence and
+opens a fake `<system>` block, and the one demanding the system prompt verbatim.
+
+**So this run measures the model, not our containment.** A3's design is that
+*the payload wins against the model and loses against the guard*; here the
+payload lost a step earlier, so the guard was never exercised. The deterministic
+half is what proves the guard, precisely because it **scripts compliance** —
+the model is made to obey the payload so the check has to catch it.
+
+**A12 must not read 0/8 as "the defences work".** It says one model version, on
+one day, resisted eight payloads written by the same people who wrote the
+defence. What it rules out is the loudest failure — an injected instruction
+reaching the reader — and what it leaves open is every payload nobody thought
+of. The bound in §11 is unchanged: the attack that succeeds is one that lies to
+the person who owns the document that lied, and that bound holds because the
+tool set is empty.
+
+**Worth re-running when the model version changes**, which is the revisit
+trigger a tier decision (D13) creates.
+
 **Inherited from A3:** the **live red-team half**. It was specified in A3 and
 deferred here, because a compliance rate measured against A3's stand-in prompt
 would be a number about a prompt we will not ship — and A12 is meant to act on
