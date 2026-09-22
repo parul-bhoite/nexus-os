@@ -274,14 +274,18 @@ async def accept(db: AsyncSession, *, token: str, user_id: UUID) -> Accepted:
     # else would seat the wrong person in a role chosen for the invited one —
     # and a forwarded link is the ordinary way that happens, not an attack.
     #
-    # Known gap, recorded rather than hidden: this proves the account *claims*
-    # the address, not that the address was ever confirmed. Nothing in the
-    # product sends a verification email yet (see `RegisterForm`), so requiring
-    # `email_verified_at` here would make every invitation unusable. When
-    # delivery lands, this predicate is where the check belongs.
+    # `email_verified_at IS NOT NULL` is required here, matching the check
+    # `routes/onboarding.py` already applies. Registration sends a verification
+    # email (`routes/auth.py`, `issue_verification`), so an unverified address
+    # is one nobody has proven they control yet — accepting an invitation on
+    # its behalf would let anyone claiming an address they do not own seat
+    # themselves in the role chosen for its real owner.
     email = (
         await db.execute(
-            text("SELECT lower(email) FROM app_user WHERE id = :u"), {"u": str(user_id)}
+            text(
+                "SELECT lower(email) FROM app_user WHERE id = :u AND email_verified_at IS NOT NULL"
+            ),
+            {"u": str(user_id)},
         )
     ).scalar()
 

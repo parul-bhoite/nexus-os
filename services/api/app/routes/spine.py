@@ -20,6 +20,7 @@ from sqlalchemy import text
 from app.auth.csrf import require_csrf
 from app.db import _unscoped_session
 from app.deps import CurrentScope
+from app.deps_scope import enforce_department
 from app.domain import audit, persona_chat
 from app.domain import company_brain as brain
 from app.domain.department_answers import (
@@ -597,10 +598,13 @@ async def read_department_block(department: str, scope: CurrentScope) -> BlockOu
     the guesses that matter are the wrong ones — a Contributor shown a form that
     binds, or a Manager shown a read-only block for their own department.
 
-    Served to callers who **may not** answer it, with `may_answer: false`.
-    Hiding it would leave a Contributor unable to see what their own department
-    has been asked, which is information they are entitled to and which the
-    stored answers already carry.
+    Served to callers who **may not** answer it, with `may_answer: false`,
+    but only when they may *reach* the department at all — `may_answer: false`
+    means "you cannot write here", not "read every department's stored
+    answers". `enforce_department` is that second check: a Contributor holding
+    only Sales may see their own department's block and answers, but not
+    Finance's, which is exactly what `dashboards.py` already enforces for the
+    same role/department pair.
     """
     try:
         target = Department(department)
@@ -612,6 +616,7 @@ async def read_department_block(department: str, scope: CurrentScope) -> BlockOu
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No block for that department.")
 
     await _require_running(scope, target)
+    enforce_department(scope, target)
 
     async with scoped_connection(scope) as db:
         rows = {

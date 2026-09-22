@@ -17,17 +17,20 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import AnyHttpUrl, BaseModel, Field
 from sqlalchemy import text
 
 from app.auth.companies import (
     CompanyDetails,
     DomainAlreadyRegisteredError,
+    InvalidWebsiteUrlError,
     create_company,
     domain_of,
 )
 from app.auth.csrf import require_csrf
 from app.auth.workspaces import find_verified_workspace_for_domain
+from app.connectors.rate_limit import COMPANY_REGISTER_PER_USER
+from app.connectors.rate_limit import consume as meter
 from app.db import _unscoped_session
 from app.deps import CurrentScope, CurrentSession, require_executive_surface
 from app.domain.audit import AuditAction, record
@@ -98,7 +101,7 @@ class RegisterCompanyRequest(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     # Mandatory (`doc/11` Q13). Not decoration: it is the first fact NEXUS holds
     # about the company and the input the research run is queued against.
-    website_url: str = Field(min_length=3, max_length=2048)
+    website_url: AnyHttpUrl
     # `country`, `reporting_currency` and `headcount_band` were here and are
     # gone. The currency is asked properly later, by the question catalogue as a
     # constrained choice that arrives with a scope.
@@ -114,6 +117,12 @@ class RegisterCompanyRequest(BaseModel):
     #
     # `website_url` stays because it is genuinely read: `research/worker_loop`
     # selects it to queue the crawl.
+    #
+    # `AnyHttpUrl` rather than a bounded string (R-01): a length-only check let
+    # `"not a url !!!"` through the request boundary, four screens before
+    # `domain_of` tried and failed to make a domain out of it. Validation at
+    # the boundary is what `security-and-authz`'s input rule asks for, and it
+    # is a strictly earlier failure than the one this used to produce.
     # What the founder says they do. Presentation only: these steer what the
     # agent asks and what the dashboard leads with, and reach nothing. The
     # authorising fields are `membership.role` and `membership.departments`,
@@ -159,7 +168,23 @@ async def register_company(payload: RegisterCompanyRequest, session: CurrentSess
     `CurrentSession`, not `CurrentScope` — the caller has no workspace yet, so
     `current_scope` would refuse them 403 before they could get one. The same
     position `invitations.accept` is in, and for the same reason.
+
+    **Metered per user** (L-04): this creates a tenant, a workspace and a
+    queued research run in one call, and nothing bounded how many of those a
+    signed-in account could queue on a loop. A 429 discloses nothing here —
+    the caller is already authenticated as themselves, not probing someone
+    else's account.
     """
+    async with _unscoped_session() as db:
+        over = await meter(db, COMPANY_REGISTER_PER_USER, str(session.user_id))
+        await db.commit()
+    if over:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "Too many companies registered from this account recently. Try again tomorrow.",
+            headers={"Retry-After": "86400"},
+        )
+
     async with _unscoped_session() as db:
         try:
             created = await create_company(
@@ -167,7 +192,7 @@ async def register_company(payload: RegisterCompanyRequest, session: CurrentSess
                 user_id=session.user_id,
                 details=CompanyDetails(
                     name=payload.name.strip(),
-                    website_url=payload.website_url,
+                    website_url=str(payload.website_url),
                     designation=payload.designation,
                     # `.value`, so the column keeps the key the catalogue
                     # matches on rather than `Department.HR`'s repr.
@@ -177,6 +202,8 @@ async def register_company(payload: RegisterCompanyRequest, session: CurrentSess
             )
         except UserAlreadyInAWorkspaceError as exc:
             raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+        except InvalidWebsiteUrlError as exc:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
         except DomainAlreadyRegisteredError as exc:
             # 409 with somewhere to go, rather than a bare refusal that leaves
             # the user retyping the domain that is exactly right.
@@ -656,7 +683,13 @@ async def update_departments(
 
 
 class JoinRequestIn(BaseModel):
-    website_url: str = Field(min_length=3, max_length=2048)
+    # `AnyHttpUrl` rather than a bounded string (R-01's sibling): the same
+    # length-only check `RegisterCompanyRequest.website_url` used to carry let
+    # junk through the request boundary and left `InvalidWebsiteUrlError` in
+    # `request_to_join` below as the only thing that caught it. That guard
+    # stays as defense in depth — Pydantic now refuses it first, as a 422
+    # naming the field rather than a domain error four lines later.
+    website_url: AnyHttpUrl
     message: str | None = Field(default=None, max_length=500)
 
 
@@ -678,7 +711,10 @@ async def request_to_join(payload: JoinRequestIn, session: CurrentSession) -> Jo
     request naming an arbitrary one would be a way to enumerate them: every id
     either produces a request or does not.
     """
-    domain = domain_of(payload.website_url)
+    try:
+        domain = domain_of(str(payload.website_url))
+    except InvalidWebsiteUrlError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     workspace_id = await find_verified_workspace_for_domain(domain)
     if workspace_id is None:
         raise HTTPException(

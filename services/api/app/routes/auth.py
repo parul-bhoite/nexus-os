@@ -45,6 +45,8 @@ from app.connectors.rate_limit import (
     LOGIN_PER_EMAIL,
     LOGIN_PER_IP,
     REGISTER_PER_IP,
+    RESET_PER_EMAIL,
+    RESET_PER_IP,
     backoff_seconds,
     consume,
     hash_bucket_key,
@@ -55,6 +57,7 @@ from app.domain import audit
 from app.logging import get_logger
 from app.mail import Email, Mailer, build_mailer, send_safely
 from app.retrieval.scoped import scoped_connection
+from app.scan.client_address import client_ip
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 log = get_logger(__name__)
@@ -142,21 +145,16 @@ def _set_session_cookie(response: Response, token: str, settings: Settings) -> s
 def _caller_key(request: Request, settings: Settings) -> str:
     """A hashed, stable identifier for the source of a credential attempt.
 
-    The direct peer, never `X-Forwarded-For`. That header is attacker-controlled
-    unless a trusted proxy list says otherwise, and this repository deleted its
-    trusted-proxy configuration with the preview product in P2 — so believing it
-    now would let one client mint unlimited rate-limit identities and walk
-    straight through the per-IP counter.
-
-    The consequence is stated rather than hidden: **behind a proxy every visitor
-    shares one bucket**, and the per-IP limit collapses towards a global one.
-    That is the safe direction to fail, and the per-email counter is what keeps
-    the limit meaningful while it is true. A deployment that terminates TLS
-    elsewhere needs the trusted-proxy list back before this counter means
-    anything.
+    `X-Forwarded-For` is honoured only when the direct peer is a configured
+    trusted proxy — `client_address.client_ip` decides that, the same helper
+    `app/scan/` already uses for the same problem. Trusting the header
+    unconditionally would let one client mint unlimited rate-limit identities
+    and walk straight through the per-IP counter; ignoring it unconditionally
+    behind a real proxy collapses every visitor onto one bucket. Configuring
+    `Settings.trusted_proxies` is what tells this apart correctly.
     """
-    peer = request.client.host if request.client else "unknown"
-    return hash_bucket_key(peer, secret=settings.require("storage_signing_secret"))
+    ip = client_ip(request, settings)
+    return hash_bucket_key(ip, secret=settings.require("storage_signing_secret"))
 
 
 async def _throttle(delay: float) -> None:
@@ -269,6 +267,7 @@ class PasswordResetConfirm(BaseModel):
 @router.post("/password-reset/request")
 async def request_password_reset(
     payload: PasswordResetRequest,
+    request: Request,
     background: BackgroundTasks,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, str]:
@@ -283,7 +282,29 @@ async def request_password_reset(
     `password_reset.request` returns `None` rather than raising, and the send is
     queued rather than awaited, so neither control flow nor the clock
     distinguishes them.
+
+    **Metered like login and register** (L-01): this was the one credential
+    endpoint with no cost to spamming it, cheaper than either neighbour because
+    it hashes no password. Same two counters, same reason — per-IP falls to a
+    botnet, per-email falls to rotating the target — and the same backoff
+    applied *after* the work, never a 429, so the delay cannot be timed
+    separately from the response and cannot become an enumeration oracle of
+    its own.
     """
+    caller = _caller_key(request, settings)
+    email_key = hash_bucket_key(payload.email, secret=settings.require("storage_signing_secret"))
+
+    async with _unscoped_session() as db:
+        over_ip = await consume(db, RESET_PER_IP, caller)
+        over_email = await consume(db, RESET_PER_EMAIL, email_key)
+        await db.commit()
+
+    delay = backoff_seconds(
+        max(over_ip, over_email),
+        base=settings.login_backoff_base_seconds,
+        cap=settings.login_backoff_max_seconds,
+    )
+
     async with _unscoped_session() as db:
         issued = await password_reset.request(db, email=payload.email)
         await db.commit()
@@ -300,17 +321,38 @@ async def request_password_reset(
     # No `email` field, no count, no timing tell. Logged without the address:
     # which addresses ask for resets is the fact this endpoint protects.
     log.info("auth.password_reset.requested")
+    await _throttle(delay)
     return {"status": "check_your_email"}
 
 
 @router.post("/password-reset/confirm")
-async def confirm_password_reset(payload: PasswordResetConfirm) -> dict[str, str]:
+async def confirm_password_reset(
+    payload: PasswordResetConfirm,
+    request: Request,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, str]:
     """Set a new password and sign the account out everywhere.
 
     One message for expired, already-used and never-existed, exactly as
     `/auth/verify-email` does. Telling them apart would confirm which tokens
     were real.
+
+    **Metered per source address** (L-01), the same bucket `/request` spends.
+    There is no email to key a second counter on here — the token is opaque
+    until it is looked up — so per-IP is what this endpoint can meter, and it
+    is enough to slow a script guessing tokens without adding a 429 that would
+    make a wrong guess distinguishable from a right one.
     """
+    caller = _caller_key(request, settings)
+    async with _unscoped_session() as db:
+        over_ip = await consume(db, RESET_PER_IP, caller)
+        await db.commit()
+    delay = backoff_seconds(
+        over_ip,
+        base=settings.login_backoff_base_seconds,
+        cap=settings.login_backoff_max_seconds,
+    )
+
     try:
         async with _unscoped_session() as db:
             user_id = await password_reset.confirm(
@@ -321,9 +363,11 @@ async def confirm_password_reset(payload: PasswordResetConfirm) -> dict[str, str
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
 
     if user_id is None:
+        await _throttle(delay)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "That link is invalid or has expired.")
 
     log.info("auth.password_reset.confirmed")
+    await _throttle(delay)
     return {"status": "password_updated"}
 
 

@@ -37,6 +37,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Query,
     Response,
     UploadFile,
     status,
@@ -61,12 +62,13 @@ from app.documents.limits import (
     WORKSPACE_QUOTA_BYTES,
     check_upload,
 )
-from app.documents.parse import ParseOutcome, parse_document
+from app.documents.parse import ParseOutcome, parse_document_async
 from app.documents.rules import propose
 from app.documents.status import DocumentStatus
 from app.domain import audit
 from app.domain.departments import selected_departments
 from app.domain.document_asks import asks_for
+from app.domain.invitations import may_administer
 from app.domain.progress import progress_for
 from app.domain.scopes import Scope, scope_code
 from app.domain.session import ScopedSession
@@ -216,7 +218,7 @@ async def upload_document(
         raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, breach.message)
 
     filename = file.filename or "untitled"
-    parsed = parse_document(data, filename=filename)
+    parsed = await parse_document_async(data, filename=filename)
     digest = hashlib.sha256(data).hexdigest()
 
     document_id = uuid4()
@@ -483,7 +485,9 @@ chat is dead before anyone else opens it."""
 
 
 @router.get("", response_model=list[DocumentSummary])
-async def list_documents(scope: CurrentScope, limit: int = 100) -> list[DocumentSummary]:
+async def list_documents(
+    scope: CurrentScope, limit: Annotated[int, Query(ge=1, le=200)] = 100
+) -> list[DocumentSummary]:
     """The caller's own uploads, newest first.
 
     **Own uploads, not the workspace's.** RLS makes `document` workspace-wide
@@ -654,7 +658,19 @@ async def review_queue(scope: CurrentScope, limit: int = 50) -> ReviewQueue:
     The excerpt is truncated deliberately. A reviewer needs enough to judge the
     classification, not the whole document — and this endpoint returns content
     withheld precisely because nobody has yet decided who may see it.
+
+    **Gated on `may_administer`, exactly as `audit.py` gates its own surface.**
+    These excerpts exist specifically because they were classified PERSONAL or
+    RESTRICTED — salary, passport, IBAN. Without this check any workspace member
+    could read the withheld content whose whole point is that nobody has yet
+    decided who may see it.
     """
+    if not may_administer(scope.role):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "The review queue is available to owners and executives.",
+        )
+
     limit = max(1, min(limit, 200))
 
     async with scoped_connection(scope) as session:
@@ -725,11 +741,25 @@ async def decide_review(
     Doc 07 M5 task 5.8: a chunk marked `personal` or `restricted` needs human
     confirmation before anyone else can reach it.
 
-    The reviewer must hold the authority for the scope they are granting, and
-    `may_reach_scope` decides that rather than this handler. Without the check
-    the queue becomes a privilege-escalation route: withhold a chunk to L5, then
-    promote it to L2 from an account that cannot read L2 at all.
+    **Gated on `may_administer`, matching `setup.py`'s `ensure_may_answer`.**
+    `may_reach_scope` alone is not enough: a Viewer's `max_scope` is L2, so a
+    Viewer passes `may_reach_scope(L2)` and could approve a PERSONAL chunk
+    straight to company-wide visibility. Reviewing withheld content is workspace
+    administration, not merely reaching a scope, so it needs the same coarse
+    gate as the rest of setup.
+
+    The reviewer must also hold the authority for the scope they are granting,
+    and `may_reach_scope` decides that rather than this handler. Without that
+    second check the queue becomes a privilege-escalation route: withhold a
+    chunk to L5, then promote it to L2 from an account that cannot read L2 at
+    all.
     """
+    if not may_administer(scope.role):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Reviewing withheld content is available to owners and executives.",
+        )
+
     target = _parse_scope(decision.scope) if decision.approve and decision.scope else None
 
     if target is not None and not scope.may_reach_scope(target):

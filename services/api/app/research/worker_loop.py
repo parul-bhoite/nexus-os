@@ -20,6 +20,7 @@ from uuid import UUID
 from sqlalchemy import CursorResult, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.connectors.rate_limit import CRAWL_PER_DOMAIN, GLOBAL_DAILY, PER_WORKSPACE, consume
 from app.db import jobs_session
 from app.domain.page_signals import CaptureSource, signals_to_json
 from app.domain.research import (
@@ -171,8 +172,20 @@ async def _record(
     await db.commit()
 
 
+CRAWL_RATE_LIMITED_REASON: Final = (
+    "This step is rate limited for today — either this workspace or this target "
+    "has been crawled at its daily allowance. It will be picked up on the next run."
+)
+
+
 async def _run_source(
-    db: AsyncSession, *, workspace_id: UUID, run_id: UUID, kind: SourceKind, seeds: list[str]
+    db: AsyncSession,
+    *,
+    workspace_id: UUID,
+    run_id: UUID,
+    kind: SourceKind,
+    seeds: list[str],
+    domain: str | None,
 ) -> None:
     """One source, start to finish. **Never raises for a source that fails.**
 
@@ -203,7 +216,30 @@ async def _run_source(
 
     try:
         if kind is SourceKind.CRAWL:
-            outcome = await crawl_site(seeds)
+            # L-04: `crawl_site` was the one outbound fetch in the product with
+            # no bucket — `PER_WORKSPACE` and `GLOBAL_DAILY` existed and were
+            # asserted only by tests. Consumed here, before the fetch, on the
+            # same scoped session, same shape as the credential endpoints:
+            # `consume` never raises, so exceeding a bucket becomes a failed
+            # source with a reason rather than an unhandled exception, and Q56
+            # still holds — the other sources are unaffected.
+            over_workspace = await consume(db, PER_WORKSPACE, str(workspace_id))
+            over_global = await consume(db, GLOBAL_DAILY, "global")
+            over_domain = await consume(db, CRAWL_PER_DOMAIN, domain) if domain else 0
+            await db.commit()
+
+            if over_workspace or over_global or over_domain:
+                log.warning(
+                    "research.crawl_rate_limited",
+                    over_workspace=bool(over_workspace),
+                    over_global=bool(over_global),
+                    over_domain=bool(over_domain),
+                )
+                outcome = CrawlOutcome(
+                    state=SourceState.FAILED, error_reason=CRAWL_RATE_LIMITED_REASON
+                )
+            else:
+                outcome = await crawl_site(seeds)
         elif kind is SourceKind.KEYWORDS:
             # Not implemented, and **not estimated** (Q53/D2).
             outcome = CrawlOutcome(
@@ -302,7 +338,14 @@ async def process_one_run(db: AsyncSession, *, only: UUID | None = None) -> UUID
     # results is worse than a slow run. `CONCURRENT_SOURCES` stays as the
     # documented intent for whoever finishes it.
     for kind in SourceKind:
-        await _run_source(db, workspace_id=workspace_id, run_id=run_id, kind=kind, seeds=seeds)
+        await _run_source(
+            db,
+            workspace_id=workspace_id,
+            run_id=run_id,
+            kind=kind,
+            seeds=seeds,
+            domain=(row.domain if row else None),
+        )
 
     await apply_workspace_scope(db, workspace_id)
     states = [

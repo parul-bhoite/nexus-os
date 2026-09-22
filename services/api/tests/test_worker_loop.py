@@ -276,6 +276,7 @@ async def test_the_background_crawl_stores_page_signals(
                 run_id=run,
                 kind=SourceKind.CRAWL,
                 seeds=["https://recrawled.example/"],
+                domain="recrawled.example",
             )
 
             await apply_workspace_scope(db, ws)

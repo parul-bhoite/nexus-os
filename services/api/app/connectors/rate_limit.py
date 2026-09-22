@@ -67,6 +67,14 @@ class Limit:
 PER_WORKSPACE = Limit("workspace", max_count=50, window=timedelta(hours=24))
 GLOBAL_DAILY = Limit("global", max_count=500, window=timedelta(days=1))
 
+# The third bucket this section's docstring promised and never wrote (L-04):
+# the reflected-DoS shape `PER_WORKSPACE` does not stop. Many workspaces
+# researching the same target — a competitor everyone in one industry is
+# watching — stay under their own per-workspace allowance while that one
+# domain absorbs a crawl from each of them. Same shape as `SCAN_PER_DOMAIN`
+# below, for the identical reason.
+CRAWL_PER_DOMAIN = Limit("crawl_domain", max_count=10, window=timedelta(hours=24))
+
 # ── Credential endpoints (D14, P4) ────────────────────────────
 #
 # Two counters, because either alone is defeated by the obvious move: per-IP
@@ -82,6 +90,14 @@ GLOBAL_DAILY = Limit("global", max_count=500, window=timedelta(days=1))
 LOGIN_PER_IP = Limit("login_ip", max_count=10, window=timedelta(hours=1))
 LOGIN_PER_EMAIL = Limit("login_email", max_count=10, window=timedelta(hours=1))
 REGISTER_PER_IP = Limit("register_ip", max_count=5, window=timedelta(hours=1))
+
+# `/auth/password-reset/request` and `/confirm` were unmetered — the one gap in
+# an otherwise-covered set of credential endpoints, and the cheapest one to
+# query: a request costs no password hash, unlike login and register. Same
+# shape as the pair above, same reason for the pair: per-IP falls to a
+# botnet, per-email falls to rotating the target address.
+RESET_PER_IP = Limit("reset_ip", max_count=10, window=timedelta(hours=1))
+RESET_PER_EMAIL = Limit("reset_email", max_count=5, window=timedelta(hours=1))
 
 # ── Domain verification checks (finding #4) ───────────────────
 #
@@ -105,6 +121,17 @@ REGISTER_PER_IP = Limit("register_ip", max_count=5, window=timedelta(hours=1))
 # script, not a person.
 CHECK_PER_USER = Limit("domaincheck_user", max_count=30, window=timedelta(hours=1))
 CHECK_PER_DOMAIN = Limit("domaincheck_domain", max_count=60, window=timedelta(hours=24))
+
+# ── Company registration (L-04) ────────────────────────────────
+#
+# `POST /companies` creates a tenant, a workspace and a queued `research_run`
+# in one call — the research run is what eventually spends `PER_WORKSPACE`,
+# `GLOBAL_DAILY` and `CRAWL_PER_DOMAIN` above, but nothing bounded how many of
+# them one signed-in account could queue by calling this endpoint on a loop.
+# Generous: registering a second or third genuine company (an agency, a
+# holding structure) is a real case doc 06 §1.1 already accommodates via
+# `confirm_separate_company`, and this exists to stop a script, not a founder.
+COMPANY_REGISTER_PER_USER = Limit("company_register_user", max_count=10, window=timedelta(days=1))
 
 # ── The anonymous scanner (ADR 0046, `doc/18` G6) ──────────────
 #

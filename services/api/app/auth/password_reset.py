@@ -29,7 +29,7 @@ from uuid import UUID
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.passwords import hash_password
+from app.auth.passwords import hash_password_async
 from app.auth.tokens import hash_token, new_token
 from app.mail import Email
 
@@ -106,7 +106,7 @@ async def confirm(db: AsyncSession, *, token: str, new_password: str) -> UUID | 
 
     await db.execute(
         text("UPDATE app_user SET password_hash = :p WHERE id = :u"),
-        {"p": hash_password(new_password), "u": str(user_id)},
+        {"p": await hash_password_async(new_password), "u": str(user_id)},
     )
 
     # Every live session, including the one that asked. Someone resetting a

@@ -20,16 +20,49 @@ from __future__ import annotations
 
 import csv
 import io
+import os
+import warnings
+import zipfile
 from dataclasses import dataclass, field
 from enum import StrEnum
+
+from anyio import CapacityLimiter, to_thread
+from defusedxml import defuse_stdlib
+
+from app.documents.limits import MAX_FILE_BYTES as MAX_FILE_BYTES
+from app.documents.limits import MB
 
 # One number, defined in `limits.py` with the other two. It lived here at 50 MB
 # — `doc/01` M1's figure — after `doc/11` settled on 25, and a second definition
 # is how they came to disagree in the first place.
-from app.documents.limits import MAX_FILE_BYTES as MAX_FILE_BYTES
+
+# `.docx`/`.pptx`/`.xlsx` are zip archives of XML, parsed by `python-docx`,
+# `python-pptx` and `openpyxl` with the stdlib's `xml.etree` — which has no
+# built-in defence against a billion-laughs entity expansion or an
+# external-entity fetch (L-05). Patched process-wide, once, at import: every
+# caller of `xml.etree.ElementTree` in this process is covered without
+# touching three vendored parsers.
+#
+# `defuse_stdlib` imports its own deprecated `cElementTree` compatibility
+# shim along the way, and emits `DeprecationWarning` doing it — a warning its
+# own `catch_warnings()` wrapper does not actually suppress. Harmless (the
+# shim is never used; only `ElementTree` is), but `filterwarnings = ["error"]`
+# in this project's pytest config turns it into a collection error for every
+# module that imports this one. Silenced here, narrowly, rather than loosened
+# project-wide.
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", DeprecationWarning)
+    defuse_stdlib()
 
 # Below this, a "successful" parse is almost certainly an image-only document.
 MIN_TEXT_CHARS_PER_PAGE = 20
+
+# A zip-based upload (`.docx`/`.pptx`/`.xlsx`) can claim a tiny compressed size
+# and expand to gigabytes on decompression — the classic zip-bomb, and
+# `MAX_FILE_BYTES` alone does not catch it because that limit is checked
+# against the *compressed* upload. Bounded here, on the sum of every member's
+# *uncompressed* size, before any parser reads a byte of content.
+MAX_ZIP_UNCOMPRESSED_BYTES = 10 * MAX_FILE_BYTES
 
 
 class DocumentKind(StrEnum):
@@ -55,7 +88,9 @@ class ParseOutcome(StrEnum):
 # failure the user cannot act on is only marginally better than a silent one.
 OUTCOME_MESSAGE: dict[ParseOutcome, str] = {
     ParseOutcome.OK: "",
-    ParseOutcome.TOO_LARGE: "This file is over 50 MB. Split it and upload the parts.",
+    ParseOutcome.TOO_LARGE: (
+        f"This file is over {MAX_FILE_BYTES // MB} MB. Split it and upload the parts."
+    ),
     ParseOutcome.UNSUPPORTED_TYPE: (
         "Only PDF, Word, PowerPoint, Excel, CSV and text files can be read. "
         "Images and scans are not read at all, so there is no point converting one."
@@ -121,6 +156,27 @@ def _fail(kind: DocumentKind | None, outcome: ParseOutcome) -> ParsedDocument:
     return ParsedDocument(kind=kind, outcome=outcome)
 
 
+_ZIP_KINDS = frozenset({DocumentKind.DOCX, DocumentKind.PPTX, DocumentKind.XLSX})
+
+
+def _zip_bomb(data: bytes) -> bool:
+    """True if a zip-based upload's members would decompress past the cap.
+
+    Checked against the archive's own declared sizes, never by inflating it —
+    inflating first to measure is the attack. `bad_file` also catches a
+    truncated or hand-edited central directory, which is corruption `_fail`
+    already has a named outcome for.
+    """
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            if archive.testzip() is not None:
+                return True
+            total = sum(member.file_size for member in archive.infolist())
+    except zipfile.BadZipFile:
+        return True
+    return total > MAX_ZIP_UNCOMPRESSED_BYTES
+
+
 def parse_document(data: bytes, *, filename: str) -> ParsedDocument:
     """Parse into pages, or return a named failure. Never raises."""
     if len(data) > MAX_FILE_BYTES:
@@ -132,6 +188,9 @@ def parse_document(data: bytes, *, filename: str) -> ParsedDocument:
 
     if not data:
         return _fail(kind, ParseOutcome.EMPTY)
+
+    if kind in _ZIP_KINDS and _zip_bomb(data):
+        return _fail(kind, ParseOutcome.CORRUPT)
 
     try:
         pages = _PARSERS[kind](data)
@@ -166,6 +225,31 @@ def parse_document(data: bytes, *, filename: str) -> ParsedDocument:
         pages=tuple(pages),
         page_count=len(pages),
         char_count=total_chars,
+    )
+
+
+# **The shared thread pool.** Mirrors `app.auth.passwords._HASHING_LIMITER`
+# exactly, and for the identical reason: `to_thread.run_sync` with no limiter
+# draws on anyio's process-wide default (40 tokens), so a burst of uploads
+# would not only serialise themselves, it would starve every other blocking
+# call in the process — including argon2's own limiter's neighbours. Sized to
+# cores rather than a round number: parsing is CPU-bound and one core is left
+# for the event loop.
+_PARSE_LIMITER = CapacityLimiter(max(2, (os.cpu_count() or 2) - 1))
+
+
+async def parse_document_async(data: bytes, *, filename: str) -> ParsedDocument:
+    """`parse_document`, off the event loop (L-05).
+
+    `parse_document` is synchronous and can hold a core for as long as
+    openpyxl or pypdf takes to walk a large file — a blocking call inside the
+    `async def` upload handler that was stalling every other request on the
+    process while one document parsed. Offloaded through the same
+    `CapacityLimiter` pattern as password hashing, so a burst of uploads
+    queues on a bounded pool rather than exhausting anyio's shared default.
+    """
+    return await to_thread.run_sync(
+        lambda: parse_document(data, filename=filename), limiter=_PARSE_LIMITER
     )
 
 

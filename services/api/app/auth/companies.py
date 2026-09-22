@@ -70,6 +70,21 @@ class CompanyRegistrationError(Exception):
     """A refusal a person can act on."""
 
 
+class InvalidWebsiteUrlError(CompanyRegistrationError):
+    """`website_url` produced no usable host (R-01).
+
+    `RegisterCompanyRequest.website_url` is `AnyHttpUrl` now, so pydantic
+    refuses most junk before this runs at all. This still guards a value that
+    parses as a URL but names no real host — `https://` alone, or an IP
+    literal `normalise_domain` reduces to something with no dot — rather than
+    storing an empty or malformed `domain` column that verification could
+    never match against.
+    """
+
+    def __init__(self, website_url: str) -> None:
+        super().__init__(f"{website_url!r} does not name a usable domain.")
+
+
 class DomainAlreadyRegisteredError(CompanyRegistrationError):
     """`doc/11` Q8 — the domain belongs to a workspace that has proved it.
 
@@ -101,7 +116,13 @@ def domain_of(website_url: str) -> str:
     if "://" not in raw:
         raw = f"https://{raw}"
     host = urlparse(raw).hostname or ""
-    return normalise_domain(host)
+    domain = normalise_domain(host)
+    if not domain or "." not in domain:
+        # Store nothing rather than junk (R-01). A blank or dot-free `domain`
+        # can never be verified against, and a company row that is silently
+        # unreachable by its own verification flow is worse than a refusal now.
+        raise InvalidWebsiteUrlError(website_url)
+    return domain
 
 
 async def create_company(

@@ -58,6 +58,13 @@ dependencies = [
   "python-docx>=1.1",
   "python-pptx>=1.0",
   "openpyxl>=3.1",
+  # `.docx`/`.pptx`/`.xlsx` are zip archives of XML, and `python-docx`,
+  # `python-pptx` and `openpyxl` all parse that XML with the stdlib's
+  # `xml.etree`, which has no built-in defence against a billion-laughs
+  # entity expansion or an external-entity fetch (L-05). `defuse_stdlib()`
+  # patches the stdlib parser process-wide at import, so every library that
+  # calls it is covered without touching three vendored parsers.
+  "defusedxml>=0.7",
 ]
 
 [project.optional-dependencies]
@@ -148,6 +155,13 @@ plugins = ["pydantic.mypy"]
 [[tool.mypy.overrides]]
 # No type stubs published upstream.
 module = ["pgvector.*", "fastembed.*", "apscheduler.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# `types-defusedxml` on PyPI stubs only the `.common` exceptions, not
+# `defuse_stdlib` — the one function this codebase calls. `ignore_missing_imports`
+# rather than a per-line `type: ignore`, matching the row above.
+module = ["defusedxml.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

@@ -43,6 +43,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.csrf import require_csrf
 from app.calculators.completeness import ENTITIES
 from app.deps import CurrentScope
+from app.domain.invitations import may_administer
 from app.domain.scopes import Role
 from app.logging import get_logger
 from app.retrieval.deals import TYPED, typed_deal_records
@@ -864,8 +865,18 @@ async def set_dispatch_rule(body: DispatchRuleIn, scope: CurrentScope) -> Dispat
     append-only because *when somebody last vouched* is what a reader of a rate
     needs — this is a rule rather than a claim about a moment, and a figure
     computed under it says which rule it used.
+
+    **Gated on `may_administer`, not `_may_write`.** `_may_write` only checks
+    that the caller holds a department — the right bar for recording their own
+    work, and the wrong one for a workspace-wide setting that every
+    `on_time_dispatch` figure is computed under afterwards. Matches
+    `update_reporting`'s gate on the same kind of workspace-level assumption.
     """
-    _may_write(scope)
+    if not may_administer(scope.role):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "The dispatch rule is set by an owner or an executive.",
+        )
 
     async with scoped_connection(scope) as db:
         await db.execute(
@@ -1046,19 +1057,73 @@ async def create_deal(body: DealIn, scope: CurrentScope) -> DealOut:
     )
 
 
+@router.post(
+    "/deals/{deal_id}/archive",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_csrf)],
+)
+async def archive_deal(deal_id: UUID, scope: CurrentScope) -> None:
+    """Archive a typed deal — `doc/15` S10.6, F-04.
+
+    **The new default path.** `crm_deal` gained `archived_at` in `0041` so a
+    typed deal follows the same "archive, never delete" rule as every other
+    row type in this file, instead of the hard delete below standing behind
+    nothing but a confirm dialog.
+
+    `POST .../archive` rather than `DELETE /deals/{deal_id}` (`_archive`'s
+    shape): that path already means the hard delete kept for compatibility
+    below, and a second meaning on the same route would make the method the
+    only thing telling them apart. `api-design`'s rule for a genuine non-CRUD
+    action is a verb sub-resource, so this is that.
+
+    Same guard as every other write in this file (`_may_write`), same CSRF
+    dependency, same 204-with-no-body shape as `archive_project` and its
+    siblings. Not routed through the shared `_archive` helper: that helper
+    also sets `updated_at`, a column `crm_deal` does not have, and it writes
+    only to the closed `ARCHIVABLE` set of `ops_*` tables — widening either
+    for one table outside that family is a worse trade than the few lines
+    here.
+
+    Restricted to `provider = 'nexus'`, matching `delete_deal`'s own scoping:
+    a synced deal is not this workspace's to archive, it is the CRM's to stop
+    reporting.
+    """
+    _may_write(scope)
+
+    async with scoped_connection(scope) as db:
+        await db.execute(
+            sa.text(
+                "UPDATE crm_deal SET archived_at = :now"
+                " WHERE id = :id AND workspace_id = :w AND provider = :provider"
+                "   AND archived_at IS NULL"
+            ),
+            {
+                "id": str(deal_id),
+                "w": str(scope.workspace_id),
+                "provider": TYPED,
+                "now": datetime.now(UTC),
+            },
+        )
+        await db.commit()
+
+    log.info("ops.deal_archived")
+
+
 @router.delete(
     "/deals/{deal_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(require_csrf)],
 )
 async def delete_deal(deal_id: UUID, scope: CurrentScope) -> None:
-    """**A real `DELETE`, and the only one in this file.**
+    """A hard `DELETE`, kept for whatever still calls it.
 
-    `crm_deal` has no `archived_at`: it is a sync target, and a provider that
-    stops reporting a deal means the row goes. A typed deal in the same table
-    inherits that shape, so "archive" would be a column added for one provider's
-    rows and ignored by every read. Deleting one loses nothing a sync would have
-    kept.
+    `archive_deal` above is the new default path the UI is wired to (F-04).
+    This still exists because `crm_deal` is also a sync target for
+    `provider != 'nexus'` rows — a provider that stops reporting a deal means
+    that row genuinely goes, and there is no "archive" a sync could mean for
+    it. Scoped to `provider = 'nexus'` here too, so this endpoint only ever
+    deletes a typed deal, never a synced one; nothing prunes synced rows
+    through this path.
     """
     _may_write(scope)
 

@@ -118,18 +118,23 @@ _ALL: Final = sa.text(
     """
     SELECT provider, external_id, amount_minor, currency, stage, closes_on, fetched_at
       FROM crm_deal
-     WHERE workspace_id = :w
+     WHERE workspace_id = :w AND archived_at IS NULL
      ORDER BY fetched_at DESC, external_id
     """
 )
 """Both populations, for the caller that needs both. `provider` is selected so
-the partition can be made in Python rather than by asking twice."""
+the partition can be made in Python rather than by asking twice.
+
+`archived_at IS NULL`: a typed deal somebody archived from the Ops surface
+stops counting here immediately, exactly as the other record types filter
+their archived rows — see `0041`. A synced deal never has `archived_at` set,
+so this changes nothing for the CRM population."""
 
 _TYPED_ROWS: Final = sa.text(
     """
     SELECT id, name, amount_minor, currency, stage, closes_on
       FROM crm_deal
-     WHERE workspace_id = :w AND provider = :typed
+     WHERE workspace_id = :w AND provider = :typed AND archived_at IS NULL
      ORDER BY closes_on NULLS LAST, name
     """
 )
