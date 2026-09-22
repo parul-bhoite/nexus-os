@@ -12,10 +12,25 @@ import {
 
 type State =
   | { status: 'idle' }
-  | { status: 'working' }
+  /** Starting verification for the first time — no claim exists yet. */
+  | { status: 'starting' }
   | { status: 'claimed'; claim: DomainClaim; note: string | null }
+  /**
+   * F-09: "Check now" used to set `{ status: 'working' }`, a state the render
+   * below matched nothing against — the instructions vanished while the
+   * check ran, with no visible sign anything was happening. Carrying `claim`
+   * here is what lets the instructions stay on screen through the check.
+   */
+  | { status: 'checking'; claim: DomainClaim }
   | { status: 'verified' }
-  | { status: 'error'; message: string }
+  /**
+   * F-09's other half: the catch on "Check now" used to discard `claim`
+   * entirely, losing the one-time challenge token and forcing a restart from
+   * scratch for what is usually just "not visible yet". `claim` is `null`
+   * only for a failure to *start* verification, where there was never one to
+   * keep.
+   */
+  | { status: 'error'; message: string; claim: DomainClaim | null }
 
 /**
  * The four methods, in the order a person should consider them.
@@ -83,6 +98,18 @@ export function DomainVerificationCard({
   const [state, setState] = useState<State>(verified ? { status: 'verified' } : { status: 'idle' })
   const [method, setMethod] = useState<ClaimMethod>('dns_txt')
 
+  // F-09: whichever claim this render has, regardless of whether it arrived
+  // via `claimed`, is mid-`checking`, or survived into an `error` — so the
+  // instructions and the challenge token they carry stay on screen through
+  // all three, rather than vanishing the moment "Check now" is pressed or
+  // failing to find the record.
+  const activeClaim =
+    state.status === 'claimed' || state.status === 'checking'
+      ? state.claim
+      : state.status === 'error'
+        ? state.claim
+        : null
+
   if (state.status === 'verified') {
     return (
       <section className="rounded-2xl border border-ink-100 bg-white px-5 py-5 shadow-paper">
@@ -119,26 +146,30 @@ export function DomainVerificationCard({
         </div>
       ) : null}
 
-      {state.status === 'claimed' ? (
+      {activeClaim ? (
         <div className="mt-4 flex flex-col gap-3">
           {/* The instruction comes from the API and carries the challenge
               token. Rendered `whitespace-pre-line` because it is written as
               lines — a DNS value on the same line as the sentence explaining it
               is a value somebody will copy wrong. */}
           <p className="whitespace-pre-line rounded-xl border border-ink-200 bg-white px-4 py-3 font-mono text-[0.8rem] leading-relaxed text-ink-800">
-            {state.claim.instruction}
+            {activeClaim.instruction}
           </p>
 
-          {state.note ? <p className="text-[0.95rem] text-ink-800">{state.note}</p> : null}
+          {state.status === 'claimed' && state.note ? (
+            <p className="text-[0.95rem] text-ink-800">{state.note}</p>
+          ) : null}
 
-          {state.claim.method === 'manual' ? null : (
+          {activeClaim.method === 'manual' ? null : (
             <div className="flex flex-wrap items-center gap-3">
               <Button
                 type="button"
                 className="w-fit"
+                loading={state.status === 'checking'}
+                loadingLabel="Checking…"
                 onClick={async () => {
-                  const claim = state.claim
-                  setState({ status: 'working' })
+                  const claim = activeClaim
+                  setState({ status: 'checking', claim })
                   try {
                     const checked = await checkDomainClaim(claim.claim_id)
                     if (checked.state === 'verified') {
@@ -161,9 +192,14 @@ export function DomainVerificationCard({
                         'Not visible yet. DNS can take a few minutes to propagate — try again shortly.',
                     })
                   } catch (error) {
+                    // F-09: `claim` travels into the error too, rather than
+                    // being discarded — losing it meant losing the one-time
+                    // challenge token, forcing a restart from scratch for
+                    // what is usually just "try again in a minute".
                     setState({
                       status: 'error',
                       message: error instanceof AuthError ? error.message : 'Could not check.',
+                      claim,
                     })
                   }
                 }}
@@ -181,7 +217,7 @@ export function DomainVerificationCard({
           )}
         </div>
       ) : (
-        <fieldset className="mt-5" disabled={!mayAdminister || state.status === 'working'}>
+        <fieldset className="mt-5" disabled={!mayAdminister || state.status === 'starting'}>
           <legend className="font-mono text-2xs uppercase tracking-[0.12em] text-clay-600">
             How you want to prove it
           </legend>
@@ -210,8 +246,10 @@ export function DomainVerificationCard({
           <div className="mt-4">
             <Button
               type="button"
+              loading={state.status === 'starting'}
+              loadingLabel="Starting…"
               onClick={async () => {
-                setState({ status: 'working' })
+                setState({ status: 'starting' })
                 try {
                   const claim = await startDomainClaim(domain, method)
                   setState({ status: 'claimed', claim, note: null })
@@ -222,11 +260,12 @@ export function DomainVerificationCard({
                       error instanceof AuthError
                         ? error.message
                         : 'Could not start verification.',
+                    claim: null,
                   })
                 }
               }}
             >
-              {state.status === 'working' ? 'Working…' : 'Start verification'}
+              Start verification
             </Button>
           </div>
         </fieldset>

@@ -99,7 +99,17 @@ export function AccountMenu() {
         type="button"
         onClick={() => setOpen((was) => !was)}
         aria-expanded={open}
-        aria-haspopup="menu"
+        // X-04: this declared `aria-haspopup="menu"` with `role="menu"` and
+        // `menuitem` children, but had no menu keyboard behaviour at all — no
+        // arrow-key roving tabindex, no Home/End, and no focus moved into the
+        // popup on open or restored to this button on close. A `menu` role
+        // promises that contract to assistive technology and this did not
+        // keep it, which is worse than not claiming it: a screen reader user
+        // is told to expect arrow-key navigation that does nothing. Dropped
+        // to the honest, simpler shape — a disclosure of plain links and one
+        // button, reachable by Tab like the rest of the page, which is what
+        // this menu actually behaves like.
+        aria-haspopup="true"
         aria-label={email ? `Account — ${email}` : 'Account'}
         className="flex h-9 w-9 items-center justify-center rounded-full border border-ink-200 bg-white text-2xs font-semibold tracking-[0.02em] text-ink-600 transition-[background-color,border-color] duration-micro ease-out hover:border-ink-300 hover:bg-bone-100 hover:text-ink-900"
       >
@@ -113,7 +123,6 @@ export function AccountMenu() {
             initial="hidden"
             animate="show"
             exit="leave"
-            role="menu"
             className="absolute right-0 top-full z-overlay mt-1.5 w-64 rounded-data border border-ink-100 bg-white p-1.5 shadow-e3"
           >
             <div className="border-b border-ink-100 px-2.5 pb-2.5 pt-1.5">
@@ -125,7 +134,6 @@ export function AccountMenu() {
 
             <Link
               href="/account"
-              role="menuitem"
               onClick={() => setOpen(false)}
               className="mt-1 block rounded-control px-2.5 py-2 text-body text-ink-700 transition-colors duration-micro ease-out hover:bg-bone-100 hover:text-ink-900"
             >
@@ -133,7 +141,6 @@ export function AccountMenu() {
             </Link>
             <Link
               href="/settings"
-              role="menuitem"
               onClick={() => setOpen(false)}
               className="block rounded-control px-2.5 py-2 text-body text-ink-700 transition-colors duration-micro ease-out hover:bg-bone-100 hover:text-ink-900"
             >
@@ -142,7 +149,6 @@ export function AccountMenu() {
 
             <button
               type="button"
-              role="menuitem"
               onClick={() => void signOut()}
               disabled={leaving}
               aria-busy={leaving || undefined}

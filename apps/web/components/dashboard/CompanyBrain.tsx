@@ -124,8 +124,11 @@ export function CompanyBrain() {
               Assumptions we are working from
             </p>
             <ul className="mt-2 flex flex-col gap-1">
-              {brain.assumptions.map((assumption) => (
-                <li key={assumption} className="text-sm leading-relaxed text-ink-800">
+              {brain.assumptions.map((assumption, index) => (
+                // F-28: `key={assumption}` collides on a repeated or empty
+                // string. The index is stable — this list is rendered once
+                // per brain and never reordered.
+                <li key={assumption || index} className="text-sm leading-relaxed text-ink-800">
                   {assumption}
                 </li>
               ))}

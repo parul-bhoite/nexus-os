@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useId, useState } from 'react'
 import { AuditLogCard } from '@/components/settings/AuditLogCard'
 import { DepartmentBlockCard } from '@/components/settings/DepartmentBlockCard'
 import { Connections } from '@/components/settings/Connections'
@@ -11,7 +11,7 @@ import { EntitiesCard } from '@/components/settings/EntitiesCard'
 import { DomainVerificationCard } from '@/components/settings/DomainVerificationCard'
 import { InvitePeople } from '@/components/settings/InvitePeople'
 import { ReportingCard } from '@/components/settings/ReportingCard'
-import { Tabs } from '@/components/ui/Tabs'
+import { Tabs, TabPanel } from '@/components/ui/Tabs'
 import { Button } from '@/components/ui/Button'
 import { AuthError } from '@/lib/auth-client'
 import { fetchState, type SpineState } from '@/lib/onboarding-client'
@@ -45,6 +45,9 @@ export function SettingsPanel() {
   const [state, setState] = useState<State>({ status: 'loading' })
   /** Which group of settings is on screen. See the note beside `groups`. */
   const [group, setGroup] = useState('company')
+  // X-01: shared by the `Tabs` rail and every `TabPanel` below, so
+  // `aria-controls` names ids these panels actually render.
+  const tabsId = useId()
 
   const load = useCallback(async () => {
     const company = await fetchCompany()
@@ -257,10 +260,10 @@ export function SettingsPanel() {
   return (
     <div className="flex flex-col gap-6">
       <div className="sticky top-[var(--app-header-h)] z-sticky -mx-[var(--app-x)] border-b border-ink-100 bg-bone-50/90 px-[var(--app-x)] py-2 backdrop-blur-md">
-        <Tabs label="Settings sections" active={group} onChange={setGroup} tabs={groups} />
+        <Tabs label="Settings sections" active={group} onChange={setGroup} tabs={groups} id={tabsId} />
       </div>
 
-      <div className={show('company')}>
+      <TabPanel id={tabsId} tab="company" className={show('company')}>
         {/* Panel 4b, first — and now first in fact rather than second. It names
             which company every panel below it is about, so it is the one panel
             that should never be behind a spinner: somebody who does not know
@@ -268,9 +271,9 @@ export function SettingsPanel() {
             have not identified. It takes no props, so it no longer waits. */}
         <EntitiesCard />
         {companyRegion}
-      </div>
+      </TabPanel>
 
-      <div className={show('you')}>
+      <TabPanel id={tabsId} tab="you" className={show('you')}>
         {/*
           Reading its own settings rather than taking them from the two fetches
           above. It is the only panel here that everybody in the workspace may
@@ -282,9 +285,9 @@ export function SettingsPanel() {
         {/* Panel 2: the one panel that is entirely this person's, and the only
             one that needs no owner — nothing in it can widen what anybody sees. */}
         <PreferencesCard />
-      </div>
+      </TabPanel>
 
-      <div className={show('reporting')}>
+      <TabPanel id={tabsId} tab="reporting" className={show('reporting')}>
         <ReportingCard />
 
         {/* Panel 3, one per department this company runs. The block is served
@@ -298,16 +301,16 @@ export function SettingsPanel() {
             label={department.label}
           />
         ))}
-      </div>
+      </TabPanel>
 
-      <div className={show('departments')}>
+      <TabPanel id={tabsId} tab="departments" className={show('departments')}>
         {/* Panel 7. The gap it closes: department selection happened once during
             onboarding and never again, and the only writer was a route that
             advances the spine. */}
         <DepartmentsCard />
-      </div>
+      </TabPanel>
 
-      <div className={show('data')}>
+      <TabPanel id={tabsId} tab="data" className={show('data')}>
         {/* Panel 10. Read-only: deleting an item has to fan out to its
             passages, embeddings and derivations, and that is P21's. */}
         <BrainCard />
@@ -316,15 +319,15 @@ export function SettingsPanel() {
             at all — the OAuth round trip and sealed storage were built and
             unreachable. */}
         <Connections />
-      </div>
+      </TabPanel>
 
-      <div className={show('activity')}>
+      <TabPanel id={tabsId} tab="activity" className={show('activity')}>
         {/* Panel 12, and it is a record of everything above it. It renders
             nothing at all for a caller the API refuses — a red box telling
             somebody they may not read something they never asked for is worse
             than the panel not being there. */}
         <AuditLogCard />
-      </div>
+      </TabPanel>
     </div>
   )
 }

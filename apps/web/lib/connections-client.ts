@@ -1,5 +1,5 @@
-import { messageFrom } from '@/lib/api-error'
 import { AuthError, csrfToken } from '@/lib/auth-client'
+import { HttpError, httpJson } from '@/lib/http'
 
 /**
  * Connecting the tools a workspace is read from — `doc/14` S9.
@@ -36,18 +36,20 @@ async function send<T>(path: string, init: RequestInit, fallback: string): Promi
   const token = csrfToken()
   if (token) headers['X-CSRF-Token'] = token
 
-  const response = await fetch(`/api${path}`, {
-    ...init,
-    headers,
-    credentials: 'same-origin',
-    cache: 'no-store',
-  })
-
-  const payload = await response.json().catch(() => null)
-  if (!response.ok) {
-    throw new AuthError(messageFrom(payload, fallback), response.status)
+  try {
+    return await httpJson<T>(`/api${path}`, {
+      ...init,
+      headers,
+      credentials: 'same-origin',
+      cache: 'no-store',
+      fallbackMessage: fallback,
+    })
+  } catch (error) {
+    if (error instanceof HttpError) {
+      throw new AuthError(error.message, error.status, error.detail)
+    }
+    throw error
   }
-  return payload as T
 }
 
 export function fetchConnections(): Promise<Connections> {

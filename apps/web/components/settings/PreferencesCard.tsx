@@ -51,6 +51,20 @@ const LANDINGS = [
   { value: 'strategy', label: 'Strategy' },
 ]
 
+/**
+ * F-07: a stored value outside the hardcoded option list rendered blank —
+ * `<select>` falls back to nothing selected when `value` matches none of its
+ * `<option>`s — and the very next save then silently overwrote it with
+ * whatever the browser had defaulted to. Appending the current value as an
+ * extra option, only when it is not already listed, means an unusual
+ * timezone is still shown and still round-trips rather than being quietly
+ * replaced.
+ */
+function withCurrent(options: readonly string[], current: string): string[] {
+  if (current === '' || options.includes(current)) return [...options]
+  return [...options, current]
+}
+
 type State =
   | { status: 'loading' }
   | { status: 'error'; message: string }
@@ -170,7 +184,7 @@ export function PreferencesCard() {
             value={prefs.timezone}
             onChange={(event) => update({ timezone: event.target.value })}
           >
-            {TIMEZONES.map((zone) => (
+            {withCurrent(TIMEZONES, prefs.timezone).map((zone) => (
               <option key={zone} value={zone}>
                 {zone}
               </option>

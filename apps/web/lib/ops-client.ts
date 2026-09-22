@@ -236,11 +236,15 @@ export function createDeal(body: {
   )
 }
 
-export function deleteDeal(id: string): Promise<void> {
+export function archiveDeal(id: string): Promise<void> {
+  // F-04: deals now archive (recoverable) like every other ops row, rather than
+  // hard-deleting. Backend: POST /ops/deals/{id}/archive sets `archived_at` and
+  // drops the row from the live pipeline. The old DELETE path still exists on the
+  // API for compatibility but is no longer reached from the UI.
   return send<void>(
-    `/ops/deals/${encodeURIComponent(id)}`,
-    { method: 'DELETE' },
-    'Could not remove that deal.',
+    `/ops/deals/${encodeURIComponent(id)}/archive`,
+    { method: 'POST' },
+    'Could not archive that deal.',
   )
 }
 

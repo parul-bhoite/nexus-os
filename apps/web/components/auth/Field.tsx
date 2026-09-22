@@ -50,9 +50,15 @@ export function Field({
    * form would refuse without it.
    *
    * `required` sets both, because `aria-required` and the native attribute are
-   * not interchangeable: the attribute is what blocks a submit, and the ARIA
-   * property is what a screen reader reads. Setting one is the mistake that
-   * looks fixed.
+   * not interchangeable: the attribute is what a screen reader reads, and
+   * `aria-required` says the same thing to assistive technology. **Neither
+   * blocks a submit here** (F-24) — every form that uses `Field` also sets
+   * `noValidate`, which turns off the browser's own constraint validation
+   * entirely, `required` included. That is deliberate: `noValidate` is what
+   * lets a form show its own styled, announced error instead of the browser's
+   * native bubble — but it means `required` is decorative unless the form's
+   * own `onSubmit` checks the field itself. Every consumer of `Field` does
+   * that validation in its `onSubmit`, the same pattern `LoginForm` uses.
    *
    * Optional fields say so in their **label** — "Phone (optional)" — which is
    * the existing convention here, so this is the inverse of it and not a second

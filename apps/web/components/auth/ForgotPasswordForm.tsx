@@ -6,7 +6,11 @@ import { Field } from '@/components/auth/Field'
 import { ArrowRight, Button } from '@/components/ui/Button'
 import { requestPasswordReset } from '@/lib/auth-client'
 
-type State = { status: 'idle' } | { status: 'submitting' } | { status: 'sent' }
+type State =
+  | { status: 'idle' }
+  | { status: 'submitting' }
+  | { status: 'sent' }
+  | { status: 'error'; message: string }
 
 /**
  * Asks for a reset link.
@@ -32,6 +36,13 @@ export function ForgotPasswordForm() {
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault()
     if (busy) return
+
+    // F-24: `noValidate` means `required` alone does not stop this. Checked
+    // here rather than only by disabling the button (R-03).
+    if (email.trim() === '') {
+      setState({ status: 'error', message: 'Enter the address you signed up with.' })
+      return
+    }
 
     setState({ status: 'submitting' })
     try {
@@ -65,6 +76,15 @@ export function ForgotPasswordForm() {
 
   return (
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
+      {state.status === 'error' ? (
+        <div
+          role="alert"
+          className="rounded-xl border border-clay-300 bg-clay-100 px-4 py-3 text-sm text-clay-600"
+        >
+          {state.message}
+        </div>
+      ) : null}
+
       <Field
         required
         label="Work email"
@@ -78,7 +98,6 @@ export function ForgotPasswordForm() {
       <Button
         type="submit"
         size="lg"
-        disabledReason={email.trim() === '' ? 'Enter the address you signed up with.' : undefined}
         disabled={busy}
         icon={busy ? undefined : <ArrowRight />}
         className="mt-1 w-full"

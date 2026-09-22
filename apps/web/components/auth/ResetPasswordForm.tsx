@@ -56,6 +56,23 @@ export function ResetPasswordForm() {
     event.preventDefault()
     if (busy || !token) return
 
+    // F-24: this used to enforce length and match only by keeping the submit
+    // button disabled — and `noValidate` on the form means `required` does
+    // nothing either. With the button no longer disableable via
+    // `disabledReason` (R-03), an implicit submit (Enter in a field) needs
+    // its own check or a mismatched password reaches the API.
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setState({
+        status: 'error',
+        message: `Your new password needs at least ${MIN_PASSWORD_LENGTH} characters.`,
+      })
+      return
+    }
+    if (confirmation !== password) {
+      setState({ status: 'error', message: 'The two passwords do not match yet.' })
+      return
+    }
+
     setState({ status: 'submitting' })
     try {
       await confirmPasswordReset(token, password)
@@ -115,13 +132,6 @@ export function ResetPasswordForm() {
       <Button
         type="submit"
         size="lg"
-        disabledReason={
-          password.length < MIN_PASSWORD_LENGTH
-            ? `Your new password needs at least ${MIN_PASSWORD_LENGTH} characters.`
-            : confirmation !== password
-              ? 'The two passwords do not match yet.'
-              : undefined
-        }
         disabled={busy}
         icon={busy ? undefined : <ArrowRight />}
         className="mt-1 w-full"

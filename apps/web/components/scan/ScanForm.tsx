@@ -56,8 +56,18 @@ export function ScanForm() {
   }
 
   async function onDelete(id: string) {
-    await deleteScan(id)
-    setState({ status: 'deleted' })
+    // F-10: this used to be an unguarded floating promise — no try/catch, so
+    // a failed delete threw an unhandled rejection while the screen still
+    // flipped to "deleted" underneath it (the caller never awaited this).
+    try {
+      await deleteScan(id)
+      setState({ status: 'deleted' })
+    } catch (error) {
+      setState({
+        status: 'refused',
+        message: error instanceof ScanError ? error.message : 'Could not delete that result.',
+      })
+    }
   }
 
   if (state.status === 'result') {
@@ -83,6 +93,12 @@ export function ScanForm() {
         <p role="alert" className="text-sm text-clay-600">
           {state.message}
         </p>
+        {/* F-11: `refused` and `deleted` both offer a way out; `limited` used
+            to be the one dead end on this form — nothing to click but reload
+            the page. */}
+        <Button className="mt-4" variant="secondary" onClick={() => setState({ status: 'idle' })}>
+          Try a different address
+        </Button>
       </div>
     )
   }

@@ -1,7 +1,45 @@
 'use client'
 
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { looksSignedIn } from '@/lib/auth-client'
+
+/**
+ * An `AbortController` per effect run, aborted automatically on cleanup and
+ * on the next call — F-04/F-12/R-04's shared fix.
+ *
+ * `RegisterCompanyForm`'s department fetch used to guard its cleanup with a
+ * `live` boolean, which stops the stale response from being applied but does
+ * nothing to the request itself — under React 18 Strict Mode's
+ * mount/unmount/remount the effect still fires the fetch twice. `useAbortable`
+ * gives an effect a fresh `AbortSignal` each time it runs and cancels the
+ * previous one, so the in-flight request is actually cancelled rather than
+ * merely ignored.
+ *
+ *     const abortable = useAbortable()
+ *     useEffect(() => {
+ *       const signal = abortable()
+ *       fetchDepartments(signal)
+ *         .then((choices) => setDepartments(choices))
+ *         .catch((error: unknown) => {
+ *           if (error instanceof DOMException && error.name === 'AbortError') return
+ *           setDepartmentsError('Department list unavailable — skip this')
+ *         })
+ *     }, [abortable])
+ */
+export function useAbortable(): () => AbortSignal {
+  const controller = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    return () => controller.current?.abort()
+  }, [])
+
+  return useCallback(() => {
+    controller.current?.abort()
+    const next = new AbortController()
+    controller.current = next
+    return next.signal
+  }, [])
+}
 
 /** True once the window has scrolled past `threshold` px. */
 export function useScrolled(threshold = 12) {

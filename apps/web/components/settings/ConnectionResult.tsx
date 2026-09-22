@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { messageFrom } from '@/lib/api-error'
 
 /**
  * Completes the authorisation the vendor just sent the browser back from.
@@ -35,11 +36,20 @@ export function ConnectionResult({ provider }: { provider: string }) {
 
         if (!response.ok) {
           setState('failed')
-          setMessage(payload?.detail ?? 'That connection could not be completed.')
+          // F-17: `payload?.detail ?? '…'` rendered the literal text
+          // `[object Object]` for an array-shaped 422 — FastAPI's own
+          // validation errors carry `detail` as a list, not a string.
+          // `messageFrom` is the one place that already treats every shape
+          // `detail` can arrive in.
+          setMessage(messageFrom(payload, 'That connection could not be completed.'))
           return
         }
         setState('done')
-        setMessage(payload?.message ?? 'Connected.')
+        setMessage(
+          payload && typeof payload === 'object' && typeof (payload as { message?: unknown }).message === 'string'
+            ? (payload as { message: string }).message
+            : 'Connected.',
+        )
       } catch {
         if (!live) return
         setState('failed')

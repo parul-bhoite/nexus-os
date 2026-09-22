@@ -1,8 +1,12 @@
+import { HttpError, httpJson } from '@/lib/http'
+
 /**
  * The anonymous Instant Gap Analysis scan. ADR 0046, `doc/18` G9.
  *
- * Mirrors `auth-client.ts`'s `post`/`AuthError` shape — same origin, no
- * credentials to attach (there is no session), `no-store`.
+ * Routed through the shared `httpJson` (#3) rather than a private copy of the
+ * same `fetch`-plus-`messageFrom` shape — see `lib/http.ts` for what that
+ * closes here: a timeout ceiling neither call had, and a checked response
+ * body where `deleteScan` had none at all (F-10).
  */
 
 export type CheckOut = {
@@ -43,33 +47,63 @@ export class ScanError extends Error {
   }
 }
 
-function messageFrom(payload: unknown, fallback: string): string {
-  if (payload && typeof payload === 'object' && typeof (payload as { detail?: unknown }).detail === 'string') {
-    return (payload as { detail: string }).detail
+/**
+ * `Retry-After`, in seconds — HTTP allows either a delta-seconds integer or
+ * an HTTP-date, and this header can arrive as either.
+ *
+ * F-26: `Number(retryAfter)` on an HTTP-date (`Wed, 21 Oct 2026 07:28:00 GMT`)
+ * is `NaN`, which produced "try again in about NaN minutes". Delta-seconds is
+ * tried first because it is what this API actually sends; `Date.parse` is the
+ * fallback for the header's other legal shape; and if neither yields a real
+ * number, `null` is returned so the caller can drop the sentence rather than
+ * print a non-answer.
+ */
+function retryAfterSeconds(header: string | null): number | null {
+  if (!header) return null
+
+  const asDelta = Number(header)
+  if (Number.isFinite(asDelta) && asDelta >= 0) return asDelta
+
+  const asDate = Date.parse(header)
+  if (!Number.isNaN(asDate)) {
+    const seconds = Math.round((asDate - Date.now()) / 1000)
+    return seconds >= 0 ? seconds : 0
   }
-  return fallback
+
+  return null
 }
 
 export async function startScan(url: string): Promise<ScanResult> {
-  const response = await fetch('/api/public/scans', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url }),
-    cache: 'no-store',
-  })
-
-  const payload = await response.json().catch(() => null)
-  if (!response.ok) {
-    const retryAfter = response.headers.get('retry-after')
-    throw new ScanError(
-      messageFrom(payload, 'Something went wrong.'),
-      response.status,
-      retryAfter ? Number(retryAfter) : null,
-    )
+  let retryAfter: string | null = null
+  try {
+    return await httpJson<ScanResult>('/api/public/scans', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+      cache: 'no-store',
+      fallbackMessage: 'Something went wrong.',
+      // Read before the body — the only way to see `Retry-After` on the 429
+      // this call may get back, since it is gone once `httpJson` has thrown.
+      onResponse: (response) => {
+        retryAfter = response.headers.get('retry-after')
+      },
+    })
+  } catch (error) {
+    if (error instanceof HttpError) {
+      throw new ScanError(error.message, error.status, retryAfterSeconds(retryAfter))
+    }
+    throw error
   }
-  return payload as ScanResult
 }
 
 export async function deleteScan(id: string): Promise<void> {
-  await fetch(`/api/public/scans/${id}`, { method: 'DELETE', cache: 'no-store' })
+  // F-10: this used to be a bare `await fetch(...)` with nothing checking
+  // `response.ok` — a failed delete and a successful one looked identical to
+  // the caller, which unconditionally showed "deleted" either way.
+  await httpJson<void>(`/api/public/scans/${id}`, {
+    method: 'DELETE',
+    cache: 'no-store',
+    allowEmptyBody: true,
+    fallbackMessage: 'Could not delete that result.',
+  })
 }

@@ -138,7 +138,15 @@ export function DocumentLibrary() {
     }
   }
 
-  if (error !== null) {
+  // F-15: `send()` re-reads the library with `load()` after every upload, and
+  // `load()` can fail on that *re*-read exactly as it can on the first one.
+  // This used to be one `if (error !== null)` gating the entire component, so
+  // a reload that failed after a successful upload replaced the whole screen
+  // with `Failed` — discarding `refused`, the one thing telling the reader
+  // which of the files they just picked actually made it. Only a failure with
+  // nothing loaded yet takes over the whole view now; a failure with `stage`
+  // already in hand renders above the library instead, next to `refused`.
+  if (error !== null && stage === null) {
     return (
       <Failed title="Your documents did not load" retry={() => void load()}>
         {error}
@@ -154,6 +162,11 @@ export function DocumentLibrary() {
 
   return (
     <div className="flex flex-col gap-5">
+      {error !== null ? (
+        <Failed title="Could not refresh your documents" retry={() => void load()}>
+          {error}
+        </Failed>
+      ) : null}
       <div className="rounded-2xl border border-bone-300 bg-white/90 p-5">
         <label
           htmlFor="document-upload"

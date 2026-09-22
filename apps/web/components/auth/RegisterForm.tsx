@@ -15,6 +15,18 @@ type State =
   // and what stating it costs.
   | { status: 'error'; message: string; taken?: boolean }
 
+/** What the submit button explains when it cannot yet act — X-02/F-24.
+ *  `noValidate` on the form means `required` alone does not stop a submit, so
+ *  this is checked explicitly rather than left to the browser. */
+function blockedBy(email: string, password: string): string | undefined {
+  if (email.trim() === '') return 'Enter your work email.'
+  if (password === '') return 'Choose a password.'
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return `Your password needs at least ${MIN_PASSWORD_LENGTH} characters.`
+  }
+  return undefined
+}
+
 export function RegisterForm() {
   const router = useRouter()
   const [fullName, setFullName] = useState('')
@@ -25,10 +37,20 @@ export function RegisterForm() {
 
   const busy = state.status === 'submitting'
   const tooShort = password !== '' && password.length < MIN_PASSWORD_LENGTH
+  const reason = blockedBy(email, password)
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault()
-    if (busy || tooShort) return
+    if (busy) return
+
+    // X-02/F-24: the button used to be disabled while `reason` was set,
+    // which is the mistake `Button`'s own doc comment now describes — the
+    // control stays enabled and this is what actually stops an incomplete
+    // submit, with the same sentence surfacing beside the button.
+    if (reason) {
+      setState({ status: 'error', message: reason })
+      return
+    }
 
     setState({ status: 'submitting' })
     try {
@@ -179,15 +201,6 @@ export function RegisterForm() {
       <Button
         type="submit"
         size="lg"
-        disabledReason={
-          email.trim() === ''
-            ? 'Enter your work email.'
-            : password === ''
-              ? 'Choose a password.'
-              : tooShort
-                ? `Your password needs at least ${MIN_PASSWORD_LENGTH} characters.`
-                : undefined
-        }
         disabled={busy}
         icon={busy ? undefined : <ArrowRight />}
         className="mt-1 w-full"

@@ -59,8 +59,12 @@ export function AssistantPanel({
           Ask the {assistant.director}
         </p>
         <ul className="mt-3 flex flex-col gap-2">
-          {assistant.questions.map((q) => (
-            <li key={q} className="text-[0.95rem] leading-relaxed text-ink-700">
+          {assistant.questions.map((q, index) => (
+            // F-28: `key={q}` collides whenever the bank asks the same
+            // question twice, or repeats the placeholder empty string —
+            // falling back to the array index, which is stable here because
+            // this list is never reordered or filtered.
+            <li key={q || index} className="text-[0.95rem] leading-relaxed text-ink-700">
               &ldquo;{q}&rdquo;
             </li>
           ))}
@@ -129,8 +133,8 @@ export function AssistantPanel({
 
       {!reply && !pending && !failed ? (
         <ul className="mt-4 flex flex-col gap-2 border-t border-ink-100 pt-3">
-          {assistant.questions.map((q) => (
-            <li key={q}>
+          {assistant.questions.map((q, index) => (
+            <li key={q || index}>
               <button
                 type="button"
                 onClick={() => setQuestion(q)}
@@ -163,8 +167,12 @@ export function AssistantPanel({
         <div className="mt-4 border-t border-ink-100 pt-3">
           <p className="text-[0.95rem] leading-relaxed text-ink-800">{reply.prose}</p>
           <ul className="mt-3 flex flex-col gap-1">
-            {reply.citations.map((citation) => (
-              <li key={citation.chunkId}>
+            {reply.citations.map((citation, index) => (
+              // F-28: `chunkId` defaults to `''` when the server omits it
+              // (`c.chunk_id ?? ''` in `dashboard-client.ts`), so two such
+              // citations in one answer collided. The index is stable here —
+              // this list is rendered once per reply and never reordered.
+              <li key={citation.chunkId || index}>
                 <a
                   // **`/documents#doc-<id>`, not `/documents/<id>`.** There is
                   // no per-document page: the first version of this linked to

@@ -1,7 +1,8 @@
 'use client'
 
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { AssistantPanel } from '@/components/dashboard/AssistantPanel'
 import { BlockCard } from '@/components/dashboard/BlockCard'
 // Still used by `ChooseEntity` below — that is the chooser itself, not the
@@ -15,6 +16,7 @@ import { Disclosure } from '@/components/ui/Disclosure'
 import { PageBody, PageHeader, Section } from '@/components/ui/Page'
 import { BlockGridSkeleton, Bone, Loading, PageHeadSkeleton } from '@/components/ui/Skeleton'
 import { Failed } from '@/components/ui/States'
+import { TabPanel } from '@/components/ui/Tabs'
 import { AuthError } from '@/lib/auth-client'
 import { fetchDirector, type Dashboards, type Director } from '@/lib/dashboard-client'
 
@@ -70,6 +72,12 @@ export function DirectorPage({ department }: { department: string }) {
   const router = useRouter()
   const all = useDashboards()
   const [state, setState] = useState<State>({ status: 'loading' })
+  // F-01: `retry` used to call `setState({ status: 'loading' })` directly,
+  // which is a no-op against the effect below — its dependency array is
+  // `[department, router]`, neither of which that call changes, so the fetch
+  // never re-ran and the page stayed on its spinner for ever. `attempt` is in
+  // the dependency array precisely so retrying has somewhere to register.
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     let live = true
@@ -111,7 +119,7 @@ export function DirectorPage({ department }: { department: string }) {
     return () => {
       live = false
     }
-  }, [department, router])
+  }, [department, router, attempt])
 
   return state.status === 'loading' ? (
     <DirectorSkeleton />
@@ -121,7 +129,7 @@ export function DirectorPage({ department }: { department: string }) {
     <Unavailable
       message={state.message}
       code={state.code}
-      retry={() => setState({ status: 'loading' })}
+      retry={() => setAttempt((n) => n + 1)}
     />
   ) : (
     <Ready director={state.director} all={all} />
@@ -175,6 +183,9 @@ function Ready({ director, all }: { director: Director; all: Dashboards | null }
   // array every render because of the `?? []` above — so it recomputed every
   // time anyway while making the dependency list wrong. `next lint` caught it.
   const current = sections.find((section) => section.key === active) ?? opensOn
+  // X-01: shared by `SectionRail`'s `Tabs` and the `TabPanel` below, so the
+  // rail's `aria-controls` names an id the panel actually renders.
+  const railId = useId()
 
   const scoreNote = !director.scoreable
     ? 'Never scored'
@@ -253,26 +264,35 @@ function Ready({ director, all }: { director: Director; all: Dashboards | null }
 
       {sections.length > 0 ? (
         <div className="flex flex-col gap-5">
-          <SectionRail sections={sections} active={current?.key ?? ''} onSelect={setActive} />
+          <SectionRail
+            sections={sections}
+            active={current?.key ?? ''}
+            onSelect={setActive}
+            id={railId}
+          />
 
-          {current?.key === 'setup' || current?.key === 'watchlist' ? (
-            /* The two tabs that are ours, and the only two whose content is
-               fetched separately. Finding #23 is that the dashboard already
-               spends 25 to 30 round trips; most visits never open these. */
-            <SetupSection
-              department={director.department}
-              tab={current.key}
-              notAsked={director.not_asked ?? []}
-            />
-          ) : current ? (
-            /* `items-start`: tiles carry very different amounts, and stretching
-               them to a shared height left the short ones with a hundred pixels
-               of empty card below their last line. */
-            <ul className="grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {current.blocks.map((block) => (
-                <BlockCard key={block.key} block={block} department={director.department} />
-              ))}
-            </ul>
+          {current ? (
+            <TabPanel id={railId} tab={current.key}>
+              {current.key === 'setup' || current.key === 'watchlist' ? (
+                /* The two tabs that are ours, and the only two whose content is
+                   fetched separately. Finding #23 is that the dashboard already
+                   spends 25 to 30 round trips; most visits never open these. */
+                <SetupSection
+                  department={director.department}
+                  tab={current.key}
+                  notAsked={director.not_asked ?? []}
+                />
+              ) : (
+                /* `items-start`: tiles carry very different amounts, and
+                   stretching them to a shared height left the short ones with a
+                   hundred pixels of empty card below their last line. */
+                <ul className="grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {current.blocks.map((block) => (
+                    <BlockCard key={block.key} block={block} department={director.department} />
+                  ))}
+                </ul>
+              )}
+            </TabPanel>
           ) : null}
         </div>
       ) : (
@@ -340,6 +360,23 @@ function ChooseEntity() {
       <div className="mt-6">
         <EntitySwitcher />
       </div>
+      {/* F-22: `EntitySwitcher` renders nothing at all while its own fetch is
+          in flight, on a read failure, or for the (here, unexpected) case of
+          fewer than two entities — every one of which left this screen with a
+          heading, no options and no way out. A fallback to the panel that
+          lists the same companies and reports its own errors properly means
+          the page can never be a dead end, whatever `EntitySwitcher` decided
+          to render. */}
+      <p className="mt-4 text-sm text-ink-500">
+        Not seeing your companies?{' '}
+        <Link
+          href="/settings"
+          className="font-medium text-steel-600 underline decoration-steel-300 underline-offset-2 hover:text-steel-700"
+        >
+          Settings lists them
+        </Link>
+        .
+      </p>
     </div>
   )
 }

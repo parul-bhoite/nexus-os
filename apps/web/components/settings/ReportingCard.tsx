@@ -9,6 +9,7 @@ import {
   type Reporting,
   type ReportingSetting,
 } from '@/lib/settings-client'
+import { formatDate } from '@/lib/format'
 import { Waiting } from '@/components/ui/Waiting'
 
 /**
@@ -100,6 +101,24 @@ type State =
 
 function title(word: string): string {
   return word.charAt(0).toUpperCase() + word.slice(1)
+}
+
+/**
+ * F-07: a stored currency/country/timezone outside these hardcoded lists
+ * rendered blank — a `<select>` with a `value` matching none of its
+ * `<option>`s selects nothing — and the next save silently overwrote it with
+ * whatever the browser had defaulted to instead. The current value is always
+ * listed, even when it is not one of the ordinary choices.
+ */
+function withCurrent(options: { value: string; label: string }[], current: string) {
+  if (current === '' || options.some((option) => option.value === current)) return options
+  return [...options, { value: current, label: current }]
+}
+
+/** The plain-string-list version, for `TIMEZONES`. */
+function withCurrentZone(options: readonly string[], current: string): string[] {
+  if (current === '' || options.includes(current)) return [...options]
+  return [...options, current]
 }
 
 /**
@@ -251,7 +270,7 @@ export function ReportingCard() {
               value={reporting.currency}
               onChange={(event) => update({ currency: event.target.value })}
             >
-              {CURRENCIES.map((currency) => (
+              {withCurrent(CURRENCIES, reporting.currency).map((currency) => (
                 <option key={currency.value} value={currency.value}>
                   {currency.label}
                 </option>
@@ -271,7 +290,7 @@ export function ReportingCard() {
               value={reporting.country}
               onChange={(event) => update({ country: event.target.value })}
             >
-              {COUNTRIES.map((country) => (
+              {withCurrent(COUNTRIES, reporting.country).map((country) => (
                 <option key={country.value} value={country.value}>
                   {country.label}
                 </option>
@@ -341,7 +360,7 @@ export function ReportingCard() {
             value={reporting.timezone}
             onChange={(event) => update({ timezone: event.target.value })}
           >
-            {TIMEZONES.map((zone) => (
+            {withCurrentZone(TIMEZONES, reporting.timezone).map((zone) => (
               <option key={zone} value={zone}>
                 {zone}
               </option>
@@ -412,8 +431,11 @@ export function ReportingCard() {
       ) : null}
 
       <p className="border-t border-ink-100 pt-4 text-sm text-ink-400">
-        {reporting.changed_at
-          ? `Last changed ${new Date(reporting.changed_at).toLocaleDateString()}. Every change is in the audit log.`
+        {/* F-20: unguarded `new Date(...).toLocaleDateString()` printed the
+            literal string "Invalid Date" for anything malformed, and read the
+            runtime's implicit locale otherwise. `formatDate` closes both. */}
+        {reporting.changed_at && formatDate(reporting.changed_at)
+          ? `Last changed ${formatDate(reporting.changed_at)}. Every change is in the audit log.`
           : 'Never changed since you registered — these are the defaults for a business in Oman.'}
       </p>
     </section>

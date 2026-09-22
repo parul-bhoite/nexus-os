@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/Button'
+import { Dialog } from '@/components/ui/Overlay'
 import { Empty, Failed } from '@/components/ui/States'
 import { Waiting } from '@/components/ui/Waiting'
 import { AuthError } from '@/lib/auth-client'
@@ -91,6 +92,10 @@ export function ReviewQueue() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [refused, setRefused] = useState<Record<string, string>>({})
+  // F-05: the item awaiting a confirmed rejection — a one-click "Reject"
+  // discarded knowledge with the consequence stated only in a `title`
+  // tooltip, which a touch or keyboard user never sees.
+  const [confirmReject, setConfirmReject] = useState<ReviewItem | null>(null)
 
   const load = useCallback(async () => {
     setError(null)
@@ -104,6 +109,18 @@ export function ReviewQueue() {
   useEffect(() => {
     void load()
   }, [load])
+
+  // F-02: the endpoint is paged (`limit`, no offset — see `readReviewQueue`'s
+  // own doc comment); as items are decided and removed from the visible page
+  // locally, `queue.items` can empty while `queue.total` is still positive.
+  // The old code rendered `Empty` in that case — "nothing is waiting" while
+  // dozens of chunks still were. Fetching again pulls the next batch of
+  // whatever remains, since a decided chunk never comes back.
+  useEffect(() => {
+    if (queue && queue.items.length === 0 && queue.total > 0) {
+      void load()
+    }
+  }, [queue, load])
 
   async function decide(item: ReviewItem, decision: Decision) {
     setBusy(item.chunk_id)
@@ -146,6 +163,13 @@ export function ReviewQueue() {
 
   if (queue === null) {
     return <Waiting>Loading what is waiting for you.</Waiting>
+  }
+
+  if (queue.items.length === 0 && queue.total > 0) {
+    // F-02: more remain — the effect above is already re-fetching them.
+    // Rendered as a wait rather than nothing, so this reads as "loading
+    // more" and not as a flash of the empty state before it corrects itself.
+    return <Waiting>Loading what else is waiting.</Waiting>
   }
 
   if (queue.items.length === 0) {
@@ -199,8 +223,7 @@ export function ReviewQueue() {
                 size="sm"
                 variant="quiet"
                 disabled={busy === item.chunk_id}
-                title="Removes it from the workspace's knowledge. The document itself is kept."
-                onClick={() => void decide(item, { approve: false })}
+                onClick={() => setConfirmReject(item)}
               >
                 Reject
               </Button>
@@ -220,6 +243,36 @@ export function ReviewQueue() {
           </li>
         ))}
       </ul>
+
+      {/* F-05: confirm before discarding knowledge — the consequence used to
+          live only in a `title` tooltip, invisible to touch and keyboard. */}
+      <Dialog
+        open={confirmReject !== null}
+        onClose={() => setConfirmReject(null)}
+        title="Reject this passage?"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setConfirmReject(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              loading={busy === confirmReject?.chunk_id}
+              loadingLabel="Rejecting…"
+              onClick={() => {
+                const item = confirmReject
+                if (!item) return
+                setConfirmReject(null)
+                void decide(item, { approve: false })
+              }}
+            >
+              Reject
+            </Button>
+          </>
+        }
+      >
+        Removes it from the workspace&rsquo;s knowledge. The document itself is kept.
+      </Dialog>
     </div>
   )
 }

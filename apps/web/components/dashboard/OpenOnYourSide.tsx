@@ -79,9 +79,13 @@ export function OpenOnYourSide({ questions }: { questions: OpenQuestions }) {
             }`}
           >
             <span className="font-semibold text-ink-800">
-              {questions.waiting_on_us} more questions
+              {/* F-25: "1 more questions" — pluralised on the count like its
+                  neighbours (`changes_a_figure`'s own copy a few lines up). */}
+              {questions.waiting_on_us} more {questions.waiting_on_us === 1 ? 'question' : 'questions'}
             </span>{' '}
-            are open, and answering them changes nothing yet — the capabilities that read
+            {questions.waiting_on_us === 1 ? 'is' : 'are'} open, and answering{' '}
+            {questions.waiting_on_us === 1 ? 'it changes' : 'them changes'} nothing yet — the
+            capabilities that read
             them are not built. They are worth answering when you have a moment, not
             before.
           </p>

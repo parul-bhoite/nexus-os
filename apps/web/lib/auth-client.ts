@@ -1,4 +1,5 @@
 import { messageFrom } from '@/lib/api-error'
+import { HttpError, httpJson } from '@/lib/http'
 
 /**
  * Browser-side auth calls.
@@ -79,33 +80,38 @@ export class AuthError extends Error {
   }
 }
 
-async function post(path: string, body?: unknown): Promise<unknown> {
+/**
+ * R-02/F-12: routed through the shared `httpJson`, which is what gives every
+ * call here the `AbortController` timeout ceiling none of them had —
+ * `registerCompany`'s ~8s round trip and `login`'s ~15s one previously had
+ * nothing bounding them, so a wedged upstream left the caller waiting with no
+ * way to give up.
+ */
+async function post(path: string, body?: unknown, timeoutMs?: number): Promise<unknown> {
   const headers: Record<string, string> = {}
   if (body !== undefined) headers['Content-Type'] = 'application/json'
 
   const token = csrfToken()
   if (token) headers['X-CSRF-Token'] = token
 
-  const response = await fetch(path, {
-    method: 'POST',
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-    // Same origin, so cookies ride along; stated rather than assumed.
-    credentials: 'same-origin',
-    cache: 'no-store',
-  })
-
-  if (response.status === 204) return null
-
-  const payload = await response.json().catch(() => null)
-  if (!response.ok) {
-    throw new AuthError(
-      messageFrom(payload, 'Something went wrong.'),
-      response.status,
-      (payload as { detail?: unknown } | null)?.detail,
-    )
+  try {
+    return await httpJson<unknown>(path, {
+      method: 'POST',
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      // Same origin, so cookies ride along; stated rather than assumed.
+      credentials: 'same-origin',
+      cache: 'no-store',
+      timeoutMs,
+      allowEmptyBody: true,
+      fallbackMessage: 'Something went wrong.',
+    })
+  } catch (error) {
+    if (error instanceof HttpError) {
+      throw new AuthError(error.message, error.status, error.detail)
+    }
+    throw error
   }
-  return payload
 }
 
 /**
@@ -208,10 +214,16 @@ export type DepartmentChoice = {
  * page the user spends a while filling in, and a stale copy in a module-level
  * variable would outlive a deploy that changed the list.
  */
-export async function fetchDepartments(): Promise<DepartmentChoice[]> {
+export async function fetchDepartments(signal?: AbortSignal): Promise<DepartmentChoice[]> {
+  // R-04: takes a signal so the caller can cancel the request rather than
+  // only discard its response. Strict Mode's mount/unmount/remount fired this
+  // twice with `cache: 'no-store'` and a `live` boolean cleanup that stopped
+  // the stale response from being applied but never cancelled the request
+  // itself — the second GET still went out.
   const response = await fetch('/api/departments', {
     credentials: 'same-origin',
     cache: 'no-store',
+    signal,
   })
   if (!response.ok) {
     const payload = await response.json().catch(() => null)
@@ -250,10 +262,15 @@ export async function registerCompany(
   { confirmSeparateCompany = false }: { confirmSeparateCompany?: boolean } = {},
 ): Promise<RegisteredCompany> {
   try {
-    return (await post('/api/companies', {
-      ...details,
-      confirm_separate_company: confirmSeparateCompany,
-    })) as RegisteredCompany
+    // R-02: measured at ~25s with no client-side ceiling — the ~8s figure
+    // documented elsewhere is the typical case, not the worst one. 30s gives
+    // headroom over both while still eventually giving up rather than leaving
+    // the founder's very first action hung indefinitely.
+    return (await post(
+      '/api/companies',
+      { ...details, confirm_separate_company: confirmSeparateCompany },
+      30_000,
+    )) as RegisteredCompany
   } catch (error) {
     // A 409 whose detail is an object is the join offer. FastAPI puts a dict
     // detail through unchanged, and `messageFrom` would flatten it to a string

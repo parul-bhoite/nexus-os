@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/Button'
+import { Dialog } from '@/components/ui/Overlay'
 import { AuthError } from '@/lib/auth-client'
+import { formatDate } from '@/lib/format'
 import {
   createInvitation,
   fetchInvitations,
@@ -91,6 +93,11 @@ export function InvitePeople({
   const [error, setError] = useState<string | null>(null)
   const [sent, setSent] = useState<Sent>(null)
   const [existing, setExisting] = useState<Invitation[] | null>(null)
+  // F-19: which invitation is awaiting a confirmed withdrawal, and a per-row
+  // busy flag so a second click while the first request is still in flight
+  // cannot fire twice.
+  const [confirmWithdraw, setConfirmWithdraw] = useState<Invitation | null>(null)
+  const [withdrawing, setWithdrawing] = useState<string | null>(null)
 
   const selectedRole = ROLES.find((r) => r.value === role) ?? ROLES[2]
   const needsDepartments = selectedRole.departments === 'one-to-three'
@@ -139,6 +146,20 @@ export function InvitePeople({
   async function send(event: React.FormEvent) {
     event.preventDefault()
     if (busy) return
+
+    // F-24: the form sets `noValidate`, so this is what actually stops an
+    // incomplete submit — the `disabled` attribute below covers a mouse
+    // click, but an implicit submit (Enter in the email field) still fires
+    // this handler.
+    if (email.trim() === '') {
+      setError('Enter the address you are inviting.')
+      return
+    }
+    if (departmentCountWrong) {
+      setError(`Choose one to ${MAX_DEPARTMENTS} departments for this role.`)
+      return
+    }
+
     setBusy(true)
     setError(null)
     setSent(null)
@@ -188,7 +209,13 @@ export function InvitePeople({
         <div className="mt-4 rounded-xl border border-steel-300 bg-steel-100 px-4 py-3 text-sm text-ink-700">
           <p>
             Invitation sent to <span className="font-medium">{sent.issued.email}</span>. It
-            expires {new Date(sent.issued.expires_at).toLocaleDateString()}.
+            {/* F-20: unguarded `new Date(...).toLocaleDateString()` printed
+                the literal string "Invalid Date" for anything malformed, and
+                used the runtime's implicit locale otherwise. `formatDate`
+                closes both. */}
+            {formatDate(sent.issued.expires_at)
+              ? ` expires ${formatDate(sent.issued.expires_at)}.`
+              : ' has an expiry date.'}
           </p>
           {/* Handed back as well as emailed. An owner who would rather paste it
               into a chat should be able to; the link alone grants nothing,
@@ -262,7 +289,15 @@ export function InvitePeople({
                   return (
                     <label
                       key={d.value}
-                      className={`cursor-pointer rounded-full border px-3.5 py-1.5 text-sm ${
+                      // X-05: the `sr-only` checkbox had no focus ring at all
+                      // — a keyboard user tabbing through these pills had no
+                      // way to see which one they were on — and selection was
+                      // carried by colour alone, which a low-vision or
+                      // colour-blind reader cannot rely on. `focus-within`
+                      // puts the ring on the label the checkbox is hidden
+                      // inside, and the check glyph is a second, non-colour
+                      // signal for "on".
+                      className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm focus-within:ring-2 focus-within:ring-steel-500 focus-within:ring-offset-2 ${
                         on
                           ? 'border-ink-800 bg-ink-800 text-bone-50'
                           : 'border-ink-200 bg-white text-ink-700'
@@ -280,6 +315,17 @@ export function InvitePeople({
                           )
                         }
                       />
+                      {on ? (
+                        <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" className="h-3.5 w-3.5">
+                          <path
+                            d="m3.5 8.5 2.75 2.75L12.5 5"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      ) : null}
                       {d.label}
                     </label>
                   )
@@ -328,21 +374,11 @@ export function InvitePeople({
                   {entry.state === 'pending' ? (
                     <button
                       type="button"
-                      className="text-sm font-medium text-clay-600 underline decoration-clay-300 underline-offset-2"
-                      onClick={async () => {
-                        try {
-                          await revokeInvitation(entry.invitation_id)
-                          setExisting(await fetchInvitations())
-                        } catch (caught) {
-                          setError(
-                            caught instanceof AuthError
-                              ? caught.message
-                              : 'Could not withdraw that invitation.',
-                          )
-                        }
-                      }}
+                      disabled={withdrawing === entry.invitation_id}
+                      className="text-sm font-medium text-clay-600 underline decoration-clay-300 underline-offset-2 disabled:opacity-60"
+                      onClick={() => setConfirmWithdraw(entry)}
                     >
-                      Withdraw
+                      {withdrawing === entry.invitation_id ? 'Withdrawing…' : 'Withdraw'}
                     </button>
                   ) : null}
                 </span>
@@ -351,6 +387,53 @@ export function InvitePeople({
           </ul>
         </div>
       ) : null}
+
+      {/* F-19: confirm before withdrawing — an unconfirmed one-click revoke,
+          same as disconnect on the tools panel. */}
+      <Dialog
+        open={confirmWithdraw !== null}
+        onClose={() => setConfirmWithdraw(null)}
+        title="Withdraw this invitation?"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setConfirmWithdraw(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              loading={withdrawing === confirmWithdraw?.invitation_id}
+              loadingLabel="Withdrawing…"
+              onClick={async () => {
+                const entry = confirmWithdraw
+                if (!entry) return
+                setConfirmWithdraw(null)
+                setWithdrawing(entry.invitation_id)
+                try {
+                  await revokeInvitation(entry.invitation_id)
+                  setExisting(await fetchInvitations())
+                } catch (caught) {
+                  setError(
+                    caught instanceof AuthError
+                      ? caught.message
+                      : 'Could not withdraw that invitation.',
+                  )
+                } finally {
+                  setWithdrawing(null)
+                }
+              }}
+            >
+              Withdraw
+            </Button>
+          </>
+        }
+      >
+        {confirmWithdraw ? (
+          <>
+            The link sent to <strong>{confirmWithdraw.email}</strong> stops working. They can
+            be invited again later.
+          </>
+        ) : null}
+      </Dialog>
     </section>
   )
 }

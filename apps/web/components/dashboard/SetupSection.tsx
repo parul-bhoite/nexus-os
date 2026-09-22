@@ -9,6 +9,7 @@ import {
   type SetupFact,
   type WatchItem,
 } from '@/lib/dashboard-client'
+import { formatDate } from '@/lib/format'
 import { Waiting } from '@/components/ui/Waiting'
 
 /**
@@ -37,11 +38,11 @@ import { Waiting } from '@/components/ui/Waiting'
  * the `facts` block kind exists for, and this is the first thing to use it.
  */
 
-function when(iso: string): string {
-  if (!iso) return ''
-  const parsed = new Date(iso)
-  return Number.isNaN(parsed.getTime()) ? '' : parsed.toLocaleDateString()
-}
+// F-20: this used `new Date(iso).toLocaleDateString()` directly — an implicit
+// locale (an SSR/hydration mismatch) and, for a date-only answer, a round
+// trip through `Date` that parses it as UTC midnight and can print the day
+// before in a browser west of Greenwich. `formatDate` avoids both.
+const when = formatDate
 
 function Fact({ fact }: { fact: SetupFact }) {
   const said = when(fact.answered_at)

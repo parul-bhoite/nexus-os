@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import type { ComponentProps, ReactNode } from 'react'
+import { useId, type ComponentProps, type ReactNode } from 'react'
 
 /**
  * Every button in the product.
@@ -13,10 +13,26 @@ import type { ComponentProps, ReactNode } from 'react'
  * at `opacity-50` with `disabled` set, before the reader had typed anything.
  * That fails twice over: it is the lowest-contrast thing on the screen at the
  * moment it is the most important, and it gives no indication of *what* would
- * enable it. Forms now keep the button live and validate on submit, and where a
- * control genuinely cannot act — a save with nothing changed — it passes
- * `disabledReason`, which is rendered to assistive technology and shown on
- * hover rather than left for the reader to deduce.
+ * enable it. Forms now keep the button live and validate on submit — copy the
+ * pattern `LoginForm` uses — and where a control genuinely cannot act, `disabledReason`
+ * is a sentence rendered as a **visible sibling** of the button, not a reason
+ * to disable it.
+ *
+ * **R-03/X-02/X-03: `disabledReason` used to disable the button and hide its
+ * own explanation inside it.** Setting the prop forced `disabled` — recreating
+ * the exact default-disabled anti-pattern the paragraph above describes — and
+ * the sentence was an `sr-only` span appended *inside* the `<button>`, after the
+ * label. That corrupts the accessible name (the label plus the reason read as
+ * one run-on sentence, or the whole thing reads as empty when `children` is
+ * itself hidden while `loading`) and it is not what `aria-describedby` is for —
+ * a description is a separate node the control merely *points at*, not content
+ * folded into the name. And there never was a hover tooltip: `title` on a
+ * `disabled` button does not receive pointer events in most browsers, so the
+ * "shown on hover" claim that used to be here was simply false. `disabledReason`
+ * now renders as its own element, given its own id, referenced by
+ * `aria-describedby` on an **enabled** button — the reason is always visible,
+ * always announced, and the click still fires so the caller can validate and
+ * say what is wrong.
  *
  * **There is a loading state.** Six actions in this product take eight to
  * fifteen seconds (`Waiting` documents why). Every one of them used to leave
@@ -110,12 +126,15 @@ type Props = {
   /** What to say while `loading`. Says *what* is happening, not "please wait". */
   loadingLabel?: string
   /**
-   * Why this control cannot act, in the reader's words.
+   * Why this control cannot act yet, in the reader's words — **not** a way to
+   * disable it.
    *
-   * Setting it implies `disabled`. It becomes the `title` and is announced via
-   * `aria-describedby`, so the answer to "why is this grey?" is available
-   * without guessing. A disabled button with no reason is a bug report waiting
-   * to happen, so this is the only supported way to disable one.
+   * The button stays enabled whether or not this is set; the caller validates
+   * on submit and re-renders with a reason if something is missing, the same
+   * pattern `LoginForm` uses for its own inline error. The sentence renders as
+   * a visible line under the button and is wired to it via `aria-describedby`,
+   * so it is both seen and announced — never only one or the other, and never
+   * folded into the button's own accessible name.
    */
   disabledReason?: string
   /** Full width. Named rather than passed as a class so forms are consistent. */
@@ -137,7 +156,10 @@ export function Button({
   disabled,
   ...rest
 }: Props) {
-  const isDisabled = disabled || Boolean(disabledReason)
+  // R-03/X-02/X-03: `disabledReason` no longer implies `disabled` — only the
+  // caller's own `disabled` prop does. See the type's doc comment.
+  const isDisabled = disabled
+  const reasonId = useId()
   const cls = `${base} ${variants[variant]} ${sizes[size]} ${block ? 'w-full' : ''} ${className}`
 
   const label = loading && loadingLabel ? loadingLabel : children
@@ -165,17 +187,32 @@ export function Button({
     )
   }
 
-  return (
+  const button = (
     <button
       className={cls}
       disabled={isDisabled || loading}
       aria-busy={loading || undefined}
-      title={disabledReason}
+      aria-describedby={disabledReason ? reasonId : undefined}
       {...rest}
     >
       {inner}
-      {disabledReason ? <span className="sr-only"> — {disabledReason}</span> : null}
     </button>
+  )
+
+  // The common case: no reason, so no wrapper — the button is the whole
+  // return value, exactly as before.
+  if (!disabledReason) return button
+
+  return (
+    <span className={`inline-flex flex-col items-start gap-1 ${block ? 'w-full' : ''}`}>
+      {button}
+      {/* A visible sibling, not content folded into the button's own name —
+          see the file's top-of-module note on why the old `sr-only` span
+          inside the button was the actual bug. */}
+      <span id={reasonId} className="text-meta text-clay-600">
+        {disabledReason}
+      </span>
+    </span>
   )
 }
 

@@ -1,6 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Dialog } from '@/components/ui/Overlay'
+import { Button } from '@/components/ui/Button'
+import { Waiting } from '@/components/ui/Waiting'
 import {
   fetchConnections,
   revokeConnection,
@@ -77,6 +80,9 @@ export function Connections() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState('')
+  // F-19: the provider awaiting a confirmed disconnect. A read of the whole
+  // company's data in that system does not end on one accidental click.
+  const [confirmDisconnect, setConfirmDisconnect] = useState<Offerable | null>(null)
 
   async function reload() {
     try {
@@ -142,7 +148,16 @@ export function Connections() {
         </p>
       ) : null}
 
-      {tools.length > 0 ? (
+      {/* F-18: loading and empty used to look identical — both rendered
+          nothing at all, so a slow read and a workspace with nothing
+          connectable were indistinguishable. `data === null` is "still
+          reading"; an empty `offerable` array, once loaded, is a real empty
+          state and says so. */}
+      {data === null && !error ? (
+        <div className="mt-4">
+          <Waiting>Reading your connections…</Waiting>
+        </div>
+      ) : tools.length > 0 ? (
         <ul className="mt-4 max-w-2xl divide-y divide-ink-100 rounded-xl border border-ink-100">
           {tools.map((tool) => (
             <Row
@@ -150,11 +165,44 @@ export function Connections() {
               tool={tool}
               busy={busy === tool.provider}
               onConnect={() => void connect(tool.provider)}
-              onDisconnect={() => void disconnect(tool.provider)}
+              onDisconnect={() => setConfirmDisconnect(tool)}
             />
           ))}
         </ul>
+      ) : data ? (
+        <p className="mt-4 max-w-prose text-sm text-ink-500">
+          Nothing is connectable on this deployment yet — no provider here has credentials
+          configured.
+        </p>
       ) : null}
+
+      <Dialog
+        open={confirmDisconnect !== null}
+        onClose={() => setConfirmDisconnect(null)}
+        title={confirmDisconnect ? `Disconnect ${confirmDisconnect.name}?` : 'Disconnect?'}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setConfirmDisconnect(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              loading={busy === confirmDisconnect?.provider}
+              loadingLabel="Disconnecting…"
+              onClick={() => {
+                const provider = confirmDisconnect?.provider
+                setConfirmDisconnect(null)
+                if (provider) void disconnect(provider)
+              }}
+            >
+              Disconnect
+            </Button>
+          </>
+        }
+      >
+        Every tile reading from {confirmDisconnect?.name ?? 'this tool'} loses its source. It can
+        be reconnected later, but anything it fed will go back to whatever state it was in before.
+      </Dialog>
     </section>
   )
 }

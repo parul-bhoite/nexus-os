@@ -1,5 +1,5 @@
-import { messageFrom } from '@/lib/api-error'
 import { AuthError, csrfToken } from '@/lib/auth-client'
+import { HttpError, httpJson } from '@/lib/http'
 
 /**
  * The seven director pages.
@@ -787,13 +787,27 @@ export type Surface = {
   measured: DirectorBlock[]
 }
 
+/**
+ * F-03: this used to be `await response.json().catch(() => null)` returned
+ * unchecked — an OK response with an empty or unparseable body surfaced as a
+ * bare `null` several renders later, wherever the caller first dereferenced a
+ * field on it. Routed through the shared `httpJson` (#3), which throws at the
+ * boundary instead, and carries the timeout ceiling F-12 found missing
+ * everywhere in this file.
+ */
 async function get(path: string): Promise<unknown> {
-  const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store' })
-  const payload = await response.json().catch(() => null)
-  if (!response.ok) {
-    throw new AuthError(messageFrom(payload, 'Could not load that dashboard.'), response.status)
+  try {
+    return await httpJson<unknown>(path, {
+      credentials: 'same-origin',
+      cache: 'no-store',
+      fallbackMessage: 'Could not load that dashboard.',
+    })
+  } catch (error) {
+    if (error instanceof HttpError) {
+      throw new AuthError(error.message, error.status, error.detail)
+    }
+    throw error
   }
-  return payload
 }
 
 export async function fetchDashboards(): Promise<Dashboards> {
@@ -840,25 +854,24 @@ export async function narrateBlock(
   const token = csrfToken()
   if (token) headers['X-CSRF-Token'] = token
 
-  const response = await fetch(
-    `/api/dashboards/${encodeURIComponent(department)}/narrate`,
-    {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ key }),
-      credentials: 'same-origin',
-      cache: 'no-store',
-    },
-  )
-
-  const payload = await response.json().catch(() => null)
-  if (!response.ok) {
-    throw new AuthError(
-      messageFrom(payload, 'Could not write that explanation.'),
-      response.status,
+  try {
+    return await httpJson<NarrationResult>(
+      `/api/dashboards/${encodeURIComponent(department)}/narrate`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ key }),
+        credentials: 'same-origin',
+        cache: 'no-store',
+        fallbackMessage: 'Could not write that explanation.',
+      },
     )
+  } catch (error) {
+    if (error instanceof HttpError) {
+      throw new AuthError(error.message, error.status, error.detail)
+    }
+    throw error
   }
-  return payload as NarrationResult
 }
 
 export const STATE_LABEL: Record<WidgetState, string> = {

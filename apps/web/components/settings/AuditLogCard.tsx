@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { AuthError } from '@/lib/auth-client'
 import { fetchAuditLog, type AuditEntry } from '@/lib/settings-client'
+import { formatDateTime } from '@/lib/format'
 import { Waiting } from '@/components/ui/Waiting'
 
 /**
@@ -26,9 +27,14 @@ import { Waiting } from '@/components/ui/Waiting'
  * filter over the most recent fifty would look like a filter over the log.
  */
 
+// F-20: `new Date(iso).toLocaleString()` used the runtime's implicit locale
+// (an SSR/hydration mismatch) and fell back to the raw ISO string on a parse
+// failure rather than a formatted one — `formatDateTime` fixes the locale and
+// returns `''` instead, which every call site already treats as "nothing to
+// show".
 function when(iso: string): string {
-  const parsed = new Date(iso)
-  return Number.isNaN(parsed.getTime()) ? iso : parsed.toLocaleString()
+  const formatted = formatDateTime(iso)
+  return formatted || iso
 }
 
 /** `departments_changed` reads better as "departments changed". */

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ReviewQueue } from '@/components/review/ReviewQueue'
 import { AuthError } from '@/lib/auth-client'
@@ -73,12 +73,20 @@ describe('ReviewQueue', () => {
   })
 
   it('sends a rejection as a rejection, not an approval with no scope', async () => {
+    // F-05: "Reject" now confirms before it fires — a one-click rejection
+    // used to discard knowledge with the consequence stated only in a
+    // `title` tooltip. The row's button opens the dialog; the dialog's own
+    // "Reject" is what actually decides.
     queued(ITEM)
     vi.mocked(decideChunk).mockResolvedValue(undefined)
     render(<ReviewQueue />)
     await waitFor(() => expect(screen.getByText(/Basic pay/)).toBeTruthy())
 
     fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
+    expect(decideChunk).not.toHaveBeenCalled()
+
+    const dialog = await screen.findByRole('dialog', { name: /reject this passage/i })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reject' }))
 
     await waitFor(() => expect(decideChunk).toHaveBeenCalledWith(ITEM.chunk_id, { approve: false }))
   })

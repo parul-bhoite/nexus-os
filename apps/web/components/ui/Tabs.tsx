@@ -57,6 +57,7 @@ export function Tabs({
   onChange,
   label,
   className = '',
+  id,
 }: {
   tabs: Tab[]
   active: string
@@ -64,9 +65,21 @@ export function Tabs({
   /** Names the rail for assistive technology — "Operations sections". */
   label: string
   className?: string
+  /**
+   * The group id shared with this rail's `TabPanel`s.
+   *
+   * X-01: `aria-controls` used to point at an id nothing rendered — the panel
+   * was a plain `<section>` with no `role="tabpanel"` and no matching id, so
+   * the relationship the ARIA attribute claims did not exist. Generated here
+   * with `useId()` by default so a caller with a single rail need not think
+   * about it; a caller that renders the panels itself passes its own
+   * `useId()` result so the ids it builds for `TabPanel` agree with this one.
+   */
+  id?: string
 }) {
   const safe = useMotionSafe()
-  const group = useId()
+  const generated = useId()
+  const group = id ?? generated
   const refs = useRef<Record<string, HTMLButtonElement | null>>({})
   const rail = useRef<HTMLDivElement>(null)
   const [overflow, setOverflow] = useState({ start: false, end: false })
@@ -176,18 +189,25 @@ export function TabPanel({
   tab,
   children,
   className = '',
+  ariaLabel,
 }: {
   /** The same `useId()` group value the rail was given. */
   id: string
   tab: string
   children: ReactNode
   className?: string
+  /** An additional landmark label, for a panel that used to be its own
+   *  `<section aria-label>` — `aria-labelledby` already names the panel from
+   *  its tab, so this is only for a caller that wants the extra redundancy of
+   *  a plain-language label alongside it. */
+  ariaLabel?: string
 }) {
   return (
     <div
       role="tabpanel"
       id={`${id}-${tab}-panel`}
       aria-labelledby={`${id}-${tab}`}
+      aria-label={ariaLabel}
       tabIndex={0}
       className={`outline-none ${className}`}
     >

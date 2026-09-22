@@ -1,8 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/Button'
-import { Tabs } from '@/components/ui/Tabs'
+import { Tabs, TabPanel } from '@/components/ui/Tabs'
 import { useToast } from '@/components/ui/Toast'
 import {
   ISSUE_STATUSES,
@@ -12,7 +12,7 @@ import {
   TASK_STATUSES,
   archiveDispatch,
   archiveStockItem,
-  deleteDeal,
+  archiveDeal,
   archiveSupplier,
   archiveIssue,
   archiveMilestone,
@@ -32,6 +32,8 @@ import {
   type Confirmation,
   type Ops,
 } from '@/lib/ops-client'
+import { fetchReporting } from '@/lib/settings-client'
+import { formatCurrency } from '@/lib/format'
 
 /**
  * Recording projects and tasks — `doc/15` S10.1.
@@ -167,6 +169,9 @@ export function WorkRecorder() {
    * and the eighth.
    */
   const [tab, setTab] = useState<string>('projects')
+  // X-01: shared by the `Tabs` rail below and every `TabPanel` section, so
+  // `aria-controls` names ids these sections actually render.
+  const tabsId = useId()
   const [ops, setOps] = useState<Ops | null>(null)
   const [loadError, setLoadError] = useState('')
   // **One flag per form, not one for the page.** Shared, pressing "Record
@@ -244,6 +249,12 @@ export function WorkRecorder() {
   const [issueDue, setIssueDue] = useState('')
   const [savingIssue, setSavingIssue] = useState(false)
 
+  // F-06: the workspace's own reporting currency, not a hardcoded 'OMR'. A
+  // deal recorded here inherits whatever the company actually reports in —
+  // `ReportingCard` is where that is set, and this is the same value rather
+  // than a second, silently wrong guess.
+  const [reportingCurrency, setReportingCurrency] = useState<string | null>(null)
+
   async function reload() {
     try {
       setOps(await fetchOps())
@@ -255,6 +266,12 @@ export function WorkRecorder() {
 
   useEffect(() => {
     void reload()
+    // Absorbed rather than raised: the reporting currency is only needed for
+    // the deal form's amount, and its own failure must not take the rest of
+    // this page down with it.
+    fetchReporting()
+      .then((reporting) => setReportingCurrency(reporting.currency))
+      .catch(() => {})
   }, [])
 
   async function submitProject(event: React.FormEvent) {
@@ -373,10 +390,19 @@ export function WorkRecorder() {
 
   async function submitRule(event: React.FormEvent) {
     event.preventDefault()
-    setSavingRule(true)
     setFeedback(null)
+    // F-14: `Number('')` is `0` and `Number('—')` is `NaN` — either would
+    // have posted a grace period nobody chose rather than refusing to guess
+    // one. Checked explicitly rather than trusted to the native `required`,
+    // which a pasted or programmatically set value can bypass.
+    const graceDays = Number(grace)
+    if (!Number.isFinite(graceDays) || graceDays < 0) {
+      announce({ kind: 'error', text: 'Enter a whole number of days, zero or more.' })
+      return
+    }
+    setSavingRule(true)
     try {
-      await setDispatchRule(Number(grace))
+      await setDispatchRule(graceDays)
       announce({ kind: 'done', text: 'Saved. The on-time figure can be worked out now.' })
       await reload()
     } catch (error) {
@@ -388,13 +414,22 @@ export function WorkRecorder() {
 
   async function submitStock(event: React.FormEvent) {
     event.preventDefault()
-    setSavingStock(true)
     setFeedback(null)
+    // F-14: `Number('')` is `0`, indistinguishable from a genuine zero on
+    // hand — and this field has no `required` fallback to lean on for the
+    // minimum. Both are validated before anything is sent.
+    const onHand = Number(stockOnHand)
+    const minimum = Number(stockMinimum)
+    if (!Number.isFinite(onHand) || onHand < 0 || !Number.isFinite(minimum) || minimum < 0) {
+      announce({ kind: 'error', text: 'Enter a number, zero or more, for both on hand and minimum.' })
+      return
+    }
+    setSavingStock(true)
     try {
       await createStockItem({
         name: stockName,
-        on_hand: Number(stockOnHand),
-        minimum: Number(stockMinimum),
+        on_hand: onHand,
+        minimum: minimum,
         unit: null,
       })
       setStockName('')
@@ -411,14 +446,23 @@ export function WorkRecorder() {
 
   async function submitSupplier(event: React.FormEvent) {
     event.preventDefault()
-    setSavingSupplier(true)
     setFeedback(null)
+    // F-14: `spend_minor: Math.round(Number('—') * 100)` posts `NaN`, and the
+    // field is optional, so there is no `required` to catch a malformed
+    // value before it reaches here. Checked, not trusted.
+    const spend = supplierSpend.trim()
+    const spendAmount = spend === '' ? null : Number(spend)
+    if (spendAmount !== null && (!Number.isFinite(spendAmount) || spendAmount < 0)) {
+      announce({ kind: 'error', text: 'Enter a spend of zero or more, or leave it blank.' })
+      return
+    }
+    setSavingSupplier(true)
     try {
       await createSupplier({
         name: supplierName,
         // Major units in, minor units stored — money in a float stops adding
         // up, and the API takes the integer.
-        spend_minor: supplierSpend ? Math.round(Number(supplierSpend) * 100) : null,
+        spend_minor: spendAmount === null ? null : Math.round(spendAmount * 100),
         category: null,
       })
       setSupplierName('')
@@ -434,15 +478,35 @@ export function WorkRecorder() {
 
   async function submitDeal(event: React.FormEvent) {
     event.preventDefault()
-    setSavingDeal(true)
     setFeedback(null)
+    // F-14: an optional amount with no native `required` to fall back on —
+    // `Math.round(Number('—') * 100)` would have posted `NaN`.
+    const trimmedAmount = dealAmount.trim()
+    const amount = trimmedAmount === '' ? null : Number(trimmedAmount)
+    if (amount !== null && (!Number.isFinite(amount) || amount < 0)) {
+      announce({ kind: 'error', text: 'Enter an amount of zero or more, or leave it blank.' })
+      return
+    }
+    // F-06: the workspace's own reporting currency, never a hardcoded guess.
+    // An amount with no currency is refused by the table's own CHECK, so a
+    // reporting currency that has not loaded yet blocks the amount rather
+    // than mislabelling it — the honest failure is "we don't know your
+    // currency yet", not a deal silently recorded in the wrong one.
+    if (amount !== null && !reportingCurrency) {
+      announce({
+        kind: 'error',
+        text: 'Could not read your reporting currency yet — try again in a moment, or record the deal without an amount.',
+      })
+      return
+    }
+    setSavingDeal(true)
     try {
       await createDeal({
         name: dealName,
         // Together or neither — an amount with no currency is a number with no
         // unit, and the table's CHECK says the same.
-        amount_minor: dealAmount ? Math.round(Number(dealAmount) * 100) : null,
-        currency: dealAmount ? 'OMR' : null,
+        amount_minor: amount === null ? null : Math.round(amount * 100),
+        currency: amount === null ? null : reportingCurrency,
         stage: null,
       })
       setDealName('')
@@ -464,7 +528,7 @@ export function WorkRecorder() {
     dispatch: archiveDispatch,
     stock: archiveStockItem,
     supplier: archiveSupplier,
-    deal: deleteDeal,
+    deal: archiveDeal,
   } as const
 
   async function archive(kind: keyof typeof ARCHIVERS, id: string) {
@@ -584,6 +648,7 @@ export function WorkRecorder() {
           label="What to record"
           active={tab}
           onChange={setTab}
+          id={tabsId}
           tabs={TABS.map((entry) => ({
             key: entry.key,
             label: entry.label,
@@ -592,8 +657,10 @@ export function WorkRecorder() {
         />
       </div>
 
-      <section
-        aria-label="Projects"
+      <TabPanel
+        id={tabsId}
+        tab="projects"
+        ariaLabel="Projects"
         className={tab === 'projects' ? 'flex flex-col gap-4' : 'hidden'}
       >
 
@@ -703,10 +770,12 @@ export function WorkRecorder() {
             ))}
           </ul>
         ) : null}
-      </section>
+      </TabPanel>
 
-      <section
-        aria-label="Tasks"
+      <TabPanel
+        id={tabsId}
+        tab="tasks"
+        ariaLabel="Tasks"
         className={tab === 'tasks' ? 'flex flex-col gap-4' : 'hidden'}
       >
 
@@ -816,10 +885,12 @@ export function WorkRecorder() {
             ))}
           </ul>
         ) : null}
-      </section>
+      </TabPanel>
 
-      <section
-        aria-label="Milestones"
+      <TabPanel
+        id={tabsId}
+        tab="milestones"
+        ariaLabel="Milestones"
         className={tab === 'milestones' ? 'flex flex-col gap-4' : 'hidden'}
       >
 
@@ -926,10 +997,12 @@ export function WorkRecorder() {
             ))}
           </ul>
         ) : null}
-      </section>
+      </TabPanel>
 
-      <section
-        aria-label="Issues and snags"
+      <TabPanel
+        id={tabsId}
+        tab="issues"
+        ariaLabel="Issues and snags"
         className={tab === 'issues' ? 'flex flex-col gap-4' : 'hidden'}
       >
 
@@ -1041,10 +1114,12 @@ export function WorkRecorder() {
             ))}
           </ul>
         ) : null}
-      </section>
+      </TabPanel>
 
-      <section
-        aria-label="Orders and dispatch"
+      <TabPanel
+        id={tabsId}
+        tab="dispatch"
+        ariaLabel="Orders and dispatch"
         className={tab === 'dispatch' ? 'flex flex-col gap-4' : 'hidden'}
       >
 
@@ -1058,9 +1133,12 @@ export function WorkRecorder() {
           className="flex max-w-2xl flex-wrap items-end gap-3 rounded-xl border border-ink-100 bg-bone-50 px-4 py-3"
         >
           <div className="grow">
-            <label className={LABEL} htmlFor="dispatch-grace">
-              When is an order late?
-            </label>
+            {/* X-06: this used to share `htmlFor="dispatch-grace"` with the
+                actual field label below — the input's own accessible name
+                came from whichever `<label>` a screen reader picked, and it
+                was a coin flip whether that was "Days of grace" or this
+                sentence. This is the section's heading, not a field label. */}
+            <p className={LABEL}>When is an order late?</p>
             <p className="mt-1 text-sm text-ink-600">
               {ops?.grace_days === null || ops?.grace_days === undefined
                 ? 'Until you say, NEXUS counts your orders but will not work out an on-time percentage.'
@@ -1180,10 +1258,12 @@ export function WorkRecorder() {
             ))}
           </ul>
         ) : null}
-      </section>
+      </TabPanel>
 
-      <section
-        aria-label="Stock"
+      <TabPanel
+        id={tabsId}
+        tab="stock"
+        ariaLabel="Stock"
         className={tab === 'stock' ? 'flex flex-col gap-4' : 'hidden'}
       >
         {/* Recording one of these is what answers "do you hold stock, or order
@@ -1281,10 +1361,12 @@ export function WorkRecorder() {
             ))}
           </ul>
         ) : null}
-      </section>
+      </TabPanel>
 
-      <section
-        aria-label="Suppliers"
+      <TabPanel
+        id={tabsId}
+        tab="suppliers"
+        ariaLabel="Suppliers"
         className={tab === 'suppliers' ? 'flex flex-col gap-4' : 'hidden'}
       >
         {/* The founder enters what they spend. The share is what NEXUS works
@@ -1350,9 +1432,18 @@ export function WorkRecorder() {
               <li key={supplier.id} className="flex flex-wrap items-baseline gap-x-3 px-4 py-3">
                 <span className="min-w-0 grow text-sm text-ink-800">{supplier.name}</span>
                 <span className="text-2xs text-ink-400">
+                  {/* F-21: `.toLocaleString()` on its own shows no currency
+                      and zero to three fraction digits depending on the
+                      number — `450` and `450.5` printed differently wide.
+                      `formatCurrency` is the one formatter for money in this
+                      app; it falls back to the plain number only when the
+                      workspace's reporting currency has not loaded, rather
+                      than guessing one. */}
                   {supplier.spend_minor === null
                     ? 'no figure'
-                    : (supplier.spend_minor / 100).toLocaleString()}
+                    : reportingCurrency
+                      ? formatCurrency(supplier.spend_minor, reportingCurrency)
+                      : (supplier.spend_minor / 100).toLocaleString()}
                 </span>
                 <button
                   type="button"
@@ -1366,10 +1457,12 @@ export function WorkRecorder() {
             ))}
           </ul>
         ) : null}
-      </section>
+      </TabPanel>
 
-      <section
-        aria-label="Deals"
+      <TabPanel
+        id={tabsId}
+        tab="deals"
+        ariaLabel="Deals"
         className={tab === 'deals' ? 'flex flex-col gap-4' : 'hidden'}
       >
         {/* These are counted on their own Sales tile and never mixed with a
@@ -1428,9 +1521,12 @@ export function WorkRecorder() {
               <li key={deal.id} className="flex flex-wrap items-baseline gap-x-3 px-4 py-3">
                 <span className="min-w-0 grow text-sm text-ink-800">{deal.name}</span>
                 <span className="text-2xs text-ink-400">
-                  {deal.amount_minor === null
+                  {/* F-21: one formatter for money, with a real currency
+                      symbol and a fixed, correct number of fraction digits —
+                      not `.toLocaleString()` alone. */}
+                  {deal.amount_minor === null || !deal.currency
                     ? 'no amount'
-                    : `${deal.currency} ${(deal.amount_minor / 100).toLocaleString()}`}
+                    : formatCurrency(deal.amount_minor, deal.currency)}
                 </span>
                 <button
                   type="button"
@@ -1438,13 +1534,13 @@ export function WorkRecorder() {
                   onClick={() => void archive('deal', deal.id)}
                   className="text-2xs text-ink-500 underline hover:text-ink-800 disabled:opacity-60"
                 >
-                  Remove
+                  Archive
                 </button>
               </li>
             ))}
           </ul>
         ) : null}
-      </section>
+      </TabPanel>
     </div>
   )
 }

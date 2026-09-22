@@ -1,5 +1,6 @@
 import { messageFrom } from '@/lib/api-error'
 import { AuthError, csrfToken } from '@/lib/auth-client'
+import { HttpError, httpJson } from '@/lib/http'
 
 /**
  * Browser-side calls for document upload.
@@ -74,20 +75,22 @@ export type StoredDocument = {
   chunks_held_for_review: number
 }
 
+// #3: routed through the shared `httpJson` — the timeout ceiling F-12 found
+// missing everywhere in this app, and the checked-empty-body guard that
+// closes this file's own share of F-03's shape.
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {}
   const token = csrfToken()
   if (token) headers['X-CSRF-Token'] = token
 
-  const response = await fetch(path, { ...init, headers, credentials: 'same-origin' })
-  if (response.ok) return (await response.json()) as T
-
-  const payload = await response.json().catch(() => null)
-  throw new AuthError(
-    messageFrom(payload, `The request failed (${response.status}).`),
-    response.status,
-    payload?.detail,
-  )
+  try {
+    return await httpJson<T>(path, { ...init, headers, credentials: 'same-origin' })
+  } catch (error) {
+    if (error instanceof HttpError) {
+      throw new AuthError(error.message, error.status, error.detail)
+    }
+    throw error
+  }
 }
 
 export function readAsks(): Promise<UploadStage> {
@@ -133,13 +136,28 @@ export async function uploadDocument(file: File): Promise<Uploaded> {
   })
 
   const payload = await response.json().catch(() => null)
-  if (response.ok || response.status === 422) {
+
+  // F-16: this used to be `if (response.ok || response.status === 422)`
+  // alone — but FastAPI's *own* 422 (a malformed multipart body, a missing
+  // `consent` field) carries `{ detail: [...] }`, not this endpoint's
+  // `Uploaded` shape. Reading that as `Uploaded` produced a row keyed
+  // `"undefined-undefined"` with no filename and no message. The 422 this
+  // function documents — a stored-but-unparseable file — always carries a
+  // real `document_id` and `message`; gated on that rather than on the status
+  // code alone.
+  const looksUploaded =
+    payload !== null &&
+    typeof payload === 'object' &&
+    typeof (payload as { status?: unknown }).status === 'string' &&
+    typeof (payload as { message?: unknown }).message === 'string'
+
+  if (response.ok || (response.status === 422 && looksUploaded)) {
     return payload as Uploaded
   }
   throw new AuthError(
     messageFrom(payload, `That upload failed (${response.status}).`),
     response.status,
-    payload?.detail,
+    (payload as { detail?: unknown } | null)?.detail,
   )
 }
 

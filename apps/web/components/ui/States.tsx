@@ -64,6 +64,12 @@ function Frame({
 
   return (
     <div
+      // X-07: `Failed` rendered with no live region at all, so a screen
+      // reader present when the state appeared — the common case, since it
+      // usually replaces a loading state already on screen — never announced
+      // it. `role="alert"` only on `warn`: `empty` and `good` are not
+      // failures and do not need an assertive interruption.
+      role={tone === 'warn' ? 'alert' : undefined}
       className={`flex flex-col items-start gap-4 rounded-data border border-ink-100 bg-white px-6 py-7 ${className}`}
     >
       <span className={`flex h-10 w-10 items-center justify-center rounded-control ${tile}`}>

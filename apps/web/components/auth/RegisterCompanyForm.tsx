@@ -15,6 +15,7 @@ import {
   type JoinOffer,
 } from '@/lib/auth-client'
 import { useSlowLabel } from '@/lib/slow'
+import { useAbortable } from '@/lib/hooks'
 
 type State =
   | { status: 'idle' }
@@ -67,25 +68,41 @@ export function RegisterCompanyForm() {
   // so the select stays disabled with the reason in its own placeholder while
   // every required field still submits. Losing an optional field beats losing
   // the company.
+  // R-04: `fetchDepartments` fired twice — once for Strict Mode's extra
+  // mount/unmount/remount, once for real — because the cleanup here only
+  // flipped a `live` boolean rather than cancelling the request. `useAbortable`
+  // gives the request an `AbortController` that is actually aborted on
+  // cleanup, so the stale call is cancelled rather than merely ignored.
+  const abortable = useAbortable()
   useEffect(() => {
-    let live = true
-    fetchDepartments()
-      .then((choices) => {
-        if (live) setDepartments(choices)
+    const signal = abortable()
+    fetchDepartments(signal)
+      .then((choices) => setDepartments(choices))
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return
+        setDepartmentsError('Department list unavailable — skip this')
       })
-      .catch(() => {
-        if (live) setDepartmentsError('Department list unavailable — skip this')
-      })
-    return () => {
-      live = false
-    }
-  }, [])
+  }, [abortable])
   const [state, setState] = useState<State>({ status: 'idle' })
+  // F-13: a guard of its own, distinct from `busy` — "Ask to join them" is a
+  // second async action this component can be in the middle of, and without
+  // this a rapid double click sent two join requests.
+  const [joining, setJoining] = useState(false)
 
   const busy = state.status === 'submitting'
   // Finding F9: company creation measured ~8 s against Neon behind one
   // static word, which reads as a hang on the very first thing a founder does.
   const createLabel = useSlowLabel(busy, 'Create company', 'Creating…', 'Still creating…')
+
+  /** X-02/F-24: checked explicitly in `onSubmit` rather than left to the
+   *  browser — the form sets `noValidate`, and `Button`'s `disabledReason` no
+   *  longer disables the control it explains (R-03). */
+  const blockedBy =
+    name.trim() === ''
+      ? 'Name the company.'
+      : websiteUrl.trim() === ''
+        ? 'Add the website NEXUS should read first.'
+        : undefined
 
   async function submit(confirmSeparateCompany: boolean) {
     setState({ status: 'submitting' })
@@ -144,8 +161,13 @@ export function RegisterCompanyForm() {
           <Button
             type="button"
             size="lg"
-            icon={<ArrowRight />}
+            icon={joining ? undefined : <ArrowRight />}
+            loading={joining}
+            loadingLabel="Sending…"
+            disabled={joining}
             onClick={async () => {
+              if (joining) return
+              setJoining(true)
               try {
                 await requestToJoin(websiteUrl.trim())
                 setState({ status: 'requested' })
@@ -155,6 +177,8 @@ export function RegisterCompanyForm() {
                   message:
                     error instanceof AuthError ? error.message : 'Could not send that request.',
                 })
+              } finally {
+                setJoining(false)
               }
             }}
           >
@@ -180,7 +204,12 @@ export function RegisterCompanyForm() {
     <form
       onSubmit={(event) => {
         event.preventDefault()
-        if (!busy) void submit(false)
+        if (busy) return
+        if (blockedBy) {
+          setState({ status: 'error', message: blockedBy })
+          return
+        }
+        void submit(false)
       }}
       noValidate
       className="flex flex-col gap-5"
@@ -270,13 +299,6 @@ export function RegisterCompanyForm() {
       <Button
         type="submit"
         size="lg"
-        disabledReason={
-          name.trim() === ''
-            ? 'Name the company.'
-            : websiteUrl.trim() === ''
-              ? 'Add the website NEXUS should read first.'
-              : undefined
-        }
         disabled={busy}
         icon={busy ? undefined : <ArrowRight />}
         className="mt-1 w-full"

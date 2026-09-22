@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Badge, Figure as Fig, NoFigure, StateDot } from '@/components/ui/Data'
 import { Disclosure } from '@/components/ui/Disclosure'
 import { Button } from '@/components/ui/Button'
+import { formatCurrency } from '@/lib/format'
 import {
   STATE_LABEL,
   narrateBlock,
@@ -145,11 +146,11 @@ function hasFigure(state: WidgetState): boolean {
  * one function, not a template literal at each call site.
  */
 function money(totalMinor: number, currency: string): string {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency,
-    maximumFractionDigits: 0,
-  }).format(totalMinor / 100)
+  // F-20: `Intl.NumberFormat(undefined, …)` reads the runtime's own locale,
+  // which differs between the server render and the browser and produces a
+  // hydration mismatch — the shared `formatCurrency` always takes an explicit
+  // one.
+  return formatCurrency(totalMinor, currency, undefined, 0)
 }
 
 /* ── The face ──────────────────────────────────────────────────────────────
@@ -242,6 +243,14 @@ function Head({ figure }: { figure: Figure }) {
 
     case 'priorities':
       return <PrioritiesHead figure={figure} />
+
+    default:
+      // F-08: exhaustive over every `Figure` kind this client knows about —
+      // and a backend that adds a ninth without this client's knowledge would
+      // otherwise fall through every case and return `undefined`, which React
+      // throws rendering. A tile with no figure this client understands is a
+      // tile with no figure, not a crash.
+      return null
   }
 }
 
@@ -865,6 +874,12 @@ function Consequence({ block }: { block: DirectorBlock }) {
       return null
 
     case 'live':
+      return null
+
+    default:
+      // F-08: same guard as `Head` above — a `WidgetState` the backend adds
+      // and this client does not yet know about must render nothing rather
+      // than throw.
       return null
   }
 }
