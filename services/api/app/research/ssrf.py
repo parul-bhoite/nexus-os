@@ -138,6 +138,12 @@ def _system_resolver(host: str) -> list[str]:
         infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
     except socket.gaierror:
         return []
+    except UnicodeError:
+        # A malformed host — an empty or >63-char DNS label, e.g. `foo..com` —
+        # makes getaddrinfo raise UnicodeError from the stdlib idna codec rather
+        # than gaierror. Treat it as unresolvable: validate_url turns [] into a
+        # clean UrlNotAllowedError refusal, not an unhandled 500.
+        return []
     # sockaddr[0] is the address for both AF_INET and AF_INET6; the annotation
     # is a union because the tuple shapes differ.
     return list({str(info[4][0]) for info in infos})

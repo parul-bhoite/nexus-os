@@ -24,6 +24,7 @@ import pytest
 
 from app.research.ssrf import (
     UrlNotAllowedError,
+    _system_resolver,
     is_public_ip,
     validate_url,
 )
@@ -345,3 +346,32 @@ def test_redirect_to_a_new_scheme_is_still_checked() -> None:
     target = resolve_redirect("https://example.com/", "file:///etc/passwd")
     with pytest.raises(UrlNotAllowedError):
         validate_url(target, resolve=PUBLIC)
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "foo..com",  # empty label between the dots
+        "..",  # nothing but empty labels
+        "a" * 64 + ".com",  # a label over the 63-char DNS limit
+        "x." + "b" * 70 + ".com",
+    ],
+)
+def test_malformed_host_labels_resolve_to_nothing_rather_than_crashing(host: str) -> None:
+    """getaddrinfo raises UnicodeError (not gaierror) from the stdlib idna codec
+    on an empty or >63-char label. `_system_resolver` must swallow it and return
+    an empty answer, so `validate_url` can refuse cleanly instead of 500ing —
+    the live defect found scanning `POST /public/scans`."""
+    assert _system_resolver(host) == []
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://foo..com/",
+        "http://" + "a" * 64 + ".com/",
+    ],
+)
+def test_malformed_host_is_refused_not_a_server_error(url: str) -> None:
+    with pytest.raises(UrlNotAllowedError):
+        validate_url(url, resolve=_system_resolver)
