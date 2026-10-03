@@ -103,19 +103,36 @@ class DomainAlreadyRegisteredError(CompanyRegistrationError):
         self.domain = domain
 
 
-def domain_of(website_url: str) -> str:
-    """The registrable domain from a URL the user typed.
+def with_scheme(website_url: str) -> str:
+    """Supply the `https://` a person leaves off when they type a domain.
 
-    People type `acme.om`, not `https://acme.om`. Normalised through
-    `domain_check.normalise_domain` — the same function domain *verification*
-    uses — because the two must agree: a domain registered one way and verified
-    another would never match, and the mismatch would look like a verification
-    that simply never succeeds.
+    **The single source of the prefixing rule**, because two layers need it and
+    they have to agree. `domain_of` below has always applied it — people type
+    `acme.om`, not `https://acme.om` — but R-01 later put `AnyHttpUrl` at the
+    request boundary, which refused the bare domain four layers earlier and
+    meant `domain_of` never saw the input it was written to accept. The form's
+    own placeholder (`yourcompany.om`) was rejected with pydantic's
+    "Input should be a valid URL, relative URL without a base".
+
+    So the boundary normalises through *this* function before `AnyHttpUrl`
+    judges the result. Anything that is still not a URL afterwards is still
+    refused there — R-01 keeps what it was for, and only the scheme is implied.
     """
     raw = website_url.strip()
     if "://" not in raw:
-        raw = f"https://{raw}"
-    host = urlparse(raw).hostname or ""
+        return f"https://{raw}"
+    return raw
+
+
+def domain_of(website_url: str) -> str:
+    """The registrable domain from a URL the user typed.
+
+    Normalised through `domain_check.normalise_domain` — the same function
+    domain *verification* uses — because the two must agree: a domain
+    registered one way and verified another would never match, and the
+    mismatch would look like a verification that simply never succeeds.
+    """
+    host = urlparse(with_scheme(website_url)).hostname or ""
     domain = normalise_domain(host)
     if not domain or "." not in domain:
         # Store nothing rather than junk (R-01). A blank or dot-free `domain`

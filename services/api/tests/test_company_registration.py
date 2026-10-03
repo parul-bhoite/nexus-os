@@ -470,3 +470,61 @@ def test_a_department_that_is_not_a_department_is_refused() -> None:
 
     # Absent stays legal — the field is optional and always was.
     assert RegisterCompanyRequest(name="Maersk", website_url="maersk.com").department is None
+
+
+def test_a_bare_domain_is_accepted_and_junk_is_still_refused() -> None:
+    """The form's own placeholder was refused by the field behind it.
+
+    R-01 replaced a bounded string with `AnyHttpUrl`, which requires a scheme.
+    `domain_of` had always supplied the implied `https://` — its docstring says
+    so: *people type `acme.om`, not `https://acme.om`* — but the boundary now
+    rejected that input four layers before `domain_of` could see it, and the
+    screen showed pydantic's `Input should be a valid URL, relative URL
+    without a base` under a field whose placeholder reads `yourcompany.om`.
+
+    The two halves are tested together on purpose: normalising at the boundary
+    is only correct if it did not also re-open what R-01 closed.
+    """
+    import pytest
+    from pydantic import ValidationError
+
+    from app.auth.companies import domain_of
+    from app.routes.companies import RegisterCompanyRequest
+
+    # What a person types.
+    for typed in ("acme.om", "www.acme.om", "acme.om/about", "ACME.om"):
+        request = RegisterCompanyRequest(name="Acme", website_url=typed)
+        assert domain_of(str(request.website_url)) == "acme.om", typed
+
+    # An explicit scheme is untouched, and so is a subdomain that is not `www`.
+    assert (
+        domain_of(
+            str(RegisterCompanyRequest(name="Acme", website_url="https://acme.om").website_url)
+        )
+        == "acme.om"
+    )
+    assert (
+        domain_of(str(RegisterCompanyRequest(name="Acme", website_url="shop.acme.om").website_url))
+        == "shop.acme.om"
+    )
+
+    # R-01 intact: the boundary still refuses what it was added to refuse.
+    for junk in ("not a url !!!", "acme", "", "   ", "http://"):
+        with pytest.raises(ValidationError):
+            RegisterCompanyRequest(name="Acme", website_url=junk)
+
+
+def test_with_scheme_is_the_only_place_the_prefix_is_decided() -> None:
+    """Boundary and domain layer must agree on what a typed domain means.
+
+    They drifted once already — that is this bug. A domain registered one way
+    and verified another would never match, and the mismatch reads as a
+    verification that simply never succeeds.
+    """
+    from app.auth.companies import with_scheme
+
+    assert with_scheme("acme.om") == "https://acme.om"
+    assert with_scheme("  acme.om  ") == "https://acme.om"
+    # Already schemed: left alone, including a scheme we would not have chosen.
+    assert with_scheme("http://acme.om") == "http://acme.om"
+    assert with_scheme("https://acme.om") == "https://acme.om"

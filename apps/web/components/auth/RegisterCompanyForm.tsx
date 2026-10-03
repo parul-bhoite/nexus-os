@@ -36,6 +36,28 @@ type State =
  * holds and the input the research run is queued against, so a company without
  * one is a company the product cannot begin to learn.
  */
+/** Whether the API will get something URL-shaped out of what was typed.
+ *
+ * **Deliberately permissive**, and not a second copy of the server's rule. The
+ * API is authoritative: it supplies the implied `https://` and then parses.
+ * This exists only so the ordinary typo is answered with the sentence beside
+ * the button, rather than with a 422 whose message reached the screen verbatim
+ * as pydantic wrote it — "Input should be a valid URL, relative URL without a
+ * base", which tells a founder nothing about what to type.
+ *
+ * A false accept here costs nothing: the server still refuses it. A false
+ * reject would block a legitimate address the server would have taken, so
+ * anything with a dot and no whitespace passes — IDN and unusual TLDs
+ * included.
+ */
+export function looksLikeWebsite(value: string): boolean {
+  const host = value
+    .trim()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
+    .split(/[/?#]/)[0]
+  return host.includes('.') && !host.startsWith('.') && !host.endsWith('.') && !/\s/.test(host)
+}
+
 export function RegisterCompanyForm() {
   const router = useRouter()
   const [name, setName] = useState('')
@@ -102,7 +124,9 @@ export function RegisterCompanyForm() {
       ? 'Name the company.'
       : websiteUrl.trim() === ''
         ? 'Add the website NEXUS should read first.'
-        : undefined
+        : !looksLikeWebsite(websiteUrl)
+          ? 'That does not look like a website address. Try acme.om.'
+          : undefined
 
   async function submit(confirmSeparateCompany: boolean) {
     setState({ status: 'submitting' })

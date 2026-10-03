@@ -17,7 +17,7 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import AnyHttpUrl, BaseModel, Field
+from pydantic import AfterValidator, AnyHttpUrl, BaseModel, BeforeValidator, Field
 from sqlalchemy import text
 
 from app.auth.companies import (
@@ -26,6 +26,7 @@ from app.auth.companies import (
     InvalidWebsiteUrlError,
     create_company,
     domain_of,
+    with_scheme,
 )
 from app.auth.csrf import require_csrf
 from app.auth.workspaces import find_verified_workspace_for_domain
@@ -97,11 +98,43 @@ async def list_departments() -> list[DepartmentChoiceOut]:
 ExecutiveScope = Annotated[ScopedSession, Depends(require_executive_surface)]
 
 
+def _must_name_a_domain(url: AnyHttpUrl) -> AnyHttpUrl:
+    """Hold the boundary to exactly `domain_of`'s rule, by asking it.
+
+    Supplying the implied scheme made `acme` — no dot — parse as
+    `https://acme`, which `AnyHttpUrl` accepts and R-01 had been refusing for
+    want of a scheme rather than for want of a host. `domain_of` would still
+    have caught it four layers later, but "the boundary is weaker than it
+    looks, something downstream covers it" is the shape of the original bug.
+
+    So the check *is* `domain_of`. Not a second rule that resembles it — a
+    reimplementation is what let the two disagree in the first place.
+    """
+    try:
+        domain_of(str(url))
+    except InvalidWebsiteUrlError as exc:
+        raise ValueError(str(exc)) from exc
+    return url
+
+
+# A website a person typed, not a URL a machine emitted.
+#
+# `AnyHttpUrl` alone refused `acme.om` — the exact shape the form's placeholder
+# asks for — because it requires a scheme. `with_scheme` supplies the implied
+# `https://` first and is the same function `domain_of` uses, so the boundary
+# and the domain layer cannot drift apart on what counts as typed input.
+# `AnyHttpUrl` then judges the result and `_must_name_a_domain` re-asks
+# `domain_of`, which leaves the boundary strictly stronger than R-01 left it.
+WebsiteUrl = Annotated[
+    AnyHttpUrl, BeforeValidator(with_scheme), AfterValidator(_must_name_a_domain)
+]
+
+
 class RegisterCompanyRequest(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     # Mandatory (`doc/11` Q13). Not decoration: it is the first fact NEXUS holds
     # about the company and the input the research run is queued against.
-    website_url: AnyHttpUrl
+    website_url: WebsiteUrl
     # `country`, `reporting_currency` and `headcount_band` were here and are
     # gone. The currency is asked properly later, by the question catalogue as a
     # constrained choice that arrives with a scope.
@@ -118,11 +151,14 @@ class RegisterCompanyRequest(BaseModel):
     # `website_url` stays because it is genuinely read: `research/worker_loop`
     # selects it to queue the crawl.
     #
-    # `AnyHttpUrl` rather than a bounded string (R-01): a length-only check let
+    # `WebsiteUrl` rather than a bounded string (R-01): a length-only check let
     # `"not a url !!!"` through the request boundary, four screens before
     # `domain_of` tried and failed to make a domain out of it. Validation at
     # the boundary is what `security-and-authz`'s input rule asks for, and it
     # is a strictly earlier failure than the one this used to produce.
+    #
+    # It was plain `AnyHttpUrl` until that was found to refuse `acme.om` — the
+    # shape the form asks for — so the type now normalises before it judges.
     # What the founder says they do. Presentation only: these steer what the
     # agent asks and what the dashboard leads with, and reach nothing. The
     # authorising fields are `membership.role` and `membership.departments`,
@@ -683,13 +719,13 @@ async def update_departments(
 
 
 class JoinRequestIn(BaseModel):
-    # `AnyHttpUrl` rather than a bounded string (R-01's sibling): the same
+    # `WebsiteUrl` rather than a bounded string (R-01's sibling): the same
     # length-only check `RegisterCompanyRequest.website_url` used to carry let
     # junk through the request boundary and left `InvalidWebsiteUrlError` in
     # `request_to_join` below as the only thing that caught it. That guard
     # stays as defense in depth — Pydantic now refuses it first, as a 422
     # naming the field rather than a domain error four lines later.
-    website_url: AnyHttpUrl
+    website_url: WebsiteUrl
     message: str | None = Field(default=None, max_length=500)
 
 

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { RegisterCompanyForm } from '@/components/auth/RegisterCompanyForm'
+import { looksLikeWebsite, RegisterCompanyForm } from '@/components/auth/RegisterCompanyForm'
 import * as client from '@/lib/auth-client'
 
 vi.mock('next/navigation', () => ({
@@ -98,5 +98,36 @@ describe('RegisterCompanyForm department', () => {
       expect.objectContaining({ department: null }),
       expect.anything(),
     )
+  })
+})
+
+describe('RegisterCompanyForm website', () => {
+  it('accepts the bare domain its own placeholder asks for', () => {
+    // The defect: the field's placeholder reads `yourcompany.om`, and typing
+    // exactly that shape was answered with pydantic's "Input should be a
+    // valid URL, relative URL without a base". The API now supplies the
+    // implied `https://`; this guard must not re-introduce the refusal a
+    // layer earlier.
+    for (const typed of ['acme.om', 'www.acme.om', 'acme.om/about', 'shop.acme.co.uk']) {
+      expect(looksLikeWebsite(typed), typed).toBe(true)
+    }
+  })
+
+  it('leaves an explicit scheme alone', () => {
+    expect(looksLikeWebsite('https://acme.om')).toBe(true)
+    expect(looksLikeWebsite('http://acme.om/path?q=1')).toBe(true)
+  })
+
+  it('catches the ordinary typo before the server has to', () => {
+    for (const junk of ['', '   ', 'acme', 'not a url !!!', '.om', 'acme.']) {
+      expect(looksLikeWebsite(junk), junk).toBe(false)
+    }
+  })
+
+  it('stays permissive where the server is authoritative', () => {
+    // A false reject here blocks an address the API would have taken, which
+    // is strictly worse than a 422 — so unusual-but-real addresses pass.
+    expect(looksLikeWebsite('münchen.de')).toBe(true)
+    expect(looksLikeWebsite('acme.xn--kput3i')).toBe(true)
   })
 })

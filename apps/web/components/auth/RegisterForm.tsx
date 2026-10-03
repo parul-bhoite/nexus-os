@@ -154,7 +154,6 @@ export function RegisterForm() {
         value={fullName}
         onChange={setFullName}
         autoComplete="name"
-        placeholder="Parul Bhoite"
         hint="What NEXUS will call you."
         disabled={busy}
       />
