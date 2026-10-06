@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NEXUS OS — Onboarding, Direction A: The Letter</title>
+<!--
+  STATIC DESIGN PREVIEW — not wired into the app. No Bash, no build step.
+  All raw values (colour, radius, shadow, motion, type) live in ./tokens.css,
+  which mirrors apps/web/tailwind.config.ts and apps/web/app/globals.css
+  verbatim. This file references custom properties and the `.t-display` /
+  `.t-sans` / `.t-mono` type classes only — it never declares `font-family`
+  itself, the same discipline component code is held to.
+
+  Per ADR 0043, NEXUS OS's design system is the cut-paper navy/gold palette
+  (ink/steel/slate/bone/gold/clay, Fraunces + Inter + JetBrains Mono) — not
+  the ADF magenta/aubergine system. This follows what is actually live on
+  /register-company and /onboarding/agent.
+
+  The product has no dark theme anywhere in the codebase — every screen is a
+  deliberately light paper ground, so this preview is single-theme too.
+-->
+<link rel="stylesheet" href="tokens.css" />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; }
+  body {
+    background:var(--bone-50);
+    color:var(--ink-800);
+    font-size:0.9375rem;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3 { color:var(--ink-900); margin:0; }
+  p { margin:0; }
+  button { font:inherit; color:inherit; }
+  :focus-visible { outline:2px solid var(--steel-500); outline-offset:2px; border-radius:4px; }
+
+  .meta { color:var(--ink-500); font-size:0.8125rem; }
+  .eyebrow { text-transform:uppercase; letter-spacing:0.16em; font-size:0.6875rem; color:var(--steel-600); }
+  .check-icon { stroke:var(--bone-50); }
+
+  /* ---------- preview harness chrome (not product UI) ---------- */
+  .harness-bar {
+    position:sticky; top:0; z-index:40;
+    background:var(--ink-900); color:var(--bone-50);
+    padding:var(--sp-3) var(--sp-5);
+    display:flex; align-items:center; gap:var(--sp-4); flex-wrap:wrap;
+    font-size:0.8125rem;
+  }
+  .harness-bar .tag { font-size:0.6875rem; letter-spacing:0.08em; color:var(--gold-400); text-transform:uppercase; }
+  .harness-nav { display:flex; gap:var(--sp-2); margin-left:auto; flex-wrap:wrap; }
+  .harness-nav button {
+    border:1px solid var(--ink-700); background:transparent; color:var(--bone-200);
+    padding:var(--sp-2) var(--sp-3); border-radius:999px; cursor:pointer;
+    transition:background-color var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
+    min-height:32px;
+  }
+  .harness-nav button[aria-current="step"] { background:var(--gold-400); color:var(--ink-900); border-color:var(--gold-400); font-weight:600; }
+  .harness-nav button:hover { background:var(--ink-700); }
+  .harness-nav button[aria-current="step"]:hover { background:var(--gold-300); }
+
+  .state-switch { display:flex; gap:var(--sp-2); align-items:center; flex-wrap:wrap; margin-top:var(--sp-6); }
+  .state-switch span { font-size:0.75rem; color:var(--ink-400); }
+  .state-switch button {
+    border:1px solid var(--bone-300); background:var(--bone-50); color:var(--ink-600);
+    padding:var(--sp-1) var(--sp-3); border-radius:999px; cursor:pointer; font-size:0.75rem;
+    min-height:32px;
+  }
+  .state-switch button[aria-pressed="true"] { background:var(--ink-800); color:var(--bone-50); border-color:var(--ink-800); }
+
+  /* ---------- the screens ---------- */
+  .screen { display:none; }
+  .screen.is-active { display:block; }
+  .screen[data-state="ready"] [data-state-for="ready"],
+  .screen[data-state="loading"] [data-state-for="loading"],
+  .screen[data-state="empty"] [data-state-for="empty"],
+  .screen[data-state="error"] [data-state-for="error"] { display:block; }
+
+  .page {
+    max-width:34rem; margin:0 auto;
+    padding:var(--sp-16) var(--sp-6) var(--sp-20);
+    animation:rise var(--dur-slow) var(--ease-out) both;
+  }
+  @keyframes rise { from{opacity:0; transform:translateY(0.5rem);} to{opacity:1; transform:none;} }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration:0.001ms !important; transition-duration:0.001ms !important; }
+  }
+
+  .step-mark { color:var(--ink-400); font-size:0.8125rem; margin-bottom:var(--sp-3); }
+  .page h1 { font-size:clamp(1.75rem, 3vw, 2.25rem); line-height:1.15; letter-spacing:-0.02em; font-weight:600; }
+  .page .intro { margin-top:var(--sp-3); color:var(--ink-600); font-size:1rem; line-height:1.6; max-width:30rem; }
+
+  .rule {
+    height:1px; margin:var(--sp-8) 0;
+    background:linear-gradient(to right, transparent, var(--bone-300), transparent);
+  }
+
+  /* ---- company details: plain, letter-like fields ---- */
+  .field { margin-top:var(--sp-6); }
+  .field label { display:block; font-size:0.8125rem; font-weight:500; color:var(--ink-700); margin-bottom:var(--sp-2); }
+  .field input {
+    width:100%; height:2.75rem; border-radius:var(--radius-control);
+    border:1px solid var(--ink-200); background:var(--white); padding:0 var(--sp-4);
+    font-size:0.9375rem; color:var(--ink-900);
+    transition:border-color var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
+  }
+  .field input::placeholder { color:var(--ink-300); }
+  .field input:hover { border-color:var(--ink-300); }
+  .field input:focus-visible { border-color:var(--steel-500); box-shadow:0 0 0 3px var(--steel-200); outline:none; }
+  .field .hint { margin-top:var(--sp-2); font-size:0.8125rem; color:var(--ink-500); }
+  .field .err { margin-top:var(--sp-2); font-size:0.8125rem; color:var(--clay-600); }
+  .field input[aria-invalid="true"] { border-color:var(--clay-500); }
+  .field input[aria-invalid="true"]:focus-visible { box-shadow:0 0 0 3px var(--clay-200); }
+
+  .btn {
+    display:inline-flex; align-items:center; justify-content:center; gap:var(--sp-2);
+    height:3rem; padding:0 var(--sp-6); border-radius:999px; border:none; cursor:pointer;
+    font-weight:500; font-size:0.9375rem;
+    transition:background-color var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+  }
+  .btn:active { transform:translateY(1px); }
+  .btn-primary { background:var(--ink-800); color:var(--bone-50); box-shadow:var(--shadow-e1); }
+  .btn-primary:hover { background:var(--ink-700); box-shadow:var(--shadow-e2); }
+  .btn-danger { background:var(--clay-600); color:var(--bone-50); }
+  .btn-danger:hover { background:var(--clay-500); }
+  .btn-quiet { background:transparent; color:var(--ink-500); text-decoration:underline; text-decoration-color:var(--ink-300); height:auto; padding:var(--sp-1) var(--sp-2); }
+  .btn-quiet:hover { color:var(--ink-800); text-decoration-color:var(--ink-500); }
+
+  .actions { margin-top:var(--sp-10); display:flex; align-items:center; gap:var(--sp-5); }
+
+  /* ---- areas of interest: a read list, not a card grid ---- */
+  .area-list { list-style:none; margin:var(--sp-8) 0 0; padding:0; border-top:1px solid var(--bone-300); }
+  .area-row { border-bottom:1px solid var(--bone-300); }
+  .area-row label {
+    display:flex; align-items:flex-start; gap:var(--sp-4);
+    padding:var(--sp-5) var(--sp-1); cursor:pointer; min-height:44px;
+    position:relative;
+  }
+  .area-row input { position:absolute; opacity:0; width:1px; height:1px; }
+  .area-check {
+    flex-shrink:0; width:1.375rem; height:1.375rem; margin-top:0.15rem; border-radius:6px;
+    border:1.5px solid var(--ink-300); display:flex; align-items:center; justify-content:center;
+    transition:background-color var(--dur-micro) var(--ease-out), border-color var(--dur-micro) var(--ease-out);
+  }
+  .area-check svg { opacity:0; transition:opacity var(--dur-micro) var(--ease-out); width:13px; height:13px; }
+  .area-row input:checked ~ .area-check { background:var(--ink-800); border-color:var(--ink-800); }
+  .area-row input:checked ~ .area-check svg { opacity:1; }
+  .area-row input:focus-visible ~ .area-check { box-shadow:0 0 0 3px var(--steel-200); }
+  .area-row label:hover .area-check { border-color:var(--ink-500); }
+  .area-row label:active .area-check { transform:scale(0.94); }
+  .area-text h3 { font-size:1.0625rem; font-weight:600; color:var(--ink-800); display:flex; align-items:center; }
+  .area-text p { margin-top:2px; font-size:0.8125rem; color:var(--ink-500); }
+  .area-row[data-accent="steel"] .area-dot { background:var(--steel-500); }
+  .area-row[data-accent="clay"] .area-dot { background:var(--clay-500); }
+  .area-row[data-accent="ink"] .area-dot { background:var(--ink-700); }
+  .area-row[data-accent="slate"] .area-dot { background:var(--slate-500); }
+  .area-row[data-accent="gold"] .area-dot { background:var(--gold-500); }
+  .area-dot { width:7px; height:7px; border-radius:999px; display:inline-block; margin-right:var(--sp-2); }
+
+  .area-count {
+    margin-top:var(--sp-6); display:flex; align-items:center; justify-content:space-between;
+    font-size:0.8125rem; color:var(--ink-500);
+  }
+  .area-count strong { color:var(--ink-800); font-variant-numeric:tabular-nums; }
+  .area-count .ok { color:var(--steel-600); }
+
+  /* ---- skeleton / loading ---- */
+  .sk-row { height:4.25rem; border-radius:var(--radius-data); background:var(--bone-100); margin-bottom:var(--sp-3); animation:breathe 1.6s var(--ease-inout) infinite; }
+  @keyframes breathe { 0%,100%{opacity:1;} 50%{opacity:0.45;} }
+
+  .empty-block, .error-block {
+    margin-top:var(--sp-8); padding:var(--sp-6); border-radius:var(--radius-data);
+    border:1px dashed var(--bone-300); text-align:left;
+  }
+  .error-block { border-style:solid; border-color:var(--clay-300); background:var(--clay-100); }
+  .empty-block h3, .error-block h3 { font-size:1rem; font-weight:600; color:var(--ink-800); }
+  .empty-block p, .error-block p { margin-top:var(--sp-2); font-size:0.875rem; color:var(--ink-600); }
+  .error-block p { color:var(--clay-600); }
+
+  /* ---- tailored questions: one letter-paragraph at a time ---- */
+  .q-why { margin-top:var(--sp-2); font-size:0.8125rem; color:var(--ink-500); }
+  .q-why b { color:var(--ink-700); font-weight:500; }
+  .q-prompt { margin-top:var(--sp-6); font-size:1.375rem; line-height:1.3; font-weight:600; color:var(--ink-900); }
+  .illustrative {
+    display:inline-flex; align-items:center; gap:4px; margin-left:var(--sp-2);
+    font-size:0.625rem; text-transform:uppercase; letter-spacing:0.08em;
+    color:var(--gold-700); background:var(--gold-100); border:1px solid var(--gold-300);
+    padding:2px 7px; border-radius:999px; vertical-align:middle;
+  }
+  .chip-row { margin-top:var(--sp-6); display:flex; flex-wrap:wrap; gap:var(--sp-2); }
+  .chip {
+    border:1px solid var(--bone-300); background:var(--white); color:var(--ink-700);
+    padding:var(--sp-2) var(--sp-4); border-radius:999px; cursor:pointer; font-size:0.875rem;
+    min-height:44px; display:inline-flex; align-items:center;
+    transition:border-color var(--dur-base) var(--ease-out), background-color var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
+  }
+  .chip:hover { border-color:var(--steel-400); }
+  .chip:active { transform:translateY(1px); }
+  .chip[aria-pressed="true"] { background:var(--ink-800); border-color:var(--ink-800); color:var(--bone-50); }
+  .chip.force-hover { border-color:var(--steel-400); }
+  .chip.force-active { transform:translateY(1px); border-color:var(--steel-500); }
+  .chip.force-focus { outline:2px solid var(--steel-500); outline-offset:2px; }
+
+  .or-write { margin-top:var(--sp-5); display:flex; align-items:center; gap:var(--sp-3); }
+  .or-write input {
+    flex:1; height:2.75rem; border-radius:var(--radius-control); border:1px solid var(--ink-200);
+    padding:0 var(--sp-4); font-size:0.9375rem; background:var(--white);
+  }
+  .q-progress { margin-top:var(--sp-10); font-size:0.75rem; color:var(--ink-400); letter-spacing:0.04em; }
+  .q-foot { margin-top:var(--sp-10); display:flex; justify-content:space-between; align-items:center; }
+
+  .legend { margin-top:var(--sp-10); padding-top:var(--sp-6); border-top:1px solid var(--bone-200); }
+  .legend .eyebrow { display:block; margin-bottom:var(--sp-3); }
+  .legend-row { display:flex; gap:var(--sp-3); flex-wrap:wrap; align-items:center; }
+  .legend-row .lbl { font-size:0.75rem; color:var(--ink-400); margin-right:var(--sp-1); }
+
+  /* ---- scan / wrap moment ---- */
+  .scan-wrap { text-align:left; }
+  .scan-rule { margin-top:var(--sp-8); height:2px; background:var(--bone-200); position:relative; overflow:hidden; border-radius:2px; }
+  .scan-rule::after {
+    content:''; position:absolute; inset:0; width:40%; background:linear-gradient(to right, transparent, var(--steel-500), transparent);
+    animation:sweep 2.2s var(--ease-inout) infinite;
+  }
+  @keyframes sweep { 0%{transform:translateX(-120%);} 100%{transform:translateX(320%);} }
+  .scan-lines { margin-top:var(--sp-6); display:flex; flex-direction:column; gap:var(--sp-2); }
+  .scan-lines li { list-style:none; font-size:0.8125rem; color:var(--ink-500); display:flex; gap:var(--sp-2); align-items:baseline; }
+  .scan-lines li b { color:var(--ink-700); font-weight:500; }
+  .brief-card { margin-top:var(--sp-8); padding:var(--sp-6); border-radius:var(--radius-card); border:1px solid var(--bone-300); background:var(--white); box-shadow:var(--shadow-e1); }
+  .brief-card p { font-size:0.9375rem; line-height:1.7; color:var(--ink-700); }
+  .brief-card .actions { margin-top:var(--sp-5); }
+  .wrap-ring {
+    width:3.25rem; height:3.25rem; border-radius:999px; border:1.5px dashed var(--gold-400);
+    display:flex; align-items:center; justify-content:center; margin-bottom:var(--sp-6);
+    animation:spin 14s linear infinite;
+  }
+  .wrap-ring .dot { width:0.75rem; height:0.75rem; border-radius:999px; background:var(--gold-500); }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  .footnote { max-width:34rem; margin:0 auto; padding:0 var(--sp-6) var(--sp-16); color:var(--ink-400); font-size:0.75rem; line-height:1.6; }
+</style>
+</head>
+<body>
+
+<div class="harness-bar">
+  <span class="tag t-mono">Design preview</span>
+  <strong>Direction A — The Letter</strong>
+  <span style="color:var(--bone-300)">calm · editorial · one thing at a time</span>
+  <div class="harness-nav" role="tablist" aria-label="Preview screens">
+    <button data-goto="company" aria-current="step">1 · Company</button>
+    <button data-goto="areas">2 · Areas of interest</button>
+    <button data-goto="questions">3 · Tailored questions</button>
+    <button data-goto="wrap">4 · Scan &amp; wrap-up</button>
+  </div>
+</div>
+
+<!-- ============ SCREEN 1 — COMPANY DETAILS ============ -->
+<section class="screen is-active" id="screen-company" data-state="ready">
+  <div class="page" data-state-for="ready">
+    <div class="step-mark">Part 1 of 3 — a minute, then we start learning</div>
+    <h1>Let's start with your company.</h1>
+    <p class="intro">Just enough to begin. Verifying you own the domain happens later, in Settings — you can start straight away.</p>
+
+    <div class="field">
+      <label for="a-name">Company name</label>
+      <input id="a-name" type="text" placeholder="Acme Trading LLC" />
+    </div>
+    <div class="field">
+      <label for="a-url">Website</label>
+      <input id="a-url" type="url" placeholder="acme.om" aria-invalid="true" aria-describedby="a-url-err" />
+      <p class="err" id="a-url-err">That does not look like a website address. Try acme.om.</p>
+    </div>
+    <div class="field">
+      <label for="a-role">Your role <span style="color:var(--ink-400); font-weight:400;">(optional)</span></label>
+      <input id="a-role" type="text" placeholder="Founder, Head of Sales…" />
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" onclick="go('areas')">Continue</button>
+      <span class="meta">Takes under a minute</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SCREEN 2 — AREAS OF INTEREST ============ -->
+<section class="screen" id="screen-areas" data-state="ready">
+  <div class="page" data-state-for="ready">
+    <div class="step-mark">Part 2 of 3 — Areas of interest</div>
+    <h1>Which parts of the business should NEXUS pay attention to?</h1>
+    <p class="intro">This decides which directors and dashboards you get. Pick what you actually run — three to five is typical, and you can change this later in Settings.</p>
+
+    <ul class="area-list">
+      <li class="area-row" data-accent="steel">
+        <label>
+          <input type="checkbox" checked onchange="updateCount()" />
+          <span class="area-check"><svg class="check-icon" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="area-text"><h3 class="t-sans"><span class="area-dot"></span>Marketing</h3><p>Campaigns, SEO, brand positioning, content</p></span>
+        </label>
+      </li>
+      <li class="area-row" data-accent="clay">
+        <label>
+          <input type="checkbox" checked onchange="updateCount()" />
+          <span class="area-check"><svg class="check-icon" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="area-text"><h3 class="t-sans"><span class="area-dot"></span>Sales</h3><p>Pipeline, forecasting, proposals, follow-ups</p></span>
+        </label>
+      </li>
+      <li class="area-row" data-accent="ink">
+        <label>
+          <input type="checkbox" checked onchange="updateCount()" />
+          <span class="area-check"><svg class="check-icon" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="area-text"><h3 class="t-sans"><span class="area-dot"></span>Finance</h3><p>Revenue, margin, cash-flow signals, pricing</p></span>
+        </label>
+      </li>
+      <li class="area-row" data-accent="steel">
+        <label>
+          <input type="checkbox" onchange="updateCount()" />
+          <span class="area-check"><svg class="check-icon" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="area-text"><h3 class="t-sans"><span class="area-dot"></span>Operations</h3><p>SOPs, workflows, bottlenecks, task management</p></span>
+        </label>
+      </li>
+      <li class="area-row" data-accent="slate">
+        <label>
+          <input type="checkbox" onchange="updateCount()" />
+          <span class="area-check"><svg class="check-icon" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="area-text"><h3 class="t-sans"><span class="area-dot"></span>People</h3><p>Policies, recruitment, onboarding, training</p></span>
+        </label>
+      </li>
+      <li class="area-row" data-accent="gold">
+        <label>
+          <input type="checkbox" onchange="updateCount()" />
+          <span class="area-check"><svg class="check-icon" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="area-text"><h3 class="t-sans"><span class="area-dot"></span>Strategy</h3><p>Expansion planning, market entry, risk</p></span>
+        </label>
+      </li>
+    </ul>
+
+    <div class="area-count">
+      <span><strong id="a-count">3</strong> of 6 selected — <span class="ok">a good range</span></span>
+      <span class="meta">Minimum one — a Chief of Staff view is automatic</span>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" onclick="go('questions')">Continue</button>
+      <button class="btn btn-quiet" onclick="go('company')">Back</button>
+    </div>
+  </div>
+
+  <div class="page" data-state-for="loading">
+    <div class="step-mark">Part 2 of 3 — Areas of interest</div>
+    <h1>Which parts of the business should NEXUS pay attention to?</h1>
+    <p class="intro">Loading the list of departments…</p>
+    <div style="margin-top:var(--sp-8)">
+      <div class="sk-row"></div>
+      <div class="sk-row" style="animation-delay:0.1s"></div>
+      <div class="sk-row" style="animation-delay:0.2s"></div>
+    </div>
+  </div>
+
+  <div class="page" data-state-for="empty">
+    <div class="step-mark">Part 2 of 3 — Areas of interest</div>
+    <h1>Which parts of the business should NEXUS pay attention to?</h1>
+    <div class="empty-block">
+      <h3>The department list didn't load</h3>
+      <p>Nothing to choose from yet — this is unusual. You can still continue; Settings lets you set this any time.</p>
+      <button class="btn btn-primary" style="margin-top:var(--sp-4)" onclick="setState('areas','ready')">Try again</button>
+    </div>
+  </div>
+
+  <div class="page" data-state-for="error">
+    <div class="step-mark">Part 2 of 3 — Areas of interest</div>
+    <h1>Which parts of the business should NEXUS pay attention to?</h1>
+    <div class="error-block">
+      <h3>Could not reach the account service</h3>
+      <p>Try again in a moment — nothing you've entered so far has been lost.</p>
+      <button class="btn btn-danger" style="margin-top:var(--sp-4)" onclick="setState('areas','ready')">Retry</button>
+    </div>
+  </div>
+
+  <div class="footnote legend" data-state-for="ready">
+    <span class="eyebrow t-mono">States — the selection control</span>
+    <div class="legend-row">
+      <span class="lbl">Rest</span>
+      <span class="area-check" style="position:static; display:inline-flex;"><svg class="check-icon" viewBox="0 0 16 16" fill="none" style="opacity:0"></svg></span>
+      <span class="lbl">Hover</span>
+      <span class="area-check" style="position:static; display:inline-flex; border-color:var(--ink-500);"></span>
+      <span class="lbl">Checked / active</span>
+      <span class="area-check" style="position:static; display:inline-flex; background:var(--ink-800); border-color:var(--ink-800); transform:scale(0.94);"><svg class="check-icon" viewBox="0 0 16 16" fill="none" style="width:13px;height:13px;"><path d="M3 8.5l3 3 7-7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      <span class="lbl">Focus-visible</span>
+      <span class="area-check" style="position:static; display:inline-flex; box-shadow:0 0 0 3px var(--steel-200);"></span>
+    </div>
+  </div>
+
+  <div class="state-switch" style="max-width:34rem; margin-left:auto; margin-right:auto; padding:0 var(--sp-6) var(--sp-16);">
+    <span>Preview state:</span>
+    <button aria-pressed="true" onclick="setState('areas','ready',this)">Ready</button>
+    <button onclick="setState('areas','loading',this)">Loading</button>
+    <button onclick="setState('areas','empty',this)">Empty</button>
+    <button onclick="setState('areas','error',this)">Error</button>
+  </div>
+</section>
+
+<!-- ============ SCREEN 3 — TAILORED QUESTIONS ============ -->
+<section class="screen" id="screen-questions" data-state="ready">
+  <div class="page" data-state-for="ready">
+    <div class="step-mark">Part 2 of 3 — one question at a time</div>
+    <h1 class="t-sans" style="font-size:1.1rem; font-weight:500; color:var(--ink-500);">Scoped to Marketing, Sales and Finance — the areas you chose.</h1>
+
+    <p class="q-why"><b>Why we ask —</b> every figure NEXUS shows is in this currency.</p>
+    <p class="q-prompt t-display">Which currency do you report in?</p>
+    <div class="chip-row" role="group" aria-label="Suggested currencies">
+      <button class="chip" aria-pressed="true" onclick="toggleChip(this)">OMR</button>
+      <button class="chip" aria-pressed="false" onclick="toggleChip(this)">AED</button>
+      <button class="chip" aria-pressed="false" onclick="toggleChip(this)">SAR</button>
+      <button class="chip" aria-pressed="false" onclick="toggleChip(this)">USD</button>
+    </div>
+
+    <div class="rule"></div>
+
+    <p class="q-why"><b>Why we ask —</b> used for pipeline value and forecasting.<span class="illustrative t-mono">illustrative</span></p>
+    <p class="q-prompt t-display">What's your average deal size? <span style="color:var(--ink-400); font-weight:400; font-size:0.9rem;">— Sales</span></p>
+    <div class="chip-row" role="group" aria-label="Suggested deal sizes">
+      <button class="chip" onclick="toggleChip(this)">Under 1,000 OMR</button>
+      <button class="chip" onclick="toggleChip(this)">1,000–10,000 OMR</button>
+      <button class="chip" onclick="toggleChip(this)">10,000+ OMR</button>
+    </div>
+    <div class="or-write">
+      <input type="text" placeholder="Or type an exact figure…" />
+    </div>
+
+    <div class="q-progress t-mono">4 OF 9 ANSWERED — 5 LEFT — SKIP ANY OF THEM</div>
+    <div class="q-foot">
+      <button class="btn btn-primary" onclick="go('wrap')">Continue</button>
+      <button class="btn btn-quiet">Skip this one</button>
+    </div>
+
+    <div class="legend">
+      <span class="eyebrow t-mono">States — a suggestion chip</span>
+      <div class="legend-row">
+        <span class="lbl">Rest</span><button class="chip" aria-pressed="false">Chip</button>
+        <span class="lbl">Hover</span><button class="chip force-hover" aria-pressed="false">Chip</button>
+        <span class="lbl">Active</span><button class="chip force-active" aria-pressed="false">Chip</button>
+        <span class="lbl">Focus-visible</span><button class="chip force-focus" aria-pressed="false">Chip</button>
+        <span class="lbl">Selected</span><button class="chip" aria-pressed="true">Chip</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="page" data-state-for="loading">
+    <div class="step-mark">Part 2 of 3 — one question at a time</div>
+    <h1 class="t-sans" style="font-size:1.1rem; font-weight:500; color:var(--ink-500);">Preparing questions for Marketing, Sales and Finance…</h1>
+    <div style="margin-top:var(--sp-8)">
+      <div class="sk-row" style="height:1.5rem; width:60%;"></div>
+      <div class="sk-row" style="height:2.25rem; width:90%; margin-top:var(--sp-4);"></div>
+      <div style="display:flex; gap:var(--sp-2); margin-top:var(--sp-5);">
+        <div class="sk-row" style="height:2.75rem; width:5rem; margin:0;"></div>
+        <div class="sk-row" style="height:2.75rem; width:5rem; margin:0;"></div>
+        <div class="sk-row" style="height:2.75rem; width:5rem; margin:0;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page" data-state-for="empty">
+    <div class="step-mark">Part 2 of 3 — one question at a time</div>
+    <h1>That's everything for the areas you chose.</h1>
+    <div class="empty-block">
+      <h3>Nothing left to ask</h3>
+      <p>Add another area of interest in Settings any time, and NEXUS will ask what it needs then.</p>
+      <button class="btn btn-primary" style="margin-top:var(--sp-4)" onclick="go('wrap')">Continue to your workspace</button>
+    </div>
+  </div>
+
+  <div class="page" data-state-for="error">
+    <div class="step-mark">Part 2 of 3 — one question at a time</div>
+    <h1>That answer didn't save</h1>
+    <div class="error-block">
+      <h3>Could not reach the account service</h3>
+      <p>Your other answers are safe. Try this one again.</p>
+      <button class="btn btn-danger" style="margin-top:var(--sp-4)" onclick="setState('questions','ready')">Retry</button>
+    </div>
+  </div>
+
+  <div class="state-switch" style="max-width:34rem; margin-left:auto; margin-right:auto; padding:0 var(--sp-6) var(--sp-16);">
+    <span>Preview state:</span>
+    <button aria-pressed="true" onclick="setState('questions','ready',this)">Ready</button>
+    <button onclick="setState('questions','loading',this)">Loading</button>
+    <button onclick="setState('questions','empty',this)">Empty</button>
+    <button onclick="setState('questions','error',this)">Error</button>
+  </div>
+</section>
+
+<!-- ============ SCREEN 4 — SCAN & WRAP-UP ============ -->
+<section class="screen" id="screen-wrap" data-state="ready">
+  <div class="page scan-wrap" data-state-for="ready">
+    <div class="step-mark">Reading your website</div>
+    <h1>We're reading acme.om.</h1>
+    <p class="intro">This takes a moment. You don't need to wait here — we'll bring you back the second it's ready.</p>
+    <div class="scan-rule" aria-hidden="true"></div>
+    <ul class="scan-lines">
+      <li><b>✓</b> Home, About and Services pages read</li>
+      <li><b>✓</b> Industry and positioning noted</li>
+      <li>··· Looking for a pricing or product page</li>
+    </ul>
+
+    <div class="brief-card">
+      <span class="illustrative t-mono">illustrative</span>
+      <p style="margin-top:var(--sp-3)">"Acme Trading looks like a B2B logistics company based in Muscat, serving retail and FMCG clients. We'll use this as a starting point — correct anything that's wrong."</p>
+      <div class="actions">
+        <button class="btn btn-primary" onclick="go('company')">That's right — continue</button>
+        <button class="btn btn-quiet">Something's off</button>
+      </div>
+    </div>
+
+    <div class="rule"></div>
+    <p class="meta">No site configured, or no model available? The catalogue alone still completes the workspace — nothing here is required to finish.</p>
+  </div>
+
+  <div class="page scan-wrap" data-state-for="loading">
+    <div class="wrap-ring"><span class="dot"></span></div>
+    <div class="step-mark">Part 3 of 3 — building your workspace</div>
+    <h1>Putting it together.</h1>
+    <p class="intro">Your directors, your dashboard, your first audit — assembling from what you've told us.</p>
+    <div class="scan-rule" aria-hidden="true" style="margin-top:var(--sp-10)"></div>
+  </div>
+
+  <div class="page scan-wrap" data-state-for="empty">
+    <div class="step-mark">No language model configured</div>
+    <h1>Starting from your answers alone.</h1>
+    <p class="intro">No site scan this time — that's a fully supported way to begin. Your workspace builds from the Areas of Interest and questions you've just answered.</p>
+    <div class="actions"><button class="btn btn-primary" onclick="setState('wrap','loading')">Continue</button></div>
+  </div>
+
+  <div class="page scan-wrap" data-state-for="error">
+    <div class="step-mark">Reading your website</div>
+    <h1>We couldn't read acme.om.</h1>
+    <div class="error-block">
+      <h3>The site didn't respond</h3>
+      <p>That's fine — you can carry on without it. Nothing about your workspace depends on this succeeding.</p>
+      <button class="btn btn-danger" style="margin-top:var(--sp-4)" onclick="setState('wrap','empty')">Continue without scanning</button>
+    </div>
+  </div>
+
+  <div class="state-switch" style="max-width:34rem; margin-left:auto; margin-right:auto; padding:0 var(--sp-6) var(--sp-16);">
+    <span>Preview state:</span>
+    <button aria-pressed="true" onclick="setState('wrap','ready',this)">Scan + brief</button>
+    <button onclick="setState('wrap','loading',this)">Assembling</button>
+    <button onclick="setState('wrap','empty',this)">No model configured</button>
+    <button onclick="setState('wrap','error',this)">Scan failed</button>
+  </div>
+</section>
+
+<script>
+  function go(id){
+    document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('is-active'); });
+    document.getElementById('screen-'+id).classList.add('is-active');
+    document.querySelectorAll('[data-goto]').forEach(function(b){
+      if (b.dataset.goto===id) b.setAttribute('aria-current','step'); else b.removeAttribute('aria-current');
+    });
+    window.scrollTo({top:0, behavior:'instant'});
+  }
+  document.querySelectorAll('[data-goto]').forEach(function(b){ b.addEventListener('click', function(){ go(b.dataset.goto); }); });
+
+  function setState(screen, state, btn){
+    var el = document.getElementById('screen-'+screen);
+    el.dataset.state = state;
+    if (btn) {
+      Array.prototype.forEach.call(btn.parentElement.querySelectorAll('button'), function(b){ b.setAttribute('aria-pressed','false'); });
+      btn.setAttribute('aria-pressed','true');
+    }
+  }
+
+  function toggleChip(btn){
+    var pressed = btn.getAttribute('aria-pressed') === 'true';
+    btn.setAttribute('aria-pressed', String(!pressed));
+  }
+
+  function updateCount(){
+    var checked = document.querySelectorAll('#screen-areas input[type="checkbox"]:checked').length;
+    document.getElementById('a-count').textContent = checked;
+  }
+</script>
+</body>
+</html>

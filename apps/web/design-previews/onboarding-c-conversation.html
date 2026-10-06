@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NEXUS OS — Onboarding, Direction C: The Conversation</title>
+<!--
+  STATIC DESIGN PREVIEW — not wired into the app. No Bash, no build step.
+  All raw values live in ./tokens.css (mirrors tailwind.config.ts / globals.css
+  verbatim). This file references custom properties and the `.t-display` /
+  `.t-sans` / `.t-mono` type classes only — never `font-family` itself.
+
+  This direction deliberately evolves components/onboarding/OnboardingAura.tsx
+  rather than replacing it: the wash (atmosphere, no edge) and the mark
+  (concentric rings, spins only while something is in flight) are the same
+  shape, same states (reading / listening / idle / ready), reused rather than
+  redrawn, per the brief's steer to treat that investment as a base to build on.
+
+  Per ADR 0043 the design system is the cut-paper navy/gold palette, not ADF
+  magenta. The product has no dark theme anywhere in the codebase, so this
+  preview is single-theme, matching every other screen.
+-->
+<link rel="stylesheet" href="tokens.css" />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; }
+  body {
+    background:var(--bone-50);
+    color:var(--ink-800);
+    font-size:0.9375rem;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3 { color:var(--ink-900); margin:0; }
+  p { margin:0; }
+  button { font:inherit; color:inherit; }
+  :focus-visible { outline:2px solid var(--steel-500); outline-offset:2px; border-radius:4px; }
+  .meta { color:var(--ink-500); font-size:0.8125rem; }
+  .eyebrow { text-transform:uppercase; letter-spacing:0.16em; font-size:0.6875rem; color:var(--steel-600); }
+
+  /* ---------- the ambient aura, reused from OnboardingAura.tsx ---------- */
+  .aura-wash {
+    position:fixed; inset:0; z-index:-10; pointer-events:none;
+    background:radial-gradient(58rem 30rem at 50% -10rem, var(--aura-wash, rgba(95,148,184,0.20)), transparent 72%);
+    transition:background var(--dur-slow);
+  }
+  .aura-mark { width:22px; height:22px; flex-shrink:0; overflow:visible; }
+  .aura-mark .ring { fill:none; stroke-width:1.5; stroke-linecap:round; stroke-dasharray:5 6.3; transform-origin:center; }
+  .aura-mark .ring.spin { animation:spin-slow 3.2s linear infinite; }
+  .aura-mark .halo { fill:none; stroke-width:1.5; transform-origin:center; animation:pulse-ring 3.4s cubic-bezier(0.4,0,0.6,1) infinite; }
+  .aura-mark .halo.paused { animation-play-state:paused; }
+  @keyframes spin-slow { to { transform:rotate(360deg); } }
+  @keyframes pulse-ring { 0%{transform:scale(0.82); opacity:0.7;} 70%{transform:scale(1.35); opacity:0;} 100%{transform:scale(1.35); opacity:0;} }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration:0.001ms !important; transition-duration:0.001ms !important; }
+  }
+
+  /* ---------- preview harness chrome ---------- */
+  .harness-bar {
+    position:sticky; top:0; z-index:40;
+    background:var(--ink-900); color:var(--bone-50);
+    padding:var(--sp-3) var(--sp-5);
+    display:flex; align-items:center; gap:var(--sp-4); flex-wrap:wrap;
+    font-size:0.8125rem;
+  }
+  .harness-bar .tag { font-size:0.6875rem; letter-spacing:0.08em; color:var(--gold-400); text-transform:uppercase; }
+  .harness-nav { display:flex; gap:var(--sp-2); margin-left:auto; flex-wrap:wrap; }
+  .harness-nav button {
+    border:1px solid var(--ink-700); background:transparent; color:var(--bone-200);
+    padding:var(--sp-2) var(--sp-3); border-radius:999px; cursor:pointer;
+    transition:background-color var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
+    min-height:32px;
+  }
+  .harness-nav button[aria-current="step"] { background:var(--gold-400); color:var(--ink-900); border-color:var(--gold-400); font-weight:600; }
+  .harness-nav button:hover { background:var(--ink-700); }
+  .harness-nav button[aria-current="step"]:hover { background:var(--gold-300); }
+
+  .state-switch { display:flex; gap:var(--sp-2); align-items:center; flex-wrap:wrap; margin-top:var(--sp-8); justify-content:center; }
+  .state-switch span { font-size:0.75rem; color:var(--ink-400); }
+  .state-switch button {
+    border:1px solid var(--bone-300); background:var(--white); color:var(--ink-600);
+    padding:var(--sp-1) var(--sp-3); border-radius:999px; cursor:pointer; font-size:0.75rem;
+    min-height:32px;
+  }
+  .state-switch button[aria-pressed="true"] { background:var(--ink-800); color:var(--bone-50); border-color:var(--ink-800); }
+
+  .screen { display:none; }
+  .screen.is-active { display:block; }
+  .screen[data-state="ready"] [data-state-for="ready"],
+  .screen[data-state="loading"] [data-state-for="loading"],
+  .screen[data-state="empty"] [data-state-for="empty"],
+  .screen[data-state="error"] [data-state-for="error"] { display:block; }
+
+  /* ---------- the transcript shell ---------- */
+  .thread-shell { display:flex; flex-direction:column; min-height:calc(100vh - 3.5rem); }
+  .thread-head {
+    position:sticky; top:3.5rem; z-index:20; background:rgba(251,250,248,0.9); backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--bone-200); padding:var(--sp-4) var(--sp-6);
+    display:flex; align-items:center; gap:var(--sp-3); max-width:46rem; margin:0 auto; width:100%;
+  }
+  .thread-head .who { font-weight:600; }
+  .thread-head .meta2 { margin-left:auto; font-size:0.75rem; color:var(--ink-400); }
+
+  .thread { flex:1; max-width:46rem; margin:0 auto; width:100%; padding:var(--sp-8) var(--sp-6) var(--sp-6); display:flex; flex-direction:column; gap:var(--sp-5); }
+
+  .bubble-row { display:flex; gap:var(--sp-3); align-items:flex-end; animation:rise var(--dur-slow) var(--ease-out) both; }
+  @keyframes rise { from{opacity:0; transform:translateY(0.5rem);} to{opacity:1; transform:none;} }
+  .bubble-row.from-you { flex-direction:row-reverse; }
+  .bubble {
+    max-width:30rem; padding:var(--sp-4) var(--sp-5); border-radius:var(--radius-card);
+    font-size:0.9375rem; line-height:1.6;
+  }
+  .bubble.agent { background:var(--white); border:1px solid var(--bone-300); box-shadow:var(--shadow-e1); border-bottom-left-radius:var(--radius-control); }
+  .bubble.you { background:var(--ink-800); color:var(--bone-50); border-bottom-right-radius:var(--radius-control); }
+  .bubble .why { display:block; margin-top:var(--sp-2); font-size:0.75rem; color:var(--ink-400); }
+  .illustrative {
+    display:inline-flex; align-items:center; gap:4px; margin-left:var(--sp-2);
+    font-size:0.625rem; text-transform:uppercase; letter-spacing:0.08em;
+    color:var(--gold-700); background:var(--gold-100); border:1px solid var(--gold-300);
+    padding:2px 7px; border-radius:999px; vertical-align:middle;
+  }
+
+  /* ---- inline rich message: Areas of interest multi-select ---- */
+  .inline-card { background:var(--white); border:1px solid var(--bone-300); border-radius:var(--radius-card); box-shadow:var(--shadow-e1); padding:var(--sp-5); max-width:34rem; }
+  .inline-grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:var(--sp-2); margin-top:var(--sp-4); }
+  .area-pill {
+    position:relative; display:flex; align-items:center; gap:var(--sp-2);
+    border:1px solid var(--bone-300); border-radius:var(--radius-control); padding:var(--sp-3);
+    cursor:pointer; min-height:44px; transition:border-color var(--dur-base) var(--ease-out), background-color var(--dur-base) var(--ease-out);
+  }
+  .area-pill input { position:absolute; opacity:0; width:1px; height:1px; }
+  .area-pill .dot { width:7px; height:7px; border-radius:999px; flex-shrink:0; }
+  .area-pill span.lbl2 { font-size:0.875rem; font-weight:500; }
+  .area-pill:hover { border-color:var(--steel-400); }
+  .area-pill input:checked ~ .lbl2, .area-pill input:checked + .dot { }
+  .area-pill input:checked ~ * { }
+  .area-pill.is-checked { border-color:var(--ink-800); background:var(--ink-50, var(--bone-50)); }
+  .area-pill input:focus-visible ~ .lbl2 { text-decoration:underline; }
+  .area-pill .tick { margin-left:auto; width:1.1rem; height:1.1rem; border-radius:999px; border:1.5px solid var(--bone-400); display:flex; align-items:center; justify-content:center; }
+  .area-pill .tick svg { opacity:0; width:10px; height:10px; }
+  .area-pill.is-checked .tick { background:var(--ink-800); border-color:var(--ink-800); }
+  .area-pill.is-checked .tick svg { opacity:1; }
+  .check-icon { stroke:var(--bone-50); }
+  .inline-foot { margin-top:var(--sp-4); display:flex; align-items:center; justify-content:space-between; }
+  .inline-count { font-size:0.75rem; color:var(--ink-500); }
+
+  .btn {
+    display:inline-flex; align-items:center; justify-content:center; gap:var(--sp-2);
+    height:2.75rem; padding:0 var(--sp-5); border-radius:999px; border:none; cursor:pointer;
+    font-weight:500; font-size:0.875rem;
+    transition:background-color var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+  }
+  .btn:active { transform:translateY(1px); }
+  .btn-primary { background:var(--ink-800); color:var(--bone-50); box-shadow:var(--shadow-e1); }
+  .btn-primary:hover { background:var(--ink-700); box-shadow:var(--shadow-e2); }
+  .btn-danger { background:var(--clay-600); color:var(--bone-50); }
+  .btn-danger:hover { background:var(--clay-500); }
+  .btn-quiet { background:transparent; color:var(--ink-500); text-decoration:underline; text-decoration-color:var(--ink-300); height:auto; padding:var(--sp-1) var(--sp-2); }
+
+  /* ---- suggestion chips under a question bubble ---- */
+  .chip-row { margin-top:var(--sp-3); display:flex; flex-wrap:wrap; gap:var(--sp-2); }
+  .chip {
+    border:1px solid var(--bone-300); background:var(--bone-50); color:var(--ink-700);
+    padding:var(--sp-2) var(--sp-4); border-radius:999px; cursor:pointer; font-size:0.8125rem;
+    min-height:44px; display:inline-flex; align-items:center;
+    transition:border-color var(--dur-base) var(--ease-out), background-color var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
+  }
+  .chip:hover { border-color:var(--steel-400); }
+  .chip:active { transform:translateY(1px); }
+  .chip[aria-pressed="true"] { background:var(--ink-800); border-color:var(--ink-800); color:var(--bone-50); }
+  .chip.force-hover { border-color:var(--steel-400); }
+  .chip.force-active { transform:translateY(1px); border-color:var(--steel-500); }
+  .chip.force-focus { outline:2px solid var(--steel-500); outline-offset:2px; }
+
+  .typing { display:inline-flex; gap:4px; padding:var(--sp-2) 0; }
+  .typing .d { width:6px; height:6px; border-radius:999px; background:var(--ink-300); animation:typing-dot 1.3s ease-in-out infinite; }
+  .typing .d:nth-child(2) { animation-delay:0.15s; }
+  .typing .d:nth-child(3) { animation-delay:0.3s; }
+  @keyframes typing-dot { 0%,65%,100%{ transform:translateY(0); opacity:0.3; } 30%{ transform:translateY(-3px); opacity:1; } }
+
+  /* ---- the composer band, sticky at the foot (matches the real Composer) ---- */
+  .composer {
+    position:sticky; bottom:0; z-index:10; background:rgba(251,250,248,0.95); backdrop-filter:blur(6px);
+    border-top:1px solid var(--bone-200); padding-top:var(--sp-4); padding-bottom:var(--sp-5);
+  }
+  .composer-inner { max-width:46rem; margin:0 auto; padding:0 var(--sp-6); }
+  .composer label { font-size:0.75rem; font-weight:500; color:var(--ink-600); }
+  .composer-row { margin-top:var(--sp-2); display:flex; gap:var(--sp-2); align-items:flex-end; }
+  .composer textarea {
+    flex:1; min-height:3rem; border-radius:var(--radius-control); border:1px solid var(--bone-300);
+    background:var(--white); padding:var(--sp-3); font-size:0.875rem; resize:none;
+  }
+
+  .legend { max-width:46rem; margin:var(--sp-10) auto 0; padding:0 var(--sp-6) var(--sp-10); border-top:1px solid var(--bone-200); padding-top:var(--sp-6); }
+  .legend .eyebrow { display:block; margin-bottom:var(--sp-3); }
+  .legend-row { display:flex; gap:var(--sp-3); flex-wrap:wrap; align-items:center; }
+  .legend-row .lbl { font-size:0.75rem; color:var(--ink-400); margin-right:var(--sp-1); }
+
+  .empty-block, .error-block { max-width:30rem; margin:var(--sp-6) auto; padding:var(--sp-6); border-radius:var(--radius-data); border:1px dashed var(--bone-300); text-align:left; }
+  .error-block { border-style:solid; border-color:var(--clay-300); background:var(--clay-100); }
+  .empty-block h3, .error-block h3 { font-size:1rem; font-weight:600; }
+  .empty-block p, .error-block p { margin-top:var(--sp-2); font-size:0.875rem; color:var(--ink-600); }
+  .error-block p { color:var(--clay-600); }
+
+  .center-note { text-align:center; max-width:30rem; margin:var(--sp-10) auto; color:var(--ink-500); font-size:0.9375rem; }
+</style>
+</head>
+<body>
+
+<div class="aura-wash" id="aura"></div>
+
+<div class="harness-bar">
+  <span class="tag t-mono">Design preview</span>
+  <strong>Direction C — The Conversation</strong>
+  <span style="color:var(--bone-300)">one continuous thread · inline widgets</span>
+  <div class="harness-nav" role="tablist" aria-label="Preview screens">
+    <button data-goto="company" aria-current="step" onclick="setAura('idle')">1 · Company</button>
+    <button data-goto="areas" onclick="setAura('idle')">2 · Areas of interest</button>
+    <button data-goto="questions" onclick="setAura('idle')">3 · Tailored questions</button>
+    <button data-goto="wrap" onclick="setAura('thinking')">4 · Scan &amp; wrap-up</button>
+  </div>
+</div>
+
+<!-- ============ SCREEN 1 — COMPANY (opening turns) ============ -->
+<section class="screen is-active" id="screen-company" data-state="ready">
+  <div class="thread-shell" data-state-for="ready">
+    <div class="thread-head">
+      <svg class="aura-mark" viewBox="0 0 32 32"><circle class="ring" cx="16" cy="16" r="14" style="stroke:var(--slate-400); stroke-opacity:0.4;"/><circle class="halo paused" cx="16" cy="16" r="9" style="stroke:var(--slate-400); stroke-opacity:0.5;"/><circle cx="16" cy="16" r="5.5" style="fill:var(--slate-400); fill-opacity:0.75;"/></svg>
+      <span class="who">NEXUS</span>
+      <span class="meta2">Part 1 of 3</span>
+    </div>
+    <div class="thread">
+      <div class="bubble-row">
+        <div class="bubble agent">Hi — let's set up your workspace. I'll keep this short: your company, what you'd like me to pay attention to, then a handful of quick questions.</div>
+      </div>
+      <div class="bubble-row">
+        <div class="bubble agent">What's your company called, and where's it online?</div>
+      </div>
+      <div class="bubble-row from-you">
+        <div class="bubble you">Acme Trading LLC — acme.om</div>
+      </div>
+      <div class="bubble-row">
+        <div class="bubble agent">Got it. And what should I call you — your role is optional, it just shapes what I lead with.</div>
+      </div>
+    </div>
+    <div class="composer">
+      <div class="composer-inner">
+        <label for="c-answer">Your answer</label>
+        <div class="composer-row">
+          <textarea id="c-answer" rows="1" placeholder="Founder, Head of Sales…"></textarea>
+          <button class="btn btn-primary" onclick="go('areas')">Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SCREEN 2 — AREAS OF INTEREST (inline widget) ============ -->
+<section class="screen" id="screen-areas" data-state="ready">
+  <div class="thread-shell" data-state-for="ready">
+    <div class="thread-head">
+      <svg class="aura-mark" viewBox="0 0 32 32"><circle class="ring" cx="16" cy="16" r="14" style="stroke:var(--slate-400); stroke-opacity:0.4;"/><circle class="halo paused" cx="16" cy="16" r="9" style="stroke:var(--slate-400); stroke-opacity:0.5;"/><circle cx="16" cy="16" r="5.5" style="fill:var(--slate-400); fill-opacity:0.75;"/></svg>
+      <span class="who">NEXUS</span>
+      <span class="meta2">Part 2 of 3 — Areas of interest</span>
+    </div>
+    <div class="thread">
+      <div class="bubble-row">
+        <div class="bubble agent">Thanks, Amal. Which parts of the business should I pay attention to? This decides which directors and dashboards you get — pick what you actually run.</div>
+      </div>
+      <div class="bubble-row">
+        <div class="inline-card">
+          <div class="meta">3–5 is typical · minimum one · a Chief of Staff view is automatic</div>
+          <div class="inline-grid" id="area-grid">
+            <label class="area-pill is-checked" data-accent="steel">
+              <input type="checkbox" checked onchange="onPillChange(this)" />
+              <span class="dot" style="background:var(--steel-500);"></span>
+              <span class="lbl2">Marketing</span>
+              <span class="tick"><svg class="check-icon" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            </label>
+            <label class="area-pill is-checked" data-accent="clay">
+              <input type="checkbox" checked onchange="onPillChange(this)" />
+              <span class="dot" style="background:var(--clay-500);"></span>
+              <span class="lbl2">Sales</span>
+              <span class="tick"><svg class="check-icon" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            </label>
+            <label class="area-pill is-checked" data-accent="ink">
+              <input type="checkbox" checked onchange="onPillChange(this)" />
+              <span class="dot" style="background:var(--ink-700);"></span>
+              <span class="lbl2">Finance</span>
+              <span class="tick"><svg class="check-icon" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            </label>
+            <label class="area-pill" data-accent="steel">
+              <input type="checkbox" onchange="onPillChange(this)" />
+              <span class="dot" style="background:var(--steel-500);"></span>
+              <span class="lbl2">Operations</span>
+              <span class="tick"><svg class="check-icon" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            </label>
+            <label class="area-pill" data-accent="slate">
+              <input type="checkbox" onchange="onPillChange(this)" />
+              <span class="dot" style="background:var(--slate-500);"></span>
+              <span class="lbl2">People</span>
+              <span class="tick"><svg class="check-icon" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            </label>
+            <label class="area-pill" data-accent="gold">
+              <input type="checkbox" onchange="onPillChange(this)" />
+              <span class="dot" style="background:var(--gold-500);"></span>
+              <span class="lbl2">Strategy</span>
+              <span class="tick"><svg class="check-icon" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            </label>
+          </div>
+          <div class="inline-foot">
+            <span class="inline-count"><strong id="c-count" style="color:var(--ink-800);">3</strong> of 6 selected</span>
+            <button class="btn btn-primary" onclick="go('questions')">Confirm</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span class="eyebrow t-mono">States — an inline area pill</span>
+      <div class="legend-row">
+        <span class="lbl">Rest</span><label class="area-pill" style="display:inline-flex; width:8rem;"><span class="dot" style="background:var(--steel-500);"></span><span class="lbl2">Pill</span><span class="tick"></span></label>
+        <span class="lbl">Hover</span><label class="area-pill" style="display:inline-flex; width:8rem; border-color:var(--steel-400);"><span class="dot" style="background:var(--steel-500);"></span><span class="lbl2">Pill</span><span class="tick"></span></label>
+        <span class="lbl">Checked</span><label class="area-pill is-checked" style="display:inline-flex; width:8rem;"><span class="dot" style="background:var(--steel-500);"></span><span class="lbl2">Pill</span><span class="tick"><svg class="check-icon" viewBox="0 0 16 16" fill="none" style="opacity:1; width:10px; height:10px;"><path d="M3 8.5l3 3 7-7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></label>
+        <span class="lbl">Focus-visible</span><label class="area-pill" style="display:inline-flex; width:8rem; box-shadow:0 0 0 3px var(--steel-200);"><span class="dot" style="background:var(--steel-500);"></span><span class="lbl2">Pill</span><span class="tick"></span></label>
+      </div>
+    </div>
+  </div>
+
+  <div class="thread-shell" data-state-for="loading">
+    <div class="thread-head"><svg class="aura-mark" viewBox="0 0 32 32"><circle class="ring spin" cx="16" cy="16" r="14" style="stroke:var(--steel-400); stroke-opacity:0.85;"/><circle class="halo" cx="16" cy="16" r="9" style="stroke:var(--steel-400); stroke-opacity:0.5;"/><circle cx="16" cy="16" r="5.5" style="fill:var(--steel-500);"/></svg><span class="who">NEXUS</span><span class="meta2">Part 2 of 3</span></div>
+    <div class="thread">
+      <div class="bubble-row"><div class="bubble agent">Which parts of the business should I pay attention to?</div></div>
+      <div class="bubble-row"><div class="bubble agent"><span class="typing"><span class="d"></span><span class="d"></span><span class="d"></span></span></div></div>
+    </div>
+    <p class="center-note">Loading the department list…</p>
+  </div>
+
+  <div class="thread-shell" data-state-for="empty">
+    <div class="thread-head"><svg class="aura-mark" viewBox="0 0 32 32"><circle class="ring" cx="16" cy="16" r="14" style="stroke:var(--slate-400); stroke-opacity:0.4;"/><circle class="halo paused" cx="16" cy="16" r="9" style="stroke:var(--slate-400); stroke-opacity:0.5;"/><circle cx="16" cy="16" r="5.5" style="fill:var(--slate-400); fill-opacity:0.75;"/></svg><span class="who">NEXUS</span><span class="meta2">Part 2 of 3</span></div>
+    <div class="thread">
+      <div class="bubble-row"><div class="bubble agent">Which parts of the business should I pay attention to?</div></div>
+      <div class="empty-block">
+        <h3>The department list didn't load</h3>
+        <p>Nothing to choose from yet — this is unusual. You can still continue; Settings lets you set this any time.</p>
+        <button class="btn btn-primary" style="margin-top:var(--sp-4)" onclick="setState('areas','ready')">Try again</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="thread-shell" data-state-for="error">
+    <div class="thread-head"><svg class="aura-mark" viewBox="0 0 32 32"><circle class="ring" cx="16" cy="16" r="14" style="stroke:var(--clay-400); stroke-opacity:0.6;"/><circle class="halo paused" cx="16" cy="16" r="9" style="stroke:var(--clay-400); stroke-opacity:0.5;"/><circle cx="16" cy="16" r="5.5" style="fill:var(--clay-500);"/></svg><span class="who">NEXUS</span><span class="meta2">Part 2 of 3</span></div>
+    <div class="thread">
+      <div class="bubble-row"><div class="bubble agent">Which parts of the business should I pay attention to?</div></div>
+      <div class="error-block">
+        <h3>Could not reach the account service</h3>
+        <p>Try again in a moment — nothing you've chosen so far has been lost.</p>
+        <button class="btn btn-danger" style="margin-top:var(--sp-4)" onclick="setState('areas','ready')">Retry</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="state-switch">
+    <span>Preview state:</span>
+    <button aria-pressed="true" onclick="setState('areas','ready',this)">Ready</button>
+    <button onclick="setState('areas','loading',this)">Loading</button>
+    <button onclick="setState('areas','empty',this)">Empty</button>
+    <button onclick="setState('areas','error',this)">Error</button>
+  </div>
+</section>
+
+<!-- ============ SCREEN 3 — TAILORED QUESTIONS (in the thread) ============ -->
+<section class="screen" id="screen-questions" data-state="ready">
+  <div class="thread-shell" data-state-for="ready">
+    <div class="thread-head">
+      <svg class="aura-mark" viewBox="0 0 32 32"><circle class="ring" cx="16" cy="16" r="14" style="stroke:var(--slate-400); stroke-opacity:0.4;"/><circle class="halo paused" cx="16" cy="16" r="9" style="stroke:var(--slate-400); stroke-opacity:0.5;"/><circle cx="16" cy="16" r="5.5" style="fill:var(--slate-400); fill-opacity:0.75;"/></svg>
+      <span class="who">NEXUS</span>
+      <span class="meta2">4 of 9 answered — Marketing, Sales, Finance</span>
+    </div>
+    <div class="thread">
+      <div class="bubble-row">
+        <div class="bubble agent">
+          Good set. Now a few quick ones, scoped to what you chose — skip anything that doesn't apply.
+        </div>
+      </div>
+      <div class="bubble-row">
+        <div class="bubble agent">
+          Which currency do you report in?
+          <span class="why">Why we ask — every figure NEXUS shows is in this currency.</span>
+          <div class="chip-row" role="group" aria-label="Suggested currencies">
+            <button class="chip" aria-pressed="true" onclick="toggleChip(this)">OMR</button>
+            <button class="chip" onclick="toggleChip(this)">AED</button>
+            <button class="chip" onclick="toggleChip(this)">SAR</button>
+            <button class="chip" onclick="toggleChip(this)">USD</button>
+          </div>
+        </div>
+      </div>
+      <div class="bubble-row from-you"><div class="bubble you">OMR</div></div>
+      <div class="bubble-row">
+        <div class="bubble agent">
+          What's your average deal size? <span style="color:var(--ink-400);">— Sales</span>
+          <span class="why">Why we ask — used for pipeline value and forecasting.<span class="illustrative t-mono">illustrative</span></span>
+          <div class="chip-row" role="group" aria-label="Suggested deal sizes">
+            <button class="chip" onclick="toggleChip(this)">Under 1,000 OMR</button>
+            <button class="chip" onclick="toggleChip(this)">1,000–10,000 OMR</button>
+            <button class="chip" onclick="toggleChip(this)">10,000+ OMR</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="composer">
+      <div class="composer-inner">
+        <label for="c-answer2">Your answer — or tap a suggestion above</label>
+        <div class="composer-row">
+          <textarea id="c-answer2" rows="1" placeholder="Type an exact figure…"></textarea>
+          <button class="btn btn-primary" onclick="go('wrap')">Send</button>
+          <button class="btn btn-quiet">Skip</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span class="eyebrow t-mono">States — a suggestion chip</span>
+      <div class="legend-row">
+        <span class="lbl">Rest</span><button class="chip" aria-pressed="false">Chip</button>
+        <span class="lbl">Hover</span><button class="chip force-hover" aria-pressed="false">Chip</button>
+        <span class="lbl">Active</span><button class="chip force-active" aria-pressed="false">Chip</button>
+        <span class="lbl">Focus-visible</span><button class="chip force-focus" aria-pressed="false">Chip</button>
+        <span class="lbl">Selected</span><button class="chip" aria-pressed="true">Chip</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="thread-shell" data-state-for="loading">
+    <div class="thread-head"><svg class="aura-mark" viewBox="0 0 32 32"><circle class="ring spin" cx="16" cy="16" r="14" style="stroke:var(--steel-400); stroke-opacity:0.85;"/><circle class="halo" cx="16" cy="16" r="9" style="stroke:var(--steel-400); stroke-opacity:0.5;"/><circle cx="16" cy="16" r="5.5" style="fill:var(--steel-500);"/></svg><span class="who">NEXUS</span><span class="meta2">Preparing your questions</span></div>
+    <div class="thread">
+      <div class="bubble-row"><div class="bubble agent">Good set. Preparing a few quick ones scoped to Marketing, Sales and Finance<span class="typing" style="margin-left:4px;"><span class="d"></span><span class="d"></span><span class="d"></span></span></div></div>
+    </div>
+  </div>
+
+  <div class="thread-shell" data-state-for="empty">
+    <div class="thread-head"><svg class="aura-mark" viewBox="0 0 32 32"><circle class="ring" cx="16" cy="16" r="14" style="stroke:var(--gold-400); stroke-opacity:0.6;"/><circle class="halo paused" cx="16" cy="16" r="9" style="stroke:var(--gold-400); stroke-opacity:0.5;"/><circle cx="16" cy="16" r="5.5" style="fill:var(--gold-500);"/></svg><span class="who">NEXUS</span><span class="meta2">All answered</span></div>
+    <div class="thread">
+      <div class="bubble-row"><div class="bubble agent">That's everything for the areas you chose — nothing left to ask right now. Add another area in Settings any time and I'll pick up from there.</div></div>
+      <div class="bubble-row"><button class="btn btn-primary" onclick="go('wrap')">Continue to your workspace</button></div>
+    </div>
+  </div>
+
+  <div class="thread-shell" data-state-for="error">
+    <div class="thread-head"><svg class="aura-mark" viewBox="0 0 32 32"><circle class="ring" cx="16" cy="16" r="14" style="stroke:var(--clay-400); stroke-opacity:0.6;"/><circle class="halo paused" cx="16" cy="16" r="9" style="stroke:var(--clay-400); stroke-opacity:0.5;"/><circle cx="16" cy="16" r="5.5" style="fill:var(--clay-500);"/></svg><span class="who">NEXUS</span><span class="meta2">That didn't save</span></div>
+    <div class="thread">
+      <div class="bubble-row"><div class="bubble agent">What's your average deal size? — Sales</div></div>
+      <div class="error-block">
+        <h3>That answer didn't save</h3>
+        <p>Could not reach the account service. Your other answers are safe — try this one again.</p>
+        <button class="btn btn-danger" style="margin-top:var(--sp-4)" onclick="setState('questions','ready')">Retry</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="state-switch">
+    <span>Preview state:</span>
+    <button aria-pressed="true" onclick="setState('questions','ready',this)">Ready</button>
+    <button onclick="setState('questions','loading',this)">Loading</button>
+    <button onclick="setState('questions','empty',this)">Empty</button>
+    <button onclick="setState('questions','error',this)">Error</button>
+  </div>
+</section>
+
+<!-- ============ SCREEN 4 — SCAN & WRAP-UP ============ -->
+<section class="screen" id="screen-wrap" data-state="ready">
+  <div class="thread-shell" data-state-for="ready">
+    <div class="thread-head"><svg class="aura-mark" viewBox="0 0 32 32"><circle class="ring spin" cx="16" cy="16" r="14" style="stroke:var(--steel-400); stroke-opacity:0.85;"/><circle class="halo" cx="16" cy="16" r="9" style="stroke:var(--steel-400); stroke-opacity:0.5;"/><circle cx="16" cy="16" r="5.5" style="fill:var(--steel-500);"/></svg><span class="who">NEXUS</span><span class="meta2">Reading acme.om</span></div>
+    <div class="thread">
+      <div class="bubble-row"><div class="bubble agent">Thanks — while you were answering, I started reading acme.om. Give me a moment.</div></div>
+      <div class="bubble-row"><div class="bubble agent">✓ Home, About and Services pages read<br/>✓ Industry and positioning noted<br/>··· looking for a pricing or product page</div></div>
+      <div class="bubble-row">
+        <div class="bubble agent">
+          <span class="illustrative t-mono">illustrative</span>
+          <p style="margin-top:var(--sp-2);">"Acme Trading looks like a B2B logistics company based in Muscat, serving retail and FMCG clients. I'll use this as a starting point — correct anything that's wrong."</p>
+        </div>
+      </div>
+    </div>
+    <div class="composer">
+      <div class="composer-inner">
+        <div class="composer-row" style="justify-content:flex-end;">
+          <button class="btn btn-quiet">Something's off</button>
+          <button class="btn btn-primary" onclick="setAura('ready'); go('company')">That's right — enter my workspace</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="thread-shell" data-state-for="loading">
+    <div class="thread-head"><svg class="aura-mark" viewBox="0 0 32 32"><circle class="ring spin" cx="16" cy="16" r="14" style="stroke:var(--gold-400); stroke-opacity:0.85;"/><circle class="halo" cx="16" cy="16" r="9" style="stroke:var(--gold-400); stroke-opacity:0.5;"/><circle cx="16" cy="16" r="5.5" style="fill:var(--gold-500);"/></svg><span class="who">NEXUS</span><span class="meta2">Part 3 of 3 — building your workspace</span></div>
+    <div class="thread">
+      <div class="bubble-row"><div class="bubble agent">Putting it together — your directors, your dashboard, your first audit.<span class="typing" style="margin-left:4px;"><span class="d"></span><span class="d"></span><span class="d"></span></span></div></div>
+    </div>
+  </div>
+
+  <div class="thread-shell" data-state-for="empty">
+    <div class="thread-head"><svg class="aura-mark" viewBox="0 0 32 32"><circle class="ring" cx="16" cy="16" r="14" style="stroke:var(--slate-400); stroke-opacity:0.4;"/><circle class="halo paused" cx="16" cy="16" r="9" style="stroke:var(--slate-400); stroke-opacity:0.5;"/><circle cx="16" cy="16" r="5.5" style="fill:var(--slate-400); fill-opacity:0.75;"/></svg><span class="who">NEXUS</span><span class="meta2">No language model configured</span></div>
+    <div class="thread">
+      <div class="bubble-row"><div class="bubble agent">No site scan this time — that's a fully supported way to begin. I'll build your workspace from the Areas of Interest and questions you've just answered.</div></div>
+      <div class="bubble-row"><button class="btn btn-primary" onclick="setState('wrap','loading')">Continue</button></div>
+    </div>
+  </div>
+
+  <div class="thread-shell" data-state-for="error">
+    <div class="thread-head"><svg class="aura-mark" viewBox="0 0 32 32"><circle class="ring" cx="16" cy="16" r="14" style="stroke:var(--clay-400); stroke-opacity:0.6;"/><circle class="halo paused" cx="16" cy="16" r="9" style="stroke:var(--clay-400); stroke-opacity:0.5;"/><circle cx="16" cy="16" r="5.5" style="fill:var(--clay-500);"/></svg><span class="who">NEXUS</span><span class="meta2">Scan failed</span></div>
+    <div class="thread">
+      <div class="bubble-row"><div class="bubble agent">I couldn't read acme.om — the site didn't respond. That's fine, nothing about your workspace depends on it.</div></div>
+      <div class="bubble-row"><button class="btn btn-danger" onclick="setState('wrap','empty')">Continue without scanning</button></div>
+    </div>
+  </div>
+
+  <div class="state-switch">
+    <span>Preview state:</span>
+    <button aria-pressed="true" onclick="setState('wrap','ready',this)">Scan + brief</button>
+    <button onclick="setState('wrap','loading',this)">Assembling</button>
+    <button onclick="setState('wrap','empty',this)">No model configured</button>
+    <button onclick="setState('wrap','error',this)">Scan failed</button>
+  </div>
+</section>
+
+<script>
+  var AURA = {
+    idle: 'rgba(118,153,174,0.13)',
+    thinking: 'rgba(95,148,184,0.20)',
+    ready: 'rgba(239,191,106,0.20)'
+  };
+  function setAura(state){ document.getElementById('aura').style.setProperty('--aura-wash', AURA[state] || AURA.idle); }
+
+  function go(id){
+    document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('is-active'); });
+    document.getElementById('screen-'+id).classList.add('is-active');
+    document.querySelectorAll('[data-goto]').forEach(function(b){
+      if (b.dataset.goto===id) b.setAttribute('aria-current','step'); else b.removeAttribute('aria-current');
+    });
+    window.scrollTo({top:0, behavior:'instant'});
+  }
+  document.querySelectorAll('[data-goto]').forEach(function(b){ b.addEventListener('click', function(){ go(b.dataset.goto); }); });
+
+  function setState(screen, state, btn){
+    var el = document.getElementById('screen-'+screen);
+    el.dataset.state = state;
+    if (btn) {
+      Array.prototype.forEach.call(btn.parentElement.querySelectorAll('button'), function(b){ b.setAttribute('aria-pressed','false'); });
+      btn.setAttribute('aria-pressed','true');
+    }
+  }
+
+  function toggleChip(btn){
+    var pressed = btn.getAttribute('aria-pressed') === 'true';
+    btn.setAttribute('aria-pressed', String(!pressed));
+  }
+
+  function onPillChange(input){
+    var pill = input.closest('.area-pill');
+    pill.classList.toggle('is-checked', input.checked);
+    var checked = document.querySelectorAll('#area-grid input:checked').length;
+    document.getElementById('c-count').textContent = checked;
+  }
+
+  setAura('idle');
+</script>
+</body>
+</html>
