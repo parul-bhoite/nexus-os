@@ -24,5 +24,14 @@ export async function PUT(request: Request) {
     method: 'PUT',
     body: (await readJson(request)) ?? {},
     unavailable: 'Cannot reach the account service right now.',
+    // Not a model route, but not a single-statement read either: replacing the
+    // department set is a delete-and-reinsert that re-derives what each director
+    // can see, and against a managed database that can run past the 30s default.
+    // When it did, the abort left the write holding a lock, so the retry timed
+    // out too — a founder stuck mid-onboarding on a 504 (ADR 0069 verification).
+    // 90s is comfortably above the slow-day write and still well below a hang.
+    // An explicit literal, not MODEL_TIMEOUT_MS: no model is called here, and
+    // `auth-proxy.test.ts` reserves that constant for routes that invoke a skill.
+    timeoutMs: 90_000,
   })
 }
