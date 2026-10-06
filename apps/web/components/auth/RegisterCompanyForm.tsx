@@ -16,6 +16,14 @@ import {
 } from '@/lib/auth-client'
 import { useSlowLabel } from '@/lib/slow'
 import { useAbortable } from '@/lib/hooks'
+import { looksLikeWebsite } from '@/lib/website-url'
+
+// Re-exported for backward compatibility: this used to be defined here, and
+// `components/onboarding/stages/CompanyStage.tsx` (the combined flow's company
+// stage, ADR 0067) now shares the same definition from `lib/website-url.ts`
+// rather than duplicating it. Kept as a re-export rather than updating every
+// import site, since this file's own test still imports it from here.
+export { looksLikeWebsite } from '@/lib/website-url'
 
 type State =
   | { status: 'idle' }
@@ -36,28 +44,6 @@ type State =
  * holds and the input the research run is queued against, so a company without
  * one is a company the product cannot begin to learn.
  */
-/** Whether the API will get something URL-shaped out of what was typed.
- *
- * **Deliberately permissive**, and not a second copy of the server's rule. The
- * API is authoritative: it supplies the implied `https://` and then parses.
- * This exists only so the ordinary typo is answered with the sentence beside
- * the button, rather than with a 422 whose message reached the screen verbatim
- * as pydantic wrote it — "Input should be a valid URL, relative URL without a
- * base", which tells a founder nothing about what to type.
- *
- * A false accept here costs nothing: the server still refuses it. A false
- * reject would block a legitimate address the server would have taken, so
- * anything with a dot and no whitespace passes — IDN and unusual TLDs
- * included.
- */
-export function looksLikeWebsite(value: string): boolean {
-  const host = value
-    .trim()
-    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
-    .split(/[/?#]/)[0]
-  return host.includes('.') && !host.startsWith('.') && !host.endsWith('.') && !/\s/.test(host)
-}
-
 export function RegisterCompanyForm() {
   const router = useRouter()
   const [name, setName] = useState('')
