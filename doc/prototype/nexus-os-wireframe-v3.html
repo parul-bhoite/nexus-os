@@ -1,0 +1,1969 @@
+<title>NEXUS OS Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+/* ============================================================
+   NEXUS OS — clickable wireframe prototype
+   Enhanced "paper-cut" design system
+   ============================================================ */
+:root{
+  --paper:#FBFAF8; --surface:#FFFFFF; --sunken:#F5F2EC;
+  --ink:#0A2350; --ink-soft:#17356B; --body:#2F4C7B; --muted:#5C769E; --faint:#8EA2BE;
+  --hair:#E7E1D8; --hair-strong:#D8D0C4;
+  --steel:#37729C; --steel-soft:#E4EDF4; --steel-ink:#224862;
+  --gold:#C79235; --gold-soft:#F6EBD3; --gold-ink:#8A6315;
+  --clay:#A55D35; --clay-soft:#F3E3D8; --clay-ink:#7A4225;
+  --forest:#3F7A52; --forest-soft:#E0EDE2; --forest-ink:#2B5639;
+  --plum:#4B2E63; --plum-soft:#ECE4F2; --plum-ink:#3A2150;
+  --ok:var(--forest); --warn:var(--gold-ink); --crit:var(--clay);
+  --display:"Fraunces",Georgia,"Times New Roman",serif;
+  --sans:"Inter",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --r-ctrl:10px; --r-data:14px; --r-card:20px; --r-panel:26px;
+  --sh-1:0 1px 2px rgba(10,35,80,.06),0 1px 1px rgba(10,35,80,.04);
+  --sh-2:0 4px 14px rgba(10,35,80,.08),0 2px 5px rgba(10,35,80,.05);
+  --sh-3:0 18px 50px rgba(10,35,80,.16),0 6px 16px rgba(10,35,80,.08);
+  --ring:0 0 0 3px rgba(55,114,156,.35);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#071530; --surface:#0C2049; --sunken:#0A1B3D;
+    --ink:#EAF0FA; --ink-soft:#D4E0F2; --body:#AFC2E0; --muted:#8299BE; --faint:#5E7398;
+    --hair:#1B3059; --hair-strong:#27417A;
+    --steel:#6FA6CC; --steel-soft:#15294B; --steel-ink:#AFD0E6;
+    --gold:#E0B45D; --gold-soft:#2A2411; --gold-ink:#E8C988;
+    --clay:#CE8B63; --clay-soft:#2C1C12; --clay-ink:#E0A985;
+    --forest:#6FB184; --forest-soft:#12241A; --forest-ink:#9ED3AD;
+    --plum:#A585C2; --plum-soft:#201530; --plum-ink:#C6AEDC;
+    --sh-1:0 1px 2px rgba(0,0,0,.4); --sh-2:0 4px 14px rgba(0,0,0,.45);
+    --sh-3:0 18px 50px rgba(0,0,0,.6); --ring:0 0 0 3px rgba(111,166,204,.4);
+  }
+}
+[data-theme="dark"]{
+  --paper:#071530; --surface:#0C2049; --sunken:#0A1B3D;
+  --ink:#EAF0FA; --ink-soft:#D4E0F2; --body:#AFC2E0; --muted:#8299BE; --faint:#5E7398;
+  --hair:#1B3059; --hair-strong:#27417A;
+  --steel:#6FA6CC; --steel-soft:#15294B; --steel-ink:#AFD0E6;
+  --gold:#E0B45D; --gold-soft:#2A2411; --gold-ink:#E8C988;
+  --clay:#CE8B63; --clay-soft:#2C1C12; --clay-ink:#E0A985;
+  --forest:#6FB184; --forest-soft:#12241A; --forest-ink:#9ED3AD;
+  --plum:#A585C2; --plum-soft:#201530; --plum-ink:#C6AEDC;
+  --sh-1:0 1px 2px rgba(0,0,0,.4); --sh-2:0 4px 14px rgba(0,0,0,.45);
+  --sh-3:0 18px 50px rgba(0,0,0,.6); --ring:0 0 0 3px rgba(111,166,204,.4);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--paper);color:var(--body);font-family:var(--sans);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{font-family:var(--display);color:var(--ink);margin:0;line-height:1.12;text-wrap:balance;font-weight:600}
+p{margin:0}
+a{color:var(--steel-ink);text-decoration:none}
+button{font-family:inherit}
+:focus-visible{outline:none;box-shadow:var(--ring);border-radius:8px}
+.mono{font-family:var(--mono)}
+.tnum{font-variant-numeric:tabular-nums}
+
+/* ---------- prototype chrome ---------- */
+#chrome{position:fixed;inset:0 0 auto 0;height:52px;z-index:900;display:flex;align-items:center;gap:14px;
+  padding:0 16px;background:#081A3A;color:#EAF0FA;box-shadow:var(--sh-2)}
+#chrome .brand{display:flex;align-items:center;gap:9px;font-family:var(--display);font-weight:600;font-size:17px;color:#fff}
+#chrome .brand i{font-style:normal;color:var(--gold)}
+#chrome .tag{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.14em;padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.1);color:#CBD8EE}
+#chrome .spacer{flex:1}
+#chrome .seg{display:flex;background:rgba(255,255,255,.08);border-radius:999px;padding:3px}
+#chrome .seg button{border:0;background:transparent;color:#B9C8E4;font-size:12.5px;font-weight:600;padding:6px 13px;border-radius:999px;cursor:pointer;white-space:nowrap}
+#chrome .seg button.on{background:var(--gold);color:#2A1C00}
+#chrome .ico{border:0;background:rgba(255,255,255,.08);color:#CBD8EE;width:34px;height:34px;border-radius:9px;cursor:pointer;font-size:15px;display:grid;place-items:center}
+#chrome .ico:hover{background:rgba(255,255,255,.16)}
+#maptoggle{display:flex;align-items:center;gap:7px;border:0;background:var(--gold);color:#2A1C00;font-weight:700;font-size:12.5px;padding:8px 14px;border-radius:999px;cursor:pointer}
+.chrome-sm{display:none}
+
+/* ---------- device stage ---------- */
+#stage{position:fixed;inset:52px 0 0 0;overflow:auto;background:
+   radial-gradient(1200px 600px at 80% -10%, color-mix(in srgb,var(--steel) 12%,transparent), transparent 60%),
+   var(--sunken);display:flex;justify-content:center;padding:26px 20px 60px}
+#stage.flush{padding:0}
+#device{width:100%;max-width:1400px;background:var(--paper);container-type:inline-size;min-height:calc(100vh - 112px)}
+#stage:not(.flush) #device{border:1px solid var(--hair-strong);border-radius:16px;overflow:hidden;box-shadow:var(--sh-3)}
+#device.d-tablet{max-width:834px}
+#device.d-mobile{max-width:402px}
+#device.d-desktop{max-width:1400px}
+
+/* ---------- prototype map ---------- */
+#map{position:fixed;inset:52px auto 0 0;width:316px;z-index:850;background:var(--surface);border-right:1px solid var(--hair);
+  box-shadow:var(--sh-3);transform:translateX(-102%);transition:transform .32s cubic-bezier(.16,1,.3,1);overflow:auto;padding:18px 16px 40px}
+#map.open{transform:none}
+#map h4{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:20px 0 8px;font-weight:600}
+#map h4:first-child{margin-top:4px}
+#map a{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:9px;color:var(--body);font-size:13.5px;cursor:pointer;line-height:1.3}
+#map a:hover{background:var(--sunken);color:var(--ink)}
+#map a.on{background:var(--ink);color:#fff}
+#map a .dot{width:6px;height:6px;border-radius:50%;background:var(--faint);flex:none}
+#map a.on .dot{background:var(--gold)}
+#mapscrim{position:fixed;inset:52px 0 0 0;background:rgba(10,20,40,.3);z-index:840;opacity:0;pointer-events:none;transition:opacity .3s}
+#mapscrim.on{opacity:1;pointer-events:auto}
+
+/* ============================================================ SHARED ============================================================ */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:600;font-size:14px;
+  padding:0 18px;height:44px;border-radius:999px;border:1px solid transparent;cursor:pointer;white-space:nowrap;transition:transform .08s,box-shadow .18s,background .18s}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--ink);color:#fff;box-shadow:var(--sh-1)}
+.btn.primary:hover{box-shadow:var(--sh-2)}
+.btn.secondary{background:var(--surface);color:var(--ink);border-color:var(--hair-strong)}
+.btn.secondary:hover{border-color:var(--muted)}
+.btn.gold{background:var(--gold);color:#2A1C00}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn.ghost:hover{background:var(--sunken)}
+.btn.danger{background:transparent;color:var(--clay);border-color:var(--clay)}
+.btn.sm{height:36px;font-size:13px;padding:0 14px}
+.btn.lg{height:54px;font-size:16px;padding:0 26px}
+.btn.block{width:100%}
+.btn.icon{width:40px;height:40px;padding:0}
+
+.chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10.5px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.08em;padding:4px 9px;border-radius:999px;background:var(--sunken);color:var(--muted);border:1px solid var(--hair)}
+.chip .d{width:6px;height:6px;border-radius:50%;background:currentColor}
+.chip.steel{background:var(--steel-soft);color:var(--steel-ink);border-color:transparent}
+.chip.gold{background:var(--gold-soft);color:var(--gold-ink);border-color:transparent}
+.chip.clay{background:var(--clay-soft);color:var(--clay-ink);border-color:transparent}
+.chip.forest{background:var(--forest-soft);color:var(--forest-ink);border-color:transparent}
+.chip.plum{background:var(--plum-soft);color:var(--plum-ink);border-color:transparent}
+.chip.ink{background:var(--ink);color:#fff;border-color:transparent}
+
+.eyebrow{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--steel)}
+.card{background:var(--surface);border:1px solid var(--hair);border-radius:var(--r-data);box-shadow:var(--sh-1)}
+.pad{padding:20px}
+.muted{color:var(--muted)}
+.hair{height:1px;background:var(--hair);border:0;margin:0}
+.fig{font-family:var(--display);font-variant-numeric:tabular-nums;font-weight:600;color:var(--ink);letter-spacing:-.01em}
+
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
+.field label{font-size:13px;font-weight:600;color:var(--ink)}
+.field .hint{font-size:12.5px;color:var(--muted)}
+.control{width:100%;height:46px;border:1px solid var(--hair-strong);border-radius:var(--r-ctrl);background:var(--surface);
+  color:var(--ink);padding:0 14px;font-size:15px;font-family:inherit}
+.control:focus{box-shadow:var(--ring);border-color:var(--steel)}
+textarea.control{height:auto;padding:12px 14px;min-height:84px;resize:vertical;line-height:1.5}
+select.control{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' stroke='%235C769E' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center}
+
+.sd{width:8px;height:8px;border-radius:50%;display:inline-block}
+.sd.live{background:var(--forest)} .sd.steel{background:var(--steel)}
+.sd.gold{background:var(--gold)} .sd.clay{background:var(--clay)} .sd.off{background:var(--faint)}
+
+table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+table.tbl th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--muted);font-weight:600;padding:10px 12px;border-bottom:1px solid var(--hair)}
+table.tbl td{padding:12px;border-bottom:1px solid var(--hair);color:var(--body);vertical-align:middle}
+table.tbl tr:last-child td{border-bottom:0}
+table.tbl tbody tr:hover td{background:var(--sunken)}
+.tblwrap{overflow-x:auto}
+
+.ava{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:12.5px;font-weight:700;color:#fff;background:var(--steel);flex:none}
+.ava.c1{background:#37729C}.ava.c2{background:#A55D35}.ava.c3{background:#3F7A52}
+.ava.c4{background:#4B2E63}.ava.c5{background:#C79235;color:#2A1C00}.ava.c6{background:#0A2350}
+
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);z-index:950;
+  background:var(--ink);color:#fff;padding:12px 18px;border-radius:12px;box-shadow:var(--sh-3);font-size:13.5px;font-weight:500;
+  opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;display:flex;align-items:center;gap:10px}
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast .tdot{width:8px;height:8px;border-radius:50%;background:var(--forest)}
+
+#modal{position:fixed;inset:0;z-index:940;display:none;align-items:center;justify-content:center;padding:20px}
+#modal.on{display:flex}
+#modal .scrim{position:absolute;inset:0;background:rgba(8,16,34,.5)}
+#modal .box{position:relative;background:var(--surface);border-radius:var(--r-card);box-shadow:var(--sh-3);
+  max-width:540px;width:100%;max-height:86vh;overflow:auto;border:1px solid var(--hair)}
+
+.sample{position:fixed;right:-34px;top:76px;z-index:860;background:var(--clay);color:#fff;font-family:var(--mono);
+  font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;padding:5px 40px;transform:rotate(45deg);box-shadow:var(--sh-2);pointer-events:none}
+
+@media (prefers-reduced-motion:no-preference){
+  .rise{animation:rise .5s cubic-bezier(.16,1,.3,1) both}
+  @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .typing span{animation:blink 1.2s infinite both}
+  .typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,60%,100%{opacity:.25}30%{opacity:1}}
+}
+</style>
+<style>
+/* ============================================================ APP SHELL ============================================================ */
+.app{display:grid;grid-template-columns:240px 1fr;min-height:calc(100vh - 112px)}
+.app.full{min-height:100vh}
+.rail{background:var(--surface);border-right:1px solid var(--hair);padding:14px 12px;display:flex;flex-direction:column;gap:3px;position:relative}
+.rail .logo{display:flex;align-items:center;gap:9px;font-family:var(--display);font-weight:600;font-size:19px;color:var(--ink);padding:8px 10px 14px}
+.rail .logo i{font-style:normal;color:var(--gold)}
+.rail .grp{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);font-weight:600;padding:14px 10px 5px}
+.navi{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;color:var(--body);font-size:14px;font-weight:500;cursor:pointer;min-height:40px}
+.navi:hover{background:var(--sunken);color:var(--ink)}
+.navi.on{background:var(--ink);color:#fff}
+.navi .ni{width:18px;height:18px;flex:none;opacity:.9}
+.navi .badge{margin-left:auto;background:var(--gold);color:#2A1C00;font-family:var(--mono);font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px}
+.navi.on .badge{background:var(--gold)}
+.topbar{height:60px;background:var(--surface);border-bottom:1px solid var(--hair);display:flex;align-items:center;gap:12px;padding:0 22px;position:sticky;top:0;z-index:30}
+.topbar .wsname{display:flex;align-items:center;gap:9px;font-weight:600;color:var(--ink);font-size:14.5px}
+.topbar .search{flex:1;max-width:440px;height:38px;border:1px solid var(--hair-strong);border-radius:999px;background:var(--sunken);display:flex;align-items:center;gap:8px;padding:0 14px;color:var(--muted);font-size:13.5px;cursor:text}
+.topbar .sp{flex:1}
+.main{padding:26px 30px 60px;max-width:1120px}
+.mobnav{display:none}
+.hamb{display:none}
+
+.pagehead{display:flex;align-items:flex-start;gap:16px;margin-bottom:22px;flex-wrap:wrap}
+.pagehead h1{font-size:30px}
+.pagehead .sub{color:var(--muted);font-size:14.5px;margin-top:4px}
+.pagehead .actions{margin-left:auto;display:flex;gap:10px;align-items:center}
+
+/* grids */
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(2,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+.row{display:flex;gap:16px}
+.col{display:flex;flex-direction:column;gap:16px}
+
+/* ---- block/tile (the 8 states) ---- */
+.tile{background:var(--surface);border:1px solid var(--hair);border-radius:var(--r-data);padding:18px;display:flex;flex-direction:column;gap:10px;box-shadow:var(--sh-1);position:relative;min-height:128px}
+.tile .thead{display:flex;align-items:flex-start;gap:8px}
+.tile .tt{font-size:13.5px;font-weight:600;color:var(--ink);line-height:1.25}
+.tile .st{margin-left:auto;flex:none}
+.tile .val{font-family:var(--display);font-size:34px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.02em;line-height:1}
+.tile .delta{font-size:12.5px;font-weight:600}
+.tile .delta.up{color:var(--forest-ink)}.tile .delta.dn{color:var(--clay)}
+.tile .meta{font-size:12px;color:var(--muted);margin-top:auto}
+.tile .srcs{display:flex;gap:6px;flex-wrap:wrap}
+.tile.locked{background:linear-gradient(180deg,var(--sunken),var(--surface));border-style:dashed}
+.tile.locked .lockmsg{font-size:13px;color:var(--body);line-height:1.4}
+.tile.planned{opacity:.7}
+.why{font-family:var(--mono);font-size:11px;color:var(--steel);cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-weight:600}
+.why:hover{text-decoration:underline}
+
+/* section rail */
+.srail{display:flex;gap:6px;border-bottom:1px solid var(--hair);margin-bottom:20px;overflow-x:auto}
+.srail button{border:0;background:transparent;color:var(--muted);font-size:13.5px;font-weight:600;padding:10px 14px;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+.srail button.on{color:var(--ink);border-bottom-color:var(--gold)}
+
+/* kanban board */
+.board{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.lane{background:var(--sunken);border-radius:var(--r-data);padding:12px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.lane .lh{display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:700;color:var(--ink)}
+.lane .lh .cnt{font-family:var(--mono);color:var(--muted);font-weight:600}
+.deal{background:var(--surface);border:1px solid var(--hair);border-radius:11px;padding:11px;box-shadow:var(--sh-1);cursor:grab}
+.deal .dn{font-size:13px;font-weight:600;color:var(--ink)}
+.deal .dv{font-family:var(--display);font-size:15px;color:var(--ink);font-variant-numeric:tabular-nums;margin-top:3px}
+.deal .dm{font-size:11.5px;color:var(--muted);margin-top:6px;display:flex;align-items:center;gap:6px}
+
+/* morning brief */
+.brief{display:flex;flex-direction:column}
+.briefitem{display:flex;gap:14px;padding:15px 0;border-bottom:1px solid var(--hair)}
+.briefitem:last-child{border-bottom:0}
+.briefitem .bk{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;flex:none;background:var(--sunken)}
+.briefitem .bt{font-size:14px;color:var(--ink);font-weight:600}
+.briefitem .bd{font-size:13px;color:var(--muted);margin-top:2px}
+.briefitem .bsrc{margin-left:auto;flex:none;align-self:center}
+
+/* coverage bands */
+.cband{display:flex;flex-direction:column;gap:8px}
+.cbar{height:12px;border-radius:999px;background:var(--sunken);overflow:hidden;display:flex}
+.cbar i{display:block;height:100%}
+.cbar i.live{background:var(--forest)} .cbar i.lock{background:var(--gold)} .cbar i.plan{background:var(--hair-strong)}
+
+/* assistant */
+.asst{position:absolute;right:22px;bottom:22px;width:360px;max-width:calc(100% - 44px);background:var(--surface);border:1px solid var(--hair);border-radius:var(--r-card);box-shadow:var(--sh-3);overflow:hidden;z-index:40}
+.asst .ah{display:flex;align-items:center;gap:9px;padding:13px 16px;border-bottom:1px solid var(--hair);background:var(--ink);color:#fff}
+.asst .ab{padding:14px 16px;max-height:260px;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.asst .af{padding:12px 14px;border-top:1px solid var(--hair);display:flex;gap:8px}
+
+/* ---- facts / provenance ---- */
+.fact{padding:14px 0;border-bottom:1px solid var(--hair)}
+.fact:last-child{border-bottom:0}
+.fact .fl{font-size:12px;color:var(--muted);font-weight:600}
+.fact .fv{font-size:14.5px;color:var(--ink);margin:3px 0 6px;font-weight:500}
+.prov{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10.5px;color:var(--steel-ink);background:var(--steel-soft);padding:2px 8px;border-radius:999px}
+.prov.you{color:var(--clay-ink);background:var(--clay-soft)}
+.prov.inf{color:var(--gold-ink);background:var(--gold-soft)}
+
+/* empty / error states */
+.state{text-align:center;padding:48px 24px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.state .glyph{width:56px;height:56px;border-radius:16px;background:var(--sunken);display:grid;place-items:center;font-size:24px}
+.state h3{font-size:19px}
+.state p{color:var(--muted);max-width:360px}
+
+/* ============================================================ MARKETING ============================================================ */
+.mk{background:var(--paper)}
+.mknav{height:66px;display:flex;align-items:center;gap:18px;padding:0 clamp(18px,5cqi,54px);border-bottom:1px solid var(--hair);position:sticky;top:0;background:color-mix(in srgb,var(--paper) 86%,transparent);backdrop-filter:blur(8px);z-index:30}
+.mknav .logo{font-family:var(--display);font-weight:600;font-size:21px;color:var(--ink)}
+.mknav .logo i{font-style:normal;color:var(--gold)}
+.mknav .lk{color:var(--body);font-size:14px;font-weight:500;cursor:pointer}
+.mknav .lk:hover{color:var(--ink)}
+.mknav .sp{flex:1}
+.mkwrap{padding:0 clamp(18px,5cqi,54px)}
+.hero{padding:clamp(48px,9cqi,100px) 0 clamp(40px,6cqi,70px);display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center}
+.hero h1{font-size:clamp(38px,6.2cqi,66px);letter-spacing:-.02em;font-weight:600}
+.hero .lede{font-size:clamp(16px,1.8cqi,20px);color:var(--body);margin:22px 0 28px;max-width:42ch;line-height:1.5}
+.hero .cta{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.heroart{position:relative;aspect-ratio:1/.92;border-radius:var(--r-panel);overflow:hidden;background:
+  linear-gradient(160deg,#0A2350,#17356B 60%,#37729C);box-shadow:var(--sh-3);padding:22px;display:flex;flex-direction:column;gap:12px;justify-content:center}
+.heroart .mock{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:14px;color:#EAF0FA;backdrop-filter:blur(4px)}
+.heroart .mock .mt{font-size:12px;color:#B9C8E4;font-weight:600;display:flex;align-items:center;gap:7px}
+.heroart .mock .mv{font-family:var(--display);font-size:26px;color:#fff;margin-top:4px;font-variant-numeric:tabular-nums}
+.heroart .ill{position:absolute;top:12px;right:12px;font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#CBD8EE;background:rgba(255,255,255,.12);padding:3px 8px;border-radius:999px}
+.sect{padding:clamp(44px,7cqi,82px) 0;border-top:1px solid var(--hair)}
+.sect h2{font-size:clamp(26px,4cqi,40px);letter-spacing:-.01em;max-width:18ch}
+.sect .sl{color:var(--muted);font-size:16px;margin-top:12px;max-width:52ch}
+.pillgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:34px}
+.pill{background:var(--surface);border:1px solid var(--hair);border-radius:var(--r-card);padding:22px;box-shadow:var(--sh-1)}
+.pill .pn{font-family:var(--mono);font-size:11px;color:var(--steel);font-weight:600}
+.pill h3{font-size:18px;margin:10px 0 7px}
+.pill p{font-size:13.5px;color:var(--muted)}
+.loop{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:34px}
+.loopstep{text-align:center;padding:18px 12px;border-radius:var(--r-data);background:var(--surface);border:1px solid var(--hair)}
+.loopstep .ls{font-family:var(--display);font-size:30px;color:var(--gold)}
+.loopstep h4{font-size:15px;margin:6px 0 4px}
+.loopstep p{font-size:12px;color:var(--muted)}
+.priceg{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:34px}
+.pcard{background:var(--surface);border:1px solid var(--hair);border-radius:var(--r-card);padding:26px;box-shadow:var(--sh-1);display:flex;flex-direction:column;gap:14px}
+.pcard.feat{border-color:var(--gold);box-shadow:var(--sh-2);position:relative}
+.pcard.feat::before{content:"Most chosen";position:absolute;top:-11px;left:26px;background:var(--gold);color:#2A1C00;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 10px;border-radius:999px}
+.pcard .amt{font-family:var(--display);font-size:38px;color:var(--ink);font-weight:600}
+.pcard ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:9px}
+.pcard li{font-size:13.5px;color:var(--body);display:flex;gap:9px;align-items:flex-start}
+.pcard li::before{content:"";width:16px;height:16px;border-radius:50%;background:var(--forest-soft);flex:none;margin-top:2px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2l2.2 2.2 4.8-5' stroke='%233F7A52' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:center}
+.mkfoot{border-top:1px solid var(--hair);padding:40px clamp(18px,5cqi,54px);color:var(--muted);font-size:13px;display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+
+/* auth */
+.auth{display:grid;grid-template-columns:1fr 1fr;min-height:calc(100vh - 112px)}
+.authform{display:flex;align-items:center;justify-content:center;padding:40px 28px}
+.authform .inner{width:100%;max-width:380px}
+.authart{background:linear-gradient(165deg,#0A2350,#17356B 55%,#A55D35);position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:40px}
+.authart .q{color:#EAF0FA;font-family:var(--display);font-size:26px;line-height:1.25;max-width:22ch;position:relative;z-index:2}
+.authart .blob{position:absolute;border-radius:50%;filter:blur(2px);opacity:.5}
+
+/* ============================================================ ONBOARDING CHAT ============================================================ */
+.ob{display:grid;grid-template-columns:1fr 380px;min-height:calc(100vh - 112px);background:
+  radial-gradient(900px 500px at 15% -5%, var(--steel-soft), transparent 55%),var(--paper)}
+.obmain{display:flex;flex-direction:column;min-height:0;position:relative}
+.obtop{height:62px;display:flex;align-items:center;gap:12px;padding:0 24px;border-bottom:1px solid var(--hair);background:color-mix(in srgb,var(--paper) 80%,transparent);backdrop-filter:blur(6px)}
+.obtop .logo{font-family:var(--display);font-weight:600;font-size:18px;color:var(--ink)}
+.obtop .logo i{color:var(--gold);font-style:normal}
+.obtop .part{margin-left:auto;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.obprog{height:3px;background:var(--hair)}
+.obprog i{display:block;height:100%;background:var(--gold);transition:width .5s cubic-bezier(.16,1,.3,1)}
+.chatscroll{flex:1;overflow:auto;padding:28px 24px 10px;display:flex;flex-direction:column;gap:18px}
+.chatwrap{max-width:620px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.msg{display:flex;gap:12px;max-width:100%}
+.msg .mava{width:34px;height:34px;border-radius:10px;flex:none;display:grid;place-items:center;background:var(--ink);color:#fff;font-family:var(--display);font-weight:600;font-size:15px}
+.msg .mava i{font-style:normal;color:var(--gold)}
+.bubble{background:var(--surface);border:1px solid var(--hair);border-radius:4px 16px 16px 16px;padding:13px 16px;font-size:14.5px;color:var(--ink);box-shadow:var(--sh-1);line-height:1.5;max-width:90%}
+.msg.me{flex-direction:row-reverse}
+.msg.me .bubble{background:var(--ink);color:#fff;border-radius:16px 4px 16px 16px;border-color:transparent}
+.msg.me .mava{background:var(--steel)}
+.bubble .read{color:var(--steel-ink)}
+.bubble small.tagp{display:inline-flex;gap:5px;align-items:center;font-family:var(--mono);font-size:10px;margin-top:8px;color:var(--muted)}
+.quick{display:flex;flex-wrap:wrap;gap:8px;max-width:620px;margin:0 auto;width:100%;padding-left:46px}
+.qb{border:1px solid var(--steel);color:var(--steel-ink);background:var(--surface);font-size:13.5px;font-weight:600;
+  padding:8px 15px;border-radius:999px;cursor:pointer;transition:background .15s}
+.qb:hover{background:var(--steel-soft)}
+.qb.sel{background:var(--ink);color:#fff;border-color:var(--ink)}
+.qb.skip{border-style:dashed;color:var(--muted);border-color:var(--hair-strong)}
+.obinput{border-top:1px solid var(--hair);padding:14px 24px;background:var(--surface)}
+.obinput .bar{max-width:620px;margin:0 auto;display:flex;gap:10px;align-items:flex-end}
+.obinput textarea{flex:1;border:1px solid var(--hair-strong);border-radius:16px;padding:11px 14px;font-family:inherit;font-size:14.5px;
+  resize:none;min-height:46px;max-height:120px;color:var(--ink);background:var(--paper)}
+.obinput textarea:focus{box-shadow:var(--ring);border-color:var(--steel)}
+.obinput .send{width:46px;height:46px;border-radius:14px;border:0;background:var(--ink);color:#fff;cursor:pointer;display:grid;place-items:center;flex:none}
+.obinput .mic{width:46px;height:46px;border-radius:14px;border:1px solid var(--hair-strong);background:var(--surface);color:var(--muted);cursor:pointer;flex:none}
+
+/* brain side panel */
+.brainp{border-left:1px solid var(--hair);background:var(--surface);padding:22px 20px;overflow:auto}
+.brainp h3{font-size:16px;display:flex;align-items:center;gap:8px}
+.brainp .bhint{font-size:12.5px;color:var(--muted);margin:6px 0 16px}
+.bgroup{margin-bottom:18px}
+.bgroup .bgt{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);font-weight:600;margin-bottom:8px}
+.bitem{background:var(--paper);border:1px solid var(--hair);border-radius:11px;padding:10px 12px;margin-bottom:8px;animation:rise .4s both}
+.bitem .bl{font-size:11px;color:var(--muted);font-weight:600}
+.bitem .bv{font-size:13px;color:var(--ink);margin:2px 0 5px;font-weight:500}
+.bitem.empty{border-style:dashed;color:var(--faint);text-align:center;font-size:12.5px;padding:16px}
+
+/* review gate */
+.theme{border:1px solid var(--hair);border-radius:var(--r-data);margin-bottom:14px;overflow:hidden;background:var(--surface)}
+.theme .th{display:flex;align-items:center;gap:12px;padding:15px 18px;cursor:pointer}
+.theme .th .ti{width:30px;height:30px;border-radius:9px;background:var(--steel-soft);display:grid;place-items:center;flex:none}
+.theme .th .cnt{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.theme .body{padding:0 18px 16px;display:none}
+.theme.open .body{display:block}
+
+/* ============================================================ PLATFORM ADMIN accent ============================================================ */
+.app.platform .rail .logo i{color:var(--plum)}
+.app.platform .navi.on{background:var(--plum)}
+.app.platform .navi .badge{background:var(--plum);color:#fff}
+.app.platform .topbar{background:linear-gradient(90deg,var(--plum-soft),var(--surface))}
+.opstripe{height:3px;background:linear-gradient(90deg,var(--plum),var(--gold))}
+.kpi{background:var(--surface);border:1px solid var(--hair);border-radius:var(--r-data);padding:18px;box-shadow:var(--sh-1)}
+.kpi .kl{font-size:12.5px;color:var(--muted);font-weight:600}
+.kpi .kv{font-family:var(--display);font-size:32px;color:var(--ink);font-variant-numeric:tabular-nums;margin:6px 0 2px;letter-spacing:-.02em}
+.kpi .kd{font-size:12px;font-weight:600}
+.kpi .kd.up{color:var(--forest-ink)}.kpi .kd.dn{color:var(--clay)}
+
+/* funnel */
+.funnel{display:flex;flex-direction:column;gap:9px}
+.frow{display:grid;grid-template-columns:150px 1fr 90px;gap:12px;align-items:center;font-size:13px}
+.frow .fbar{height:30px;border-radius:8px;background:var(--steel);display:flex;align-items:center;padding:0 10px;color:#fff;font-weight:600;font-size:12px;font-family:var(--mono)}
+
+/* bars chart */
+.bars{display:flex;align-items:flex-end;gap:10px;height:170px;padding-top:10px}
+.bars .bcol{flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;height:100%;justify-content:flex-end}
+.bars .bcol i{width:100%;max-width:38px;background:var(--steel);border-radius:6px 6px 0 0;display:block}
+.bars .bcol.hl i{background:var(--gold)}
+.bars .bcol span{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+
+/* ============================================================ RESPONSIVE (container queries on #device) ============================================================ */
+@container (max-width:1000px){
+  .hero{grid-template-columns:1fr;gap:28px}
+  .pillgrid{grid-template-columns:repeat(2,1fr)}
+  .loop{grid-template-columns:repeat(2,1fr)}
+  .priceg{grid-template-columns:1fr}
+  .g4{grid-template-columns:repeat(2,1fr)}
+  .ob{grid-template-columns:1fr}
+  .brainp{display:none}
+  .board{grid-template-columns:repeat(2,1fr)}
+  .auth{grid-template-columns:1fr}
+  .authart{display:none}
+}
+@container (max-width:720px){
+  .app{grid-template-columns:1fr}
+  .rail{display:none}
+  .hamb{display:grid}
+  .mobnav{display:flex;position:sticky;bottom:0;z-index:35;background:var(--surface);border-top:1px solid var(--hair);
+    padding:6px 4px;justify-content:space-around}
+  .mobnav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;color:var(--muted);padding:6px 2px;cursor:pointer;border-radius:8px}
+  .mobnav a.on{color:var(--ink);background:var(--sunken)}
+  .mobnav a .mi{width:20px;height:20px}
+  .main{padding:18px 16px 30px}
+  .g2,.g3,.g4{grid-template-columns:1fr}
+  .board{grid-template-columns:1fr}
+  .loop{grid-template-columns:1fr}
+  .pillgrid{grid-template-columns:1fr}
+  .pagehead h1{font-size:24px}
+  .asst{left:12px;right:12px;width:auto;bottom:70px}
+  .frow{grid-template-columns:110px 1fr 60px}
+  .chrome-full{display:none}.chrome-sm{display:flex}
+  .topbar .search{display:none}
+  .quick{padding-left:0}
+  .chatscroll{padding:18px 14px}
+  .obinput{padding:12px 14px}
+}
+</style>
+
+<div id="chrome">
+  <button id="maptoggle" onclick="toggleMap()">☰ <span class="chrome-full">Prototype map</span></button>
+  <div class="brand chrome-full">NEXUS<i> OS</i></div>
+  <span class="tag chrome-full">Wireframe · clickable</span>
+  <div class="spacer"></div>
+  <div class="seg chrome-full" id="flowseg"></div>
+  <div class="spacer chrome-sm" style="flex:1"></div>
+  <div class="seg" id="devseg">
+    <button data-d="desktop" class="on" onclick="setDevice('desktop')" title="Desktop">🖥</button>
+    <button data-d="tablet" onclick="setDevice('tablet')" title="Tablet">▭</button>
+    <button data-d="mobile" onclick="setDevice('mobile')" title="Mobile">▯</button>
+  </div>
+  <button class="ico" id="themebtn" onclick="toggleTheme()" title="Toggle light/dark">◐</button>
+</div>
+
+<div id="mapscrim" onclick="toggleMap()"></div>
+<nav id="map"></nav>
+
+<div id="stage"><div id="device" class="d-desktop"></div></div>
+
+<div class="sample">Sample data · illustrative</div>
+
+<div id="modal"><div class="scrim" onclick="closeModal()"></div><div class="box" id="modalbox"></div></div>
+<div id="toast"><span class="tdot"></span><span id="toastmsg"></span></div>
+
+<script>
+/* ============================================================ ICONS ============================================================ */
+const ICON={
+ today:'M3 10l9-7 9 7v9a2 2 0 0 1-2 2h-4v-6H9v6H5a2 2 0 0 1-2-2z',
+ director:'M4 19V5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2zM15 3v5h5',
+ work:'M4 7h16v12H4zM9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2',
+ doc:'M6 2h8l4 4v16H6zM14 2v4h4M9 13h6M9 17h6',
+ review:'M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7zM9 12l2 2 4-4',
+ settings:'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 12a7 7 0 0 0-.1-1l2-1.6-2-3.4-2.3 1a7 7 0 0 0-1.7-1l-.3-2.5h-4l-.3 2.5a7 7 0 0 0-1.7 1l-2.3-1-2 3.4 2 1.6a7 7 0 0 0 0 2l-2 1.6 2 3.4 2.3-1a7 7 0 0 0 1.7 1l.3 2.5h4l.3-2.5a7 7 0 0 0 1.7-1l2.3 1 2-3.4-2-1.6c.1-.3.1-.7.1-1z',
+ user:'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1',
+ bell:'M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0',
+ search:'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3',
+ chart:'M4 20V4M4 20h16M8 16v-5M12 16V8M16 16v-8M20 16v-3',
+ tenant:'M3 21V7l6-4 6 4v14M15 21V11l6-4v14M3 21h18M7 9v0M7 13v0M7 17v0',
+ brain:'M9 3a3 3 0 0 0-3 3 3 3 0 0 0-2 5 3 3 0 0 0 2 5 3 3 0 0 0 3 3 3 3 0 0 0 6 0 3 3 0 0 0 3-3 3 3 0 0 0 2-5 3 3 0 0 0-2-5 3 3 0 0 0-3-3 3 3 0 0 0-6 0z',
+ plug:'M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-10 0zM12 17v5',
+ audit:'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 4 0M9 12h6M9 16h4',
+ flag:'M4 21V4M4 4s1-1 4-1 4 2 7 2 4-1 4-1v9s-1 1-4 1-4-2-7-2-4 1-4 1',
+ shield:'M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z',
+ logout:'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
+ grid:'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
+ send:'M22 2L11 13M22 2l-7 20-4-9-9-4z',
+ mic:'M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM5 10v1a7 7 0 0 0 14 0v-1M12 19v3'
+};
+function ic(n,s=18,cls=''){return `<svg class="${cls}" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${ICON[n]||''}"/></svg>`;}
+
+/* ============================================================ MOCK DATA ============================================================ */
+const CO={name:"Nakhla Trading LLC",domain:"nakhlatrading.om",country:"Oman",currency:"OMR",size:"10–50",owner:"Layla Al-Harthy"};
+const DEPTS=[
+ {k:'executive',name:'Chief of Staff',remit:'Synthesis across every department',score:null},
+ {k:'marketing',name:'Marketing',remit:'Campaigns, SEO, brand, content',score:'45/65'},
+ {k:'sales',name:'Sales',remit:'Pipeline, forecasting, proposals',score:'52/70'},
+ {k:'finance',name:'Finance',remit:'Revenue, margin, cash-flow',score:null},
+ {k:'operations',name:'Operations',remit:'Projects, dispatch, stock, suppliers',score:'38/60'},
+ {k:'hr',name:'People',remit:'Policies, hiring, capacity',score:null},
+ {k:'strategy',name:'Strategy',remit:'Expansion, market entry, risk',score:null}
+];
+const MEMBERS=[
+ {n:'Layla Al-Harthy',e:'layla@nakhlatrading.om',role:'Owner',dept:'All departments',st:'Active',ob:'Complete',c:6,last:'2m ago'},
+ {n:'Mariam Al-Balushi',e:'mariam@nakhlatrading.om',role:'Contributor',dept:'Sales',st:'Active',ob:'Complete',c:2,last:'1h ago'},
+ {n:'Khalid Al-Rashdi',e:'khalid@nakhlatrading.om',role:'Dept. Manager',dept:'Operations',st:'Active',ob:'Complete',c:5,last:'3h ago'},
+ {n:'Sara Nasser',e:'sara@nakhlatrading.om',role:'Dept. Manager',dept:'Marketing',st:'Active',ob:'In progress',c:1,last:'yesterday'},
+ {n:'Yusuf Al-Lawati',e:'yusuf@nakhlatrading.om',role:'Contributor',dept:'Operations',st:'Invited',ob:'Not started',c:4,last:'—'},
+ {n:'Aisha Said',e:'aisha@nakhlatrading.om',role:'Viewer',dept:'Finance',st:'Disabled',ob:'Complete',c:3,last:'3w ago'}
+];
+const DEALS={
+ 'Qualified':[['Muscat Facilities Co','4,200','Mariam','3d'],['Sohar Steel Works','11,800','Mariam','1d']],
+ 'Proposal':[['Al Madina Contractors','28,500','Layla','6d'],['Gulf Interiors','9,300','Mariam','2d']],
+ 'Negotiation':[['Oman Oil Services','54,000','Layla','12d ⚠'],['Barka Logistics','17,250','Mariam','4d']],
+ 'Won':[['Salalah Resorts','22,000','Layla','—'],['Nizwa Builders','6,750','Mariam','—']]
+};
+const TENANTS=[
+ {n:'Nakhla Trading LLC',dom:'nakhlatrading.om',plan:'Growth',seats:6,ob:'Complete',score:'62%',st:'Active',last:'2m ago'},
+ {n:'Prosoft Informatics',dom:'prosoft.om',plan:'Scale',seats:14,ob:'Complete',score:'71%',st:'Active',last:'8m ago'},
+ {n:'Al Madina Contractors',dom:'almadina.om',plan:'Growth',seats:4,ob:'In review gate',score:'—',st:'Active',last:'1h ago'},
+ {n:'Gulf Interiors WLL',dom:'gulfinteriors.com',plan:'Starter',seats:2,ob:'Stage 4 (dropped)',score:'—',st:'At risk',last:'2d ago'},
+ {n:'Barka Logistics',dom:'barkalog.om',plan:'Growth',seats:7,ob:'Complete',score:'58%',st:'Active',last:'20m ago'},
+ {n:'Nizwa Builders',dom:'nizwabuild.om',plan:'Starter',seats:1,ob:'Stage 2 (dropped)',score:'—',st:'Churn risk',last:'9d ago'}
+];
+
+/* ============================================================ STATE + ROUTER ============================================================ */
+let S={route:'m-landing',device:'desktop',asstOpen:false,appTab:'today',setTab:'company',dirSec:'overview'};
+const stage=document.getElementById('stage'), device=document.getElementById('device');
+
+const FLOWS=[
+ {id:'marketing',label:'Marketing',first:'m-landing'},
+ {id:'auth',label:'Auth',first:'a-signup'},
+ {id:'onboarding',label:'Onboarding',first:'ob'},
+ {id:'app',label:'User app',first:'app-today'},
+ {id:'owner',label:'Owner admin',first:'oa-overview'},
+ {id:'platform',label:'Platform admin',first:'po-overview'}
+];
+const MAP=[
+ {flow:'marketing',group:'Entry · Marketing',items:[
+   ['m-landing','Landing page'],['m-scan','Instant Gap Analysis'],['m-scan-result','Gap results (3 gaps)'],['m-pricing','Pricing (OMR)']]},
+ {flow:'auth',group:'Accounts',items:[
+   ['a-signup','Create account'],['a-signin','Sign in'],['a-register','Register company'],
+   ['a-verify','Verify email'],['a-forgot','Reset password'],['a-invite','Accept invitation']]},
+ {flow:'onboarding',group:'Onboarding chatbot',items:[
+   ['ob','Conversational setup'],['ob-docs','· Documents step'],['ob-tools','· Connect tools'],
+   ['ob-review','· Review gate'],['ob-build','· Building the Brain'],['ob-ready','· You\'re all set']]},
+ {flow:'app',group:'User application',items:[
+   ['app-today','Today · command surface'],['app-marketing','Marketing director'],['app-sales','Sales director'],
+   ['app-finance','Finance director'],['app-operations','Operations director'],['app-people','People director'],
+   ['app-strategy','Strategy director'],['app-work','Your work (ops)'],['app-documents','Documents'],
+   ['app-documents-empty','· Documents (empty)'],['app-review','Review queue'],['app-settings','Workspace settings'],
+   ['app-account','Your account'],['app-loading','· Loading state'],['app-error','· Error state']]},
+ {flow:'owner',group:'Owner / workspace admin',items:[
+   ['oa-overview','Admin overview'],['oa-members','Members & roles'],['oa-member','· Member detail'],
+   ['oa-invites','Invitations & requests'],['oa-onboarding','Onboarding oversight'],
+   ['oa-brain','Company Brain'],['oa-connections','Tool ledger'],['oa-audit','Audit log']]},
+ {flow:'platform',group:'NEXUS platform operator',items:[
+   ['po-overview','Operator overview'],['po-tenants','Workspaces'],['po-tenant','· Workspace detail'],
+   ['po-users','Users'],['po-onboarding','Onboarding analytics'],['po-analytics','Growth & engagement'],
+   ['po-settings','Admin settings']]}
+];
+const ROUTE_FLOW={}; MAP.forEach(g=>g.items.forEach(([r])=>ROUTE_FLOW[r]=g.flow));
+const FLUSH=new Set(); // screens that fill the frame without stage padding handled via chrome; keep all framed
+
+function currentFlow(){return ROUTE_FLOW[S.route]||'marketing';}
+
+/* ---- chrome builders ---- */
+function buildFlowSeg(){
+ document.getElementById('flowseg').innerHTML=FLOWS.map(f=>
+  `<button class="${currentFlow()===f.id?'on':''}" onclick="go('${f.first}')">${f.label}</button>`).join('');
+}
+function buildMap(){
+ const m=document.getElementById('map');
+ m.innerHTML=MAP.map(g=>`<h4>${g.group}</h4>`+g.items.map(([r,l])=>
+  `<a class="${S.route===r?'on':''}" onclick="go('${r}');toggleMap(true)"><span class="dot"></span>${l}</a>`).join('')).join('');
+}
+function toggleMap(forceClose){
+ const m=document.getElementById('map'),sc=document.getElementById('mapscrim');
+ const open=forceClose?false:!m.classList.contains('open');
+ m.classList.toggle('open',open);sc.classList.toggle('on',open);
+}
+function setDevice(d){S.device=d;device.className='d-'+d;
+ document.querySelectorAll('#devseg button').forEach(b=>b.classList.toggle('on',b.dataset.d===d));
+ try{localStorage.setItem('nx-device',d)}catch(e){}}
+function toggleTheme(){
+ const cur=document.documentElement.getAttribute('data-theme');
+ const next=cur==='dark'?'light':(cur==='light'?'':'dark');
+ if(next)document.documentElement.setAttribute('data-theme',next);else document.documentElement.removeAttribute('data-theme');
+ try{localStorage.setItem('nx-theme',next)}catch(e){}}
+
+/* ---- toast + modal ---- */
+let toastT;
+function toast(msg){const t=document.getElementById('toast');document.getElementById('toastmsg').textContent=msg;
+ t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),2600);}
+function openModal(html){document.getElementById('modalbox').innerHTML=html;document.getElementById('modal').classList.add('on');}
+function closeModal(){document.getElementById('modal').classList.remove('on');}
+
+/* ---- render ---- */
+const ROUTES={};
+function go(route){
+ if(!ROUTES[route])route='m-landing';
+ S.route=route;S.asstOpen=false;
+ device.innerHTML=ROUTES[route]();
+ device.scrollTop=0;stage.scrollTop=0;
+ buildFlowSeg();buildMap();
+ if(ROUTES['_after_'+route])ROUTES['_after_'+route]();
+ window.scrollTo(0,0);
+}
+
+/* ============================================================ SHELL HELPERS ============================================================ */
+function navItem(icon,label,route,badge,active){
+ return `<div class="navi ${active?'on':''}" onclick="go('${route}')">${ic(icon)}<span>${label}</span>${badge?`<span class="badge">${badge}</span>`:''}</div>`;
+}
+// user app rail
+function userRail(active){
+ const dirs=DEPTS.map(d=>`<div class="navi ${active==='app-'+d.k?'on':''}" onclick="go('${screenForDept(d.k)}')">${ic('director')}<span>${d.name}</span>${d.k==='marketing'?'<span class="badge">1</span>':(d.k==='operations'?'<span class="badge">3</span>':'')}</div>`).join('');
+ return `<aside class="rail">
+   <div class="logo" onclick="go('app-today')" style="cursor:pointer">NEXUS<i> OS</i></div>
+   <div class="grp">Today</div>
+   ${navItem('today','What needs you','app-today',0,active==='app-today')}
+   <div class="grp">Directors</div>${dirs}
+   <div class="grp">Your data</div>
+   ${navItem('work','Your work','app-work',0,active==='app-work')}
+   ${navItem('doc','Your documents','app-documents',0,active==='app-documents')}
+   ${navItem('review','Waiting for review','app-review','2',active==='app-review')}
+   <div class="grp">Settings</div>
+   ${navItem('settings','Workspace','app-settings',0,active==='app-settings')}
+   ${navItem('user','Account','app-account',0,active==='app-account')}
+   <div style="margin-top:auto;padding:10px"><div class="chip gold">Owner view</div></div>
+ </aside>`;
+}
+function screenForDept(k){return 'app-'+k;}
+function mobNav(active,items){
+ return `<div class="mobnav">${items.map(i=>`<a class="${active===i[2]?'on':''}" onclick="go('${i[2]}')">${ic(i[0],20,'mi')}<span>${i[1]}</span></a>`).join('')}</div>`;
+}
+function topbar(title,platform){
+ return `<div class="topbar">
+   <button class="btn icon ghost hamb" onclick="toast('Menu — use the Prototype map (top-left) to navigate')">${ic('grid')}</button>
+   <div class="wsname">${platform?ic('shield',17):ic('today',17)} ${platform?'NEXUS Operator':CO.name} <span class="chip ${platform?'plum':'steel'}">${platform?'Platform':'Owner'}</span></div>
+   <div class="search" onclick="toast('Search — type to find directors, documents, people…')">${ic('search',15)} Search ${CO.name}…</div>
+   <div class="sp"></div>
+   <button class="btn icon ghost" onclick="showNotifs()" title="Notifications">${ic('bell')}</button>
+   <div class="ava c1" title="${CO.owner}">LA</div>
+ </div>`;
+}
+function appShell(active,main,opts={}){
+ const mi=opts.platform?[['chart','Overview','po-overview'],['tenant','Spaces','po-tenants'],['user','Users','po-users'],['chart','Analytics','po-analytics']]
+   :opts.owner?[['chart','Admin','oa-overview'],['user','Members','oa-members'],['brain','Brain','oa-brain'],['audit','Audit','oa-audit']]
+   :[['today','Today','app-today'],['director','Sales','app-sales'],['work','Work','app-work'],['settings','Settings','app-settings']];
+ const rail=opts.platform?platformRail(active):opts.owner?ownerRail(active):userRail(active);
+ return `<div class="app ${opts.platform?'platform':''}">${rail}
+   <div style="min-width:0;display:flex;flex-direction:column;position:relative">
+     ${opts.platform?'<div class="opstripe"></div>':''}
+     ${topbar(active,opts.platform)}
+     <div class="main">${main}</div>
+     ${mobNav(active,mi)}
+     ${opts.asst?assistantPanel(opts.asst):''}
+   </div></div>`;
+}
+function showNotifs(){
+ openModal(`<div class="pad"><div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">${ic('bell',20)}<h3 style="font-size:18px">Notifications</h3><button class="btn icon ghost" style="margin-left:auto" onclick="closeModal()">✕</button></div>
+  <div class="brief">
+   <div class="briefitem"><div class="bk">${ic('review',18)}</div><div><div class="bt">2 chunks waiting in your review queue</div><div class="bd">A payroll PDF was withheld for your decision</div></div><span class="chip gold bsrc">New</span></div>
+   <div class="briefitem"><div class="bk">${ic('plug',18)}</div><div><div class="bt">GA4 connection expires in 6 days</div><div class="bd">Reconnect to keep Marketing tiles live</div></div><span class="chip clay bsrc">Action</span></div>
+   <div class="briefitem"><div class="bk">${ic('user',18)}</div><div><div class="bt">Sara accepted her invitation</div><div class="bd">Marketing · Dept. Manager</div></div><span class="chip forest bsrc">Done</span></div>
+  </div></div>`);
+}
+
+/* ---- the 8-state tile ---- */
+function tile(o){
+ const st={live:['forest','Live'],partial:['steel','Partial'],stale:['gold','Stale'],
+   warming:['steel','Warming'],self:['clay','Self-reported'],locked:['gold','Locked'],
+   planned:['off','Not built yet'],unavailable:['clay','Unavailable']}[o.state]||['off',''];
+ if(o.state==='locked') return `<div class="tile locked">
+   <div class="thead"><span class="tt">${o.t}</span><span class="chip gold st">Locked</span></div>
+   <div class="lockmsg">${o.msg}</div>
+   <button class="btn sm secondary" style="align-self:flex-start;margin-top:auto" onclick="go('${o.cta||'app-settings'}')">${o.ctaLabel||'Connect'} →</button></div>`;
+ if(o.state==='planned') return `<div class="tile planned">
+   <div class="thead"><span class="tt">${o.t}</span><span class="chip st">Not built yet</span></div>
+   <div class="meta">${o.msg||'Planned for a later phase.'}</div></div>`;
+ if(o.state==='warming') return `<div class="tile">
+   <div class="thead"><span class="tt">${o.t}</span><span class="chip steel st"><span class="sd steel"></span>Warming</span></div>
+   <div class="fig" style="font-size:19px;line-height:1.3">${o.msg}</div>
+   <div class="meta">${o.meta||''}</div></div>`;
+ if(o.state==='self') return `<div class="tile">
+   <div class="thead"><span class="tt">${o.t}</span><span class="chip clay st">Self-reported</span></div>
+   <div class="val">${o.v}</div><div class="meta">${o.meta||''}</div>
+   <div class="why" onclick="whyDrawer('${o.t}')">${ic('search',12)} why this number</div></div>`;
+ return `<div class="tile">
+   <div class="thead"><span class="tt">${o.t}</span><span class="chip ${st[0]} st"><span class="sd ${st[0]}"></span>${st[1]}</span></div>
+   <div class="val">${o.v}</div>
+   ${o.delta?`<div class="delta ${o.deltaDir==='dn'?'dn':'up'}">${o.delta}</div>`:''}
+   <div class="meta">${o.meta||''}</div>
+   ${o.srcs?`<div class="srcs">${o.srcs.map(s=>`<span class="chip steel">${s}</span>`).join('')}</div>`:''}
+   <div class="why" onclick="whyDrawer('${o.t.replace(/'/g,'')}')">${ic('search',12)} why this number</div></div>`;
+}
+function whyDrawer(name){
+ openModal(`<div class="pad">
+  <span class="eyebrow">Why this number</span>
+  <h3 style="font-size:20px;margin:8px 0 2px">${name}</h3>
+  <p class="muted" style="font-size:13px;margin-bottom:16px">Every figure in NEXUS can open its working. Nothing here is generated by a model — the model only phrases it.</p>
+  <div class="card pad" style="margin-bottom:12px"><div class="eyebrow" style="color:var(--muted)">Method</div><p style="margin-top:6px;color:var(--ink);font-size:14px">Enquiry conversion = form submissions ÷ sessions, over the reporting window.</p></div>
+  <div class="row" style="gap:12px;margin-bottom:12px">
+   <div class="card pad" style="flex:1"><div class="eyebrow" style="color:var(--muted)">Inputs</div><p class="mono" style="margin-top:6px;font-size:12.5px;color:var(--ink)">sessions = 8,412<br>submissions = 214</p></div>
+   <div class="card pad" style="flex:1"><div class="eyebrow" style="color:var(--muted)">Window</div><p style="margin-top:6px;font-size:13px;color:var(--ink)">1–30 Sep 2026<br><span class="muted">vs 1–31 Aug</span></p></div>
+  </div>
+  <div class="card pad" style="margin-bottom:16px"><div class="eyebrow" style="color:var(--muted)">Arithmetic</div><p class="mono" style="margin-top:6px;font-size:12.5px;color:var(--ink)">214 ÷ 8,412 = 2.54%</p></div>
+  <div style="display:flex;gap:10px"><span class="prov">${ic('plug',12)} source · GA4</span><span class="prov">${ic('settings',12)} fiscal window · Settings → Reporting</span></div>
+  <button class="btn primary block" style="margin-top:18px" onclick="closeModal()">Close</button></div>`);
+}
+function assistantPanel(dept){
+ return `<div class="asst">
+   <div class="ah">${ic('brain',18)}<strong style="font-size:13.5px">Ask the ${dept} Director</strong><button class="btn icon ghost" style="margin-left:auto;color:#fff" onclick="document.querySelector('.asst').style.display='none'">✕</button></div>
+   <div class="ab">
+     <div class="msg"><div class="bubble" style="font-size:13.5px">What changed in my pipeline this week, and what needs me first?</div></div>
+     <div class="msg"><div class="bubble" style="font-size:13.5px;background:var(--sunken)">Two deals moved to Negotiation (OMR 71,250 combined). <strong>Oman Oil Services</strong> has been silent 12 days — past your 10-day flag. <span class="prov" style="margin-top:6px">${ic('plug',11)} Zoho CRM · 2m ago</span></div></div>
+   </div>
+   <div class="af"><input class="control" style="height:40px" placeholder="Ask a question…" onkeydown="if(event.key==='Enter'){this.value='';toast('Assistant is mocked in this wireframe')}"><button class="btn icon primary" onclick="toast('Assistant is mocked in this wireframe')">${ic('send',16)}</button></div>
+ </div>`;
+}
+function ownerRail(active){
+ return `<aside class="rail">
+   <div class="logo" onclick="go('oa-overview')" style="cursor:pointer">NEXUS<i> OS</i></div>
+   <div class="grp">Workspace admin</div>
+   ${navItem('chart','Overview','oa-overview',0,active==='oa-overview')}
+   ${navItem('user','Members & roles','oa-members',0,active==='oa-members'||active==='oa-member')}
+   ${navItem('bell','Invitations','oa-invites','3',active==='oa-invites')}
+   ${navItem('review','Onboarding','oa-onboarding',0,active==='oa-onboarding')}
+   <div class="grp">Knowledge & data</div>
+   ${navItem('brain','Company Brain','oa-brain',0,active==='oa-brain')}
+   ${navItem('plug','Tool ledger','oa-connections',0,active==='oa-connections')}
+   ${navItem('audit','Audit log','oa-audit',0,active==='oa-audit')}
+   <div class="grp">Go to</div>
+   ${navItem('today','User app','app-today',0,false)}
+   <div style="margin-top:auto;padding:10px"><div class="chip steel">Layla · Owner</div></div>
+ </aside>`;
+}
+function platformRail(active){
+ return `<aside class="rail">
+   <div class="logo" onclick="go('po-overview')" style="cursor:pointer">NEXUS<i> OPS</i></div>
+   <div class="grp">Operate</div>
+   ${navItem('chart','Overview','po-overview',0,active==='po-overview')}
+   ${navItem('tenant','Workspaces','po-tenants',0,active==='po-tenants'||active==='po-tenant')}
+   ${navItem('user','Users','po-users',0,active==='po-users')}
+   <div class="grp">Insight</div>
+   ${navItem('review','Onboarding','po-onboarding',0,active==='po-onboarding')}
+   ${navItem('chart','Growth & usage','po-analytics',0,active==='po-analytics')}
+   <div class="grp">Control</div>
+   ${navItem('settings','Admin settings','po-settings',0,active==='po-settings')}
+   <div style="margin-top:auto;padding:10px"><div class="chip plum">NEXUS staff</div></div>
+ </aside>`;
+}
+
+/* ============================================================ MARKETING SCREENS ============================================================ */
+function mkNav(){return `<div class="mknav">
+  <div class="logo">NEXUS<i> OS</i></div>
+  <div style="width:14px"></div>
+  <span class="lk" onclick="go('m-landing')">Product</span>
+  <span class="lk" onclick="go('m-pricing')">Pricing</span>
+  <span class="lk" onclick="go('m-scan')">Free gap scan</span>
+  <div class="sp"></div>
+  <span class="lk" onclick="go('a-signin')">Sign in</span>
+  <button class="btn primary sm" onclick="go('a-signup')">Get started</button>
+</div>`;}
+
+ROUTES['m-landing']=()=>`<div class="mk">${mkNav()}
+ <div class="mkwrap">
+  <div class="hero">
+   <div class="rise">
+     <span class="eyebrow">AI business operating system · built for the GCC</span>
+     <h1>Every tool tells you what happened. NEXUS tells you what to do — and does it.</h1>
+     <p class="lede">NEXUS learns your company once into a permanent Company Brain, then seven AI directors watch your numbers, surface what needs you, and draft the work. Never an invented number.</p>
+     <div class="cta">
+       <button class="btn primary lg" onclick="go('a-signup')">Get started free</button>
+       <button class="btn secondary lg" onclick="go('m-scan')">Scan my website →</button>
+     </div>
+     <p class="muted" style="font-size:12.5px;margin-top:16px">No card. Signup to your first real insight in about 20 minutes.</p>
+   </div>
+   <div class="heroart rise">
+     <span class="ill">Illustrative</span>
+     <div class="mock"><div class="mt">${ic('chart',13)} Company health · 6 of 6 scored</div><div class="mv">62<span style="font-size:15px;color:#B9C8E4">/100 · +4 wk</span></div></div>
+     <div class="mock"><div class="mt">${ic('bell',13)} Needs you first</div><div style="font-size:13px;margin-top:4px">Oman Oil Services silent 12 days — past your 10-day flag.</div></div>
+     <div class="mock"><div class="mt">${ic('plug',13)} Measured · Zoho CRM</div><div class="mv">OMR 71,250 <span style="font-size:14px;color:#9ED3AD">in negotiation</span></div></div>
+   </div>
+  </div>
+
+  <div class="sect">
+   <span class="eyebrow">The operating loop</span>
+   <h2>Not a dashboard. A loop that closes.</h2>
+   <div class="loop">
+     ${[['Connect','Website, documents, your CRM and tools'],['Understand','Facts assembled with provenance into the Brain'],['Decide','A daily brief ranked by what it costs you'],['Execute','Proposals, plans and content, drafted'],['Improve','Corrections compound — the Brain gets sharper']].map((s,i)=>`<div class="loopstep"><div class="ls">${i+1}</div><h4>${s[0]}</h4><p>${s[1]}</p></div>`).join('')}
+   </div>
+  </div>
+
+  <div class="sect">
+   <span class="eyebrow">Seven directors, one brain</span>
+   <h2>The executive team you can't yet afford.</h2>
+   <p class="sl">Pick the departments you run. Each director is a view onto the same Company Brain — never a separate silo, never a chatbot that forgets.</p>
+   <div class="pillgrid">
+     ${[['01','Chief of Staff','Your morning brief, health score and the one decision that matters today.'],
+        ['02','Marketing','SEO gaps, brand consistency and a 90-day growth plan from your own site.'],
+        ['03','Sales','Pipeline, stale-deal flags and proposals — reading your CRM, owning none of it.'],
+        ['04','Finance','Margin, runway and "can I afford this?" — grounded, never guessed.'],
+        ['05','Operations','Projects, dispatch, stock and supplier risk — the system of record you own.'],
+        ['06','People','Policies, hiring plans and capacity, drafted to your context.'],
+        ['07','Strategy','Market entry, bid/no-bid and the risks you told us to watch.'],
+        ['+','Never invent a number','Every figure is fetched or computed. Missing data shows a named gap — never a plausible guess.']].map(p=>`<div class="pill"><div class="pn">${p[0]}</div><h3>${p[1]}</h3><p>${p[2]}</p></div>`).join('')}
+   </div>
+  </div>
+
+  <div class="sect" style="text-align:center">
+   <h2 style="margin:0 auto">Meet your Company Brain in 20 minutes.</h2>
+   <p class="sl" style="margin:12px auto 24px">A short conversation — not a 30-field form. It reads your site first, then asks only what no tool can tell it.</p>
+   <button class="btn primary lg" onclick="go('a-signup')">Get started free</button>
+  </div>
+ </div>
+ ${mkFoot()}</div>`;
+
+function mkFoot(){return `<div class="mkfoot"><strong style="color:var(--ink);font-family:var(--display)">NEXUS OS</strong>
+  <span>© 2026 · Muscat, Oman</span><div style="flex:1"></div>
+  <span class="lk" onclick="go('m-pricing')">Pricing</span><span class="lk">Privacy (PDPL)</span><span class="lk">Terms</span><span class="lk" onclick="go('a-signin')">Sign in</span></div>`;}
+
+ROUTES['m-pricing']=()=>`<div class="mk">${mkNav()}
+ <div class="mkwrap"><div class="sect" style="border-top:0;padding-top:48px">
+  <span class="eyebrow">Pricing · Omani Rial</span>
+  <h2>Priced in OMR. Seats and generations, nothing hidden.</h2>
+  <p class="sl">Every plan includes the full Company Brain and all seven directors. Plans differ on seats and monthly AI generations.</p>
+  <div class="priceg">
+   ${[['Starter','29','For a founder testing the water',['1 seat','150 generations / mo','Website + document Brain','Email support'],'secondary'],
+      ['Growth','89','For an owner-led team',['Up to 6 seats','1,000 generations / mo','CRM + analytics connectors','Priority support'],'primary'],
+      ['Scale','249','For multi-department operations',['Up to 20 seats','4,000 generations / mo','Multi-entity group view','Onboarding specialist'],'secondary']].map((p,i)=>`
+    <div class="pcard ${i===1?'feat':''}">
+      <div><span class="eyebrow">${p[0]}</span><div class="amt">OMR ${p[1]}<span style="font-size:15px;color:var(--muted);font-family:var(--sans)"> /mo</span></div><p class="muted" style="font-size:13px">${p[2]}</p></div>
+      <ul>${p[3].map(f=>`<li>${f}</li>`).join('')}</ul>
+      <button class="btn ${p[4]} block" onclick="go('a-signup')">Start with ${p[0]}</button>
+    </div>`).join('')}
+  </div>
+  <p class="muted" style="font-size:12.5px;margin-top:20px">Generations are AI drafts (a proposal, a plan, a brief). Reading your data and viewing dashboards is never metered.</p>
+ </div></div>${mkFoot()}</div>`;
+
+ROUTES['m-scan']=()=>`<div class="mk">${mkNav()}
+ <div class="mkwrap"><div class="sect" style="border-top:0;max-width:640px;margin:0 auto;text-align:center;padding-top:64px">
+  <span class="eyebrow">Instant gap analysis · no sign-up</span>
+  <h2 style="margin:10px auto 0">Three real gaps from your own website.</h2>
+  <p class="sl" style="margin:14px auto 28px">Paste your URL. We read one page and run it against 23 checks, then show the three that fail hardest — with the evidence. It's the same audit that seeds your Brain.</p>
+  <div class="card pad" style="text-align:left;max-width:520px;margin:0 auto">
+    <div class="field" style="margin-bottom:12px"><label>Your website</label>
+      <input class="control" id="scanurl" value="nakhlatrading.om" placeholder="yourcompany.om"></div>
+    <button class="btn primary block lg" onclick="runScan()">Scan my site →</button>
+    <p class="muted" style="font-size:12px;margin-top:12px;text-align:center">Takes about 90 seconds. We read one page, not your whole site.</p>
+  </div>
+ </div></div>${mkFoot()}</div>`;
+function runScan(){
+ device.querySelector('.card.pad').innerHTML=`<div class="state"><div class="glyph">${ic('search',24)}</div><h3 style="font-size:17px">Reading nakhlatrading.om…</h3><p class="muted" id="scanstep">Fetching the homepage</p><div class="cbar" style="width:260px;margin-top:6px"><i class="live" style="width:20%" id="scanbar"></i></div></div>`;
+ const steps=['Fetching the homepage','Checking metadata & headings','Running 23 audit checks','Finding the three hardest gaps'];let i=0;
+ const t=setInterval(()=>{i++;if(i>=steps.length){clearInterval(t);go('m-scan-result');return;}
+   const s=device.querySelector('#scanstep'),b=device.querySelector('#scanbar');if(s)s.textContent=steps[i];if(b)b.style.width=(20+i*27)+'%';},750);
+}
+ROUTES['m-scan-result']=()=>`<div class="mk">${mkNav()}
+ <div class="mkwrap"><div class="sect" style="border-top:0;max-width:720px;margin:0 auto;padding-top:48px">
+  <span class="eyebrow">nakhlatrading.om · 1 page read · 23 checks</span>
+  <h2 style="margin:10px 0 6px">Your three hardest gaps</h2>
+  <p class="sl" style="margin-bottom:26px">Each is a real check that failed, with what we found. Fix these and your audit score moves first.</p>
+  ${[['Clay','No meta description','Search engines are writing your own snippet for you. 0 of your indexed pages set one.','Marketing · SEO'],
+     ['Gold','Contact page has no schema markup','Google can\'t read your location or hours, so you\'re invisible in local "near me" results in Muscat.','Marketing · Local SEO'],
+     ['Steel','Slow largest-contentful-paint (4.1s)','Your hero image is 2.3 MB. A third of mobile visitors leave before it loads.','Operations · Site health']].map(g=>`
+   <div class="card pad" style="margin-bottom:14px;display:flex;gap:16px;align-items:flex-start">
+     <div class="ava c2" style="border-radius:11px;background:var(--${g[0].toLowerCase()==='clay'?'clay':g[0].toLowerCase()==='gold'?'gold':'steel'})">!</div>
+     <div style="flex:1"><div style="font-weight:600;color:var(--ink);font-size:15px">${g[1]}</div>
+       <p class="muted" style="font-size:13.5px;margin:5px 0 8px">${g[2]}</p><span class="chip steel">${g[3]}</span></div>
+   </div>`).join('')}
+  <div class="card pad" style="background:var(--ink);color:#fff;text-align:center;margin-top:8px;border:0">
+    <h3 style="color:#fff;font-size:20px">That's 3 of 20 gaps we found.</h3>
+    <p style="color:#B9C8E4;font-size:14px;margin:8px 0 16px">Sign up to see all of them, fix them with the Marketing Director, and build your full Company Brain.</p>
+    <button class="btn gold lg" onclick="go('a-signup')">See all my gaps — free →</button>
+  </div>
+ </div></div>${mkFoot()}</div>`;
+
+/* ============================================================ AUTH SCREENS ============================================================ */
+function authShell(inner,quote){
+ return `<div class="auth">
+   <div class="authform"><div class="inner">
+     <div class="logo" style="font-family:var(--display);font-weight:600;font-size:22px;color:var(--ink);margin-bottom:28px;cursor:pointer" onclick="go('m-landing')">NEXUS<i style="color:var(--gold);font-style:normal"> OS</i></div>
+     ${inner}
+   </div></div>
+   <div class="authart">
+     <div class="blob" style="width:300px;height:300px;background:var(--gold);top:-60px;right:-40px"></div>
+     <div class="blob" style="width:220px;height:220px;background:var(--steel);bottom:40px;left:-50px"></div>
+     <div class="q">${quote}</div>
+   </div>
+ </div>`;
+}
+ROUTES['a-signup']=()=>authShell(`
+  <span class="eyebrow">Step 1 of 2 · your account</span>
+  <h1 style="font-size:28px;margin:8px 0 6px">Create your account</h1>
+  <p class="muted" style="font-size:14px;margin-bottom:22px">One account per person. Next you'll create your company.</p>
+  <div class="field"><label>Work email</label><input class="control" value="layla@nakhlatrading.om"></div>
+  <div class="field"><label>Full name</label><input class="control" value="Layla Al-Harthy"></div>
+  <div class="field"><label>Password</label><input class="control" type="password" value="••••••••••"></div>
+  <button class="btn primary block lg" onclick="go('a-register')">Create account →</button>
+  <p class="muted" style="font-size:13px;margin-top:18px;text-align:center">Already have an account? <a onclick="go('a-signin')" style="cursor:pointer">Sign in</a></p>
+`,`"NEXUS read our site and knew what we sold before we typed a word."`);
+
+ROUTES['a-signin']=()=>authShell(`
+  <h1 style="font-size:28px;margin:0 0 6px">Welcome back</h1>
+  <p class="muted" style="font-size:14px;margin-bottom:22px">Sign in to your workspace.</p>
+  <div class="field"><label>Email</label><input class="control" value="layla@nakhlatrading.om"></div>
+  <div class="field"><label>Password</label><input class="control" type="password" value="••••••••••"></div>
+  <div style="text-align:right;margin:-6px 0 16px"><a onclick="go('a-forgot')" style="cursor:pointer;font-size:13px">Forgot password?</a></div>
+  <button class="btn primary block lg" onclick="go('app-today')">Sign in →</button>
+  <div class="row" style="gap:10px;margin-top:12px">
+    <button class="btn secondary block" onclick="go('oa-overview')">Owner admin</button>
+    <button class="btn secondary block" onclick="go('po-overview')">Platform operator</button>
+  </div>
+  <p class="muted" style="font-size:13px;margin-top:18px;text-align:center">New here? <a onclick="go('a-signup')" style="cursor:pointer">Create an account</a></p>
+`,`"The morning brief tells me the one thing that actually needs me. Then I close the laptop."`);
+
+ROUTES['a-register']=()=>authShell(`
+  <span class="eyebrow">Step 2 of 2 · your company</span>
+  <h1 style="font-size:28px;margin:8px 0 6px">Create your company</h1>
+  <p class="muted" style="font-size:14px;margin-bottom:22px">We start reading your website the moment you continue.</p>
+  <div class="field"><label>Company name</label><input class="control" value="Nakhla Trading LLC"></div>
+  <div class="field"><label>Website <span class="muted" style="font-weight:400">· required</span></label><input class="control" value="nakhlatrading.om"></div>
+  <div class="row" style="gap:12px">
+    <div class="field" style="flex:1"><label>Country</label><select class="control"><option>Oman</option><option>UAE</option><option>Saudi Arabia</option><option>Qatar</option></select></div>
+    <div class="field" style="flex:1"><label>Currency</label><select class="control"><option>OMR — Omani Rial</option><option>AED</option><option>SAR</option></select></div>
+  </div>
+  <div class="field"><label>Headcount</label><select class="control"><option>Under 10</option><option selected>10–50</option><option>50–200</option><option>Over 200</option></select></div>
+  <button class="btn primary block lg" onclick="go('ob')">Continue — read my website →</button>
+`,`"It claimed our domain, then started crawling. By the time I looked up, it had a draft of us."`);
+
+ROUTES['a-verify']=()=>authShell(`
+  <div class="state" style="padding:20px 0"><div class="glyph">${ic('bell',24)}</div>
+  <h1 style="font-size:26px">Confirm your email</h1>
+  <p class="muted" style="max-width:320px">We sent a link to <strong style="color:var(--ink)">layla@nakhlatrading.om</strong>. You can keep going while it arrives — verifying isn't blocking.</p>
+  <button class="btn primary lg" onclick="go('app-today')" style="margin-top:8px">I've verified — continue</button>
+  <a style="cursor:pointer;font-size:13px;margin-top:4px" onclick="toast('Verification link re-sent')">Resend the link</a></div>
+`,`"Verification gates inviting people and connecting tools — not getting started."`);
+
+ROUTES['a-forgot']=()=>authShell(`
+  <h1 style="font-size:28px;margin:0 0 6px">Reset your password</h1>
+  <p class="muted" style="font-size:14px;margin-bottom:22px">Enter your email and we'll send a one-time link. For your security, we give the same reply whether or not an account exists.</p>
+  <div class="field"><label>Email</label><input class="control" value="layla@nakhlatrading.om"></div>
+  <button class="btn primary block lg" onclick="toast('If that email has an account, a reset link is on its way.');setTimeout(()=>go('a-signin'),900)">Send reset link</button>
+  <p class="muted" style="font-size:13px;margin-top:18px;text-align:center"><a onclick="go('a-signin')" style="cursor:pointer">Back to sign in</a></p>
+`,`"An identical reply whatever the counters say — never a lock, never a 429."`);
+
+ROUTES['a-invite']=()=>authShell(`
+  <span class="eyebrow">You've been invited</span>
+  <h1 style="font-size:27px;margin:8px 0 6px">Join Nakhla Trading LLC</h1>
+  <p class="muted" style="font-size:14px;margin-bottom:20px">Khalid invited you. Your role and department were set by them — you can't change them here.</p>
+  <div class="card pad" style="margin-bottom:18px">
+    <div class="fact" style="padding-top:0"><div class="fl">Role</div><div class="fv">Contributor</div></div>
+    <div class="fact"><div class="fl">Department</div><div class="fv">Operations</div></div>
+    <div class="fact" style="padding-bottom:0"><div class="fl">Signed in as</div><div class="fv">yusuf@nakhlatrading.om</div></div>
+  </div>
+  <button class="btn primary block lg" onclick="go('ob')">Accept & set up my view →</button>
+  <p class="muted" style="font-size:12.5px;margin-top:14px;text-align:center">Contributors answer only their own department's questions.</p>
+`,`"Role is set by the inviter. Self-declaring one would be privilege escalation by dropdown."`);
+
+/* ============================================================ ONBOARDING CHATBOT ============================================================ */
+let OB;
+ROUTES['ob']=()=>`<div class="ob">
+  <div class="obmain">
+    <div class="obtop"><div class="logo">NEXUS<i> OS</i></div>
+      <span class="chip steel" style="margin-left:14px">Guided setup</span>
+      <span class="part" id="obpart">Reading your company</span></div>
+    <div class="obprog"><i id="obbar" style="width:6%"></i></div>
+    <div class="chatscroll" id="obscroll"><div class="chatwrap" id="obwrap"></div></div>
+    <div class="obinput" id="obinput" style="display:none">
+      <div class="bar">
+        <textarea id="obtext" rows="1" placeholder="Type your answer…" oninput="obGrow(this)" onkeydown="obKey(event)"></textarea>
+        <button class="mic" onclick="toast('Dictation — audio never leaves your device')" title="Dictate">${ic('mic',18)}</button>
+        <button class="send" onclick="obSendText()">${ic('send',18)}</button>
+      </div>
+    </div>
+  </div>
+  <aside class="brainp">
+    <h3>${ic('brain',18)} Company Brain</h3>
+    <p class="bhint">Filling as we talk. Every item keeps its source, and you can edit any of it later.</p>
+    <div class="bgroup"><div class="bgt">Identity · from your website</div><div id="bg-identity"><div class="bitem empty">Reading nakhlatrading.om…</div></div></div>
+    <div class="bgroup"><div class="bgt">Market · from our conversation</div><div id="bg-market"><div class="bitem empty">Nothing yet</div></div></div>
+    <div class="bgroup"><div class="bgt">You · how I should work</div><div id="bg-you"><div class="bitem empty">Nothing yet</div></div></div>
+    <div class="bgroup"><div class="bgt">Thresholds · only you know these</div><div id="bg-thresholds"><div class="bitem empty">Nothing yet</div></div></div>
+  </aside>
+</div>`;
+
+ROUTES['_after_ob']=()=>{ OB={progress:6,qNum:0,qTotal:5,depts:['marketing','sales','operations']}; obRun(0); };
+
+function obGrow(t){t.style.height='auto';t.style.height=Math.min(t.scrollHeight,120)+'px';}
+function obScroll(){const s=document.getElementById('obscroll');if(s)s.scrollTop=s.scrollHeight;}
+function obProg(p){OB.progress=p;const b=document.getElementById('obbar');if(b)b.style.width=p+'%';}
+function obPart(t){const e=document.getElementById('obpart');if(e)e.textContent=t;}
+
+function obSay(html,cb){
+ const w=document.getElementById('obwrap');if(!w)return;
+ const typing=document.createElement('div');typing.className='msg';
+ typing.innerHTML=`<div class="mava">N<i>·</i></div><div class="bubble typing"><span style="font-size:20px;line-height:0">·</span><span style="font-size:20px;line-height:0">·</span><span style="font-size:20px;line-height:0">·</span></div>`;
+ w.appendChild(typing);obScroll();
+ setTimeout(()=>{typing.remove();
+   const m=document.createElement('div');m.className='msg';
+   m.innerHTML=`<div class="mava">N<i>·</i></div><div class="bubble">${html}</div>`;
+   w.appendChild(m);obScroll();if(cb)cb();},620);
+}
+function obMe(html){
+ const w=document.getElementById('obwrap');
+ const m=document.createElement('div');m.className='msg me';
+ m.innerHTML=`<div class="mava">LA</div><div class="bubble">${html}</div>`;
+ w.appendChild(m);obScroll();
+}
+function obControls(html){
+ const w=document.getElementById('obwrap');
+ const d=document.createElement('div');d.className='quick';d.id='obctrls';d.innerHTML=html;
+ w.appendChild(d);obScroll();
+}
+function clearControls(){const c=document.getElementById('obctrls');if(c)c.remove();document.getElementById('obinput').style.display='none';}
+function obBrain(group,label,value,prov,provcls){
+ const box=document.getElementById('bg-'+group);if(!box)return;
+ const empty=box.querySelector('.bitem.empty');if(empty)empty.remove();
+ const it=document.createElement('div');it.className='bitem';
+ it.innerHTML=`<div class="bl">${label}</div><div class="bv">${value}</div><span class="prov ${provcls||''}">${prov}</span>`;
+ box.appendChild(it);
+}
+
+/* ---- conversation beats ---- */
+function obRun(step){
+ if(step===0){ // greeting + reading
+   obSay(`Hello Layla — let's set up <strong>Nakhla Trading LLC</strong>. Give me a moment to read your website first, so I'm not asking you things I can find out myself.`,()=>{
+     setTimeout(()=>obReading(),500);});
+ }
+}
+function obReading(){
+ obPart('Reading your website');
+ const w=document.getElementById('obwrap');
+ const m=document.createElement('div');m.className='msg';m.id='obread';
+ m.innerHTML=`<div class="mava">N<i>·</i></div><div class="bubble" style="min-width:260px">
+   <div style="font-weight:600;margin-bottom:8px">Reading nakhlatrading.om</div>
+   <div id="readlist" style="display:flex;flex-direction:column;gap:7px;font-size:13px"></div></div>`;
+ w.appendChild(m);obScroll();
+ const pages=['Homepage','About us','Products & services','Contact'];let i=0;
+ const rl=document.getElementById('readlist');
+ const t=setInterval(()=>{
+   if(i<pages.length){rl.innerHTML+=`<div style="display:flex;align-items:center;gap:8px"><span class="sd live"></span><span class="muted">${pages[i]}</span></div>`;obProg(6+i*4);i++;obScroll();}
+   else{clearInterval(t);
+     obBrain('identity','What you do','Industrial supplies & distribution — valves, fittings, safety equipment','read · homepage','');
+     obBrain('identity','Where','Muscat, with delivery across Oman','read · contact','');
+     obBrain('identity','Brand voice','Practical, trade-focused, no-nonsense','inferred','inf');
+     setTimeout(()=>obBrief(),400);}
+ },700);
+}
+function obBrief(){
+ obPart('Confirming what I read');obProg(22);
+ obSay(`Here's what I understood. Two things I <span class="prov inf" style="vertical-align:middle">inferred</span> — tell me if I'm wrong.
+   <div style="margin-top:10px;display:flex;flex-direction:column;gap:9px">
+     <div><span class="read">✓ You sell</span> industrial supplies & distribution across Oman. <small class="tagp">${ic('doc',11)} read · homepage</small></div>
+     <div><span class="read">✓ You serve</span> contractors and facilities teams. <small class="tagp">${ic('doc',11)} read · about us</small></div>
+     <div style="color:var(--gold-ink)">? I'm assuming your main competitor is a regional distributor on price. <small class="tagp">inferred — unconfirmed</small></div>
+   </div>`,()=>{
+   obBrain('market','Ideal customer','Contractors & facilities teams','read · about','');
+   obControls(`<button class="qb sel" onclick="obBriefOk()">That's right — keep going</button>
+     <button class="qb" onclick="obBriefFix()">Something's wrong</button>`);
+ });
+}
+function obBriefOk(){clearControls();obMe('That\'s right — keep going');obProg(28);setTimeout(obDepts,300);}
+function obBriefFix(){clearControls();obMe('We outrank them on lead time, not price');
+ obSay(`Good — that's exactly the kind of thing the website can't tell me. I'll remember it as <strong>your words over the site's</strong>.`,()=>{
+   obBrain('market','Edge over competitors','Lead time, not price','you','you');obProg(28);setTimeout(obDepts,400);});}
+
+function obDepts(){
+ obPart('Choosing your directors');
+ obSay(`Which parts of the business should I set up directors for? Pick the ones you run — most owners start with three or four. <strong>Chief of Staff</strong> comes automatically.`,()=>{
+   const opts=[['marketing','Marketing'],['sales','Sales'],['finance','Finance'],['operations','Operations'],['hr','People'],['strategy','Strategy']];
+   obControls(opts.map(o=>`<button class="qb ${OB.depts.includes(o[0])?'sel':''}" data-d="${o[0]}" onclick="obToggleDept('${o[0]}',this)">${o[1]}</button>`).join('')
+     +`<div style="flex-basis:100%;height:4px"></div><button class="qb sel" style="background:var(--gold);color:#2A1C00;border-color:var(--gold)" onclick="obDeptsDone()">Set up these directors →</button>`);
+ });
+}
+function obToggleDept(d,btn){
+ if(OB.depts.includes(d)){OB.depts=OB.depts.filter(x=>x!==d);btn.classList.remove('sel');}
+ else{OB.depts.push(d);btn.classList.add('sel');}
+}
+function obDeptsDone(){
+ if(!OB.depts.length){toast('Pick at least one department');return;}
+ clearControls();
+ const names=OB.depts.map(d=>DEPTS.find(x=>x.k===d).name);
+ obMe(names.join(' · '));
+ obSay(`Done — ${names.length} directors, plus your Chief of Staff. Now a few questions no tool can answer for me. This is the only part that needs you.`,()=>{obProg(36);setTimeout(obPersona,350);});
+}
+function obPersona(){
+ obPart('A few questions · 1 of 5');
+ obSay(`First, so I surface the right things: <strong>what are you responsible for, day to day?</strong>`,()=>{
+   showInput('e.g. I run the whole company but spend most time on big deals and cash');
+   OB.answer=(v)=>{obMe(v);obBrain('you','Your focus',v,'you','you');obProg(44);setTimeout(obQ1,350);};
+ });
+}
+function obQ1(){
+ obPart('A few questions · 2 of 5');
+ obSay(`<span class="chip steel" style="float:right">Stored as L3 · Sales</span> What counts as a <strong>lead worth passing to Sales</strong>? This becomes the denominator of every conversion figure.`,()=>{
+   showInput('e.g. A named contact with a live project and a budget holder');
+   OB.answer=(v)=>{obMe(v);obBrain('thresholds','What counts as a lead',v,'you · L3 Sales','you');obProg(55);setTimeout(obQ2,350);};
+ });
+}
+function obQ2(){
+ obPart('A few questions · 3 of 5');
+ obSay(`After how many days of silence should I <strong>flag a deal as stale</strong>?`,()=>{
+   obControls(['7 days','10 days','14 days','Use my median cycle'].map((o,i)=>`<button class="qb" onclick="obPick('${o}',()=>{obBrain('thresholds','Flag stale deal after','${o}','you · L3 Sales','you');obProg(66);setTimeout(obQ3,350)})">${o}</button>`).join('')
+     +`<button class="qb skip" onclick="obSkip(()=>{obProg(66);setTimeout(obQ3,350)})">Skip for now</button>`);
+ });
+}
+function obQ3(){
+ obPart('A few questions · 4 of 5');
+ obSay(`<span class="chip steel" style="float:right">Marketing</span> Roughly what's your <strong>monthly budget for winning new customers</strong>?`,()=>{
+   showInput('e.g. OMR 1,500');OB.money=true;
+   OB.answer=(v)=>{obMe(v);obBrain('thresholds','Monthly acquisition budget',v.match(/\d/)?('OMR '+v.replace(/[^\d,]/g,'')):v,'you · L3 Marketing','you');obProg(77);setTimeout(obQ4,350);};
+ });
+}
+function obQ4(){
+ obPart('A few questions · 5 of 5');
+ obSay(`Last one. When is an <strong>order officially late</strong>? This decides your on-time dispatch rate.`,()=>{
+   obControls(['The day we promised','One day past','Two days past','Three days past','A week past'].map(o=>`<button class="qb" onclick="obPick('${o}',()=>{obBrain('thresholds','Order is late after','${o}','you · L3 Operations','you');obProg(88);setTimeout(obWrapChat,400)})">${o}</button>`).join(''));
+ });
+}
+function obWrapChat(){
+ obPart('Enough to start');obProg(90);
+ obSay(`That's enough to build your Brain — I cap myself at five, because more questions get shorter answers, not better ones. Here's what I'll remember, all on your right. Next I'll offer a couple of optional steps, then assemble everything.`,()=>{
+   obControls(`<button class="qb sel" style="background:var(--gold);color:#2A1C00;border-color:var(--gold)" onclick="go('ob-docs')">Continue → optional steps</button>
+     <button class="qb" onclick="toast('You can leave and resume any time — your transcript is saved')">I'll finish later</button>`);
+ });
+}
+/* input helpers */
+function showInput(ph){const i=document.getElementById('obinput');i.style.display='block';const t=document.getElementById('obtext');t.placeholder=ph||'Type your answer…';t.value='';t.focus();}
+function obKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();obSendText();}}
+function obSendText(){const t=document.getElementById('obtext');const v=t.value.trim();if(!v)return;document.getElementById('obinput').style.display='none';if(OB.answer){const f=OB.answer;OB.answer=null;OB.money=false;f(v);}}
+function obPick(v,cb){clearControls();obMe(v);if(cb)cb();}
+function obSkip(cb){clearControls();obMe('<span style="opacity:.7">Skipped</span>');if(cb)cb();}
+
+/* ---- onboarding later stages (focused screens) ---- */
+function obStageShell(part,prog,inner){
+ return `<div style="min-height:calc(100vh - 112px);background:radial-gradient(900px 500px at 15% -5%,var(--steel-soft),transparent 55%),var(--paper);display:flex;flex-direction:column">
+   <div class="obtop"><div class="logo">NEXUS<i> OS</i></div><span class="chip steel" style="margin-left:14px">Guided setup</span><span class="part">${part}</span></div>
+   <div class="obprog"><i style="width:${prog}%"></i></div>
+   <div style="flex:1;overflow:auto;padding:40px 24px"><div style="max-width:720px;margin:0 auto">${inner}</div></div>
+ </div>`;
+}
+ROUTES['ob-docs']=()=>obStageShell('Optional · documents',92,`
+  <span class="eyebrow">Optional — skip anytime</span>
+  <h1 style="font-size:30px;margin:8px 0 8px">Give me anything you already have written down.</h1>
+  <p class="muted" style="margin-bottom:24px">I'll read these into your Brain the same way I read your website. Nothing is required — but each one turns on real figures.</p>
+  <div class="grid g2" style="margin-bottom:20px">
+   ${[['Your price list or catalogue','Turns on Finance pricing checks','doc'],['A recent proposal','Teaches the Sales proposal studio your style','doc'],['Any SOP or process doc','Seeds Operations and your policy library','doc'],['Last month\'s numbers','Lets Finance show a real baseline','chart']].map(d=>`
+    <div class="card pad" style="display:flex;gap:12px;align-items:flex-start">
+      <div class="ava c1" style="border-radius:10px;background:var(--steel-soft);color:var(--steel-ink)">${ic(d[2],17)}</div>
+      <div style="flex:1"><div style="font-weight:600;color:var(--ink);font-size:14px">${d[0]}</div><p class="muted" style="font-size:12.5px;margin-top:3px">${d[1]}</p>
+      <button class="btn sm secondary" style="margin-top:9px" onclick="toast('Uploaded — parsing into your Brain')">Upload</button></div>
+    </div>`).join('')}
+  </div>
+  <div class="card pad" style="border-style:dashed;text-align:center;margin-bottom:24px">
+    <p class="muted" style="font-size:13px">Drag files here · PDF, DOCX, PPTX, XLSX, CSV · up to 25 MB each</p>
+  </div>
+  <div style="display:flex;gap:12px"><button class="btn primary lg" onclick="go('ob-tools')">Continue →</button><button class="btn ghost lg" onclick="go('ob-tools')">Skip — I'll add these later</button></div>`);
+
+ROUTES['ob-tools']=()=>obStageShell('Optional · connect tools',94,`
+  <span class="eyebrow">Optional — connect where your numbers already live</span>
+  <h1 style="font-size:30px;margin:8px 0 8px">Connect a tool, unlock live figures.</h1>
+  <p class="muted" style="margin-bottom:24px">Read-only. Connecting needs a verified domain — you can do it now or from Settings later. Each one names exactly what it turns on.</p>
+  ${[['Google Analytics 4','Unlocks 4 Marketing + 2 Strategy tiles','steel','Connect'],
+     ['Google Search Console','Unlocks SEO intelligence & keyword gaps','steel','Connect'],
+     ['Zoho CRM','Unlocks 6 Sales tiles — pipeline, forecast, stale deals','gold','Connect'],
+     ['Accounting (manual for now)','Finance stays self-reported until connected','off','Enter manually']].map(t=>`
+   <div class="card pad" style="display:flex;align-items:center;gap:14px;margin-bottom:12px">
+     <div class="ava c6" style="border-radius:10px">${ic('plug',17)}</div>
+     <div style="flex:1"><div style="font-weight:600;color:var(--ink);font-size:14.5px">${t[0]}</div><p class="muted" style="font-size:12.5px">${t[1]}</p></div>
+     <button class="btn sm ${t[2]==='gold'?'gold':'secondary'}" onclick="toast('${t[3]} — mocked in this wireframe')">${t[3]}</button>
+   </div>`).join('')}
+  <div style="display:flex;gap:12px;margin-top:20px"><button class="btn primary lg" onclick="go('ob-review')">Continue →</button><button class="btn ghost lg" onclick="go('ob-review')">Skip for now</button></div>
+  <p class="muted" style="font-size:12px;margin-top:12px">Skip is first-class. Tiles that need a tool will simply say so — never a zero, never a blank.</p>`);
+
+ROUTES['ob-review']=()=>obStageShell('The review gate',97,`
+  <span class="eyebrow">The review gate · your first value moment</span>
+  <h1 style="font-size:30px;margin:8px 0 8px">Here's what I now know about Nakhla.</h1>
+  <p class="muted" style="margin-bottom:20px">I've grouped everything into themes. Expand one to check it, then accept the theme. Nothing here was invented — each fact shows where it came from, and you can edit or delete any of it.</p>
+  <div id="themes">
+  ${[['Identity & what you sell','4 facts','identity',[['What you do','Industrial supplies & distribution','read · homepage'],['Where you operate','Muscat, delivery across Oman','read · contact'],['Brand voice','Practical, trade-focused','inferred']]],
+     ['Customers & market','3 facts','market',[['Ideal customer','Contractors & facilities teams','read · about'],['Edge','Lead time, not price','you'],['Main competitor','Regional distributor','inferred']]],
+     ['How you run Sales','2 facts','sales',[['What counts as a lead','Named contact + live project + budget','you · L3'],['Flag stale deal after','10 days','you · L3']]],
+     ['Assumptions requiring confirmation','2 items','warn',[['Fiscal year start','Assumed January — confirm?','assumption'],['Primary competitor','Inferred from site — confirm?','assumption']]]
+    ].map((t,i)=>`
+    <div class="theme ${i===0?'open':''}">
+      <div class="th" onclick="this.parentElement.classList.toggle('open')">
+        <div class="ti">${ic(t[2]==='warn'?'flag':'brain',16)}</div>
+        <div><div style="font-weight:600;color:var(--ink);font-size:14.5px">${t[0]}</div></div>
+        <span class="cnt">${t[1]} ▾</span></div>
+      <div class="body">
+        ${t[3].map(f=>`<div class="fact"><div class="fl">${f[0]}</div><div class="fv">${f[1]}</div>
+          <span class="prov ${f[2].includes('you')?'you':f[2].includes('inferred')||f[2].includes('assum')?'inf':''}">${f[2]}</span></div>`).join('')}
+        <button class="btn sm secondary" style="margin-top:12px" onclick="this.textContent='✓ Accepted';this.classList.remove('secondary');this.classList.add('gold');toast('Theme accepted into your Brain')">Accept this theme</button>
+      </div>
+    </div>`).join('')}
+  </div>
+  <div style="display:flex;gap:12px;margin-top:20px"><button class="btn primary lg" onclick="go('ob-build')">Build my Brain →</button></div>
+  <p class="muted" style="font-size:12px;margin-top:10px">Unreviewed facts are still used — just labelled "inferred" with one-click confirm. We never accept everything in one global click.</p>`);
+
+ROUTES['ob-build']=()=>obStageShell('Building your Brain',99,`
+  <div style="text-align:center;padding:30px 0">
+    <div style="width:72px;height:72px;margin:0 auto 18px;border-radius:20px;background:var(--ink);display:grid;place-items:center;color:var(--gold)">${ic('brain',34)}</div>
+    <h1 style="font-size:30px">Assembling your workspace</h1>
+    <p class="muted" style="margin:10px auto 26px;max-width:380px">Three stages, committed one at a time — if anything fails, you resume here, not from the start.</p>
+    <div style="max-width:400px;margin:0 auto;text-align:left" id="buildlist"></div>
+  </div>`);
+ROUTES['_after_ob-build']=()=>{
+  const stages=[['Persona — how NEXUS should work with you','done'],['Company Brain — assembling facts with provenance','run'],['Personalising your directors','wait']];
+  const list=device.querySelector('#buildlist');
+  function draw(){list.innerHTML=stages.map(s=>`<div style="display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid var(--hair)">
+     <span class="sd ${s[1]==='done'?'live':s[1]==='run'?'steel':'off'}"></span>
+     <span style="flex:1;color:${s[1]==='wait'?'var(--muted)':'var(--ink)'};font-size:14px">${s[0]}</span>
+     <span class="chip ${s[1]==='done'?'forest':s[1]==='run'?'steel':''}">${s[1]==='done'?'Done':s[1]==='run'?'Working…':'Waiting'}</span></div>`).join('');}
+  draw();
+  setTimeout(()=>{stages[1][1]='done';stages[2][1]='run';draw();},1400);
+  setTimeout(()=>{stages[2][1]='done';draw();setTimeout(()=>go('ob-ready'),700);},2900);
+};
+
+ROUTES['ob-ready']=()=>obStageShell('You\'re all set',100,`
+  <div style="text-align:center;padding:30px 0">
+    <div style="width:72px;height:72px;margin:0 auto 18px;border-radius:50%;background:var(--forest-soft);display:grid;place-items:center;color:var(--forest-ink)">${ic('review',34)}</div>
+    <h1 style="font-size:34px">Your Company Brain is live.</h1>
+    <p class="muted" style="margin:12px auto 26px;max-width:420px">Four directors are ready for Nakhla Trading. Some tiles are measured today; others name exactly what would turn them on. Nothing is faked.</p>
+    <div class="grid g3" style="max-width:520px;margin:0 auto 26px;text-align:left">
+      ${[['6','facts confirmed'],['4','directors live'],['12','tiles waiting on a tool']].map(s=>`<div class="kpi" style="text-align:center"><div class="kv">${s[0]}</div><div class="kl">${s[1]}</div></div>`).join('')}
+    </div>
+    <button class="btn primary lg" onclick="go('app-today')">Enter your workspace →</button>
+  </div>`);
+
+/* ============================================================ USER APP ============================================================ */
+ROUTES['app-today']=()=>appShell('app-today',`
+  <div class="pagehead">
+    <div><span class="eyebrow">Tuesday · 6 October</span><h1>Good morning, Layla.</h1>
+      <p class="sub">One thing needs you first. The rest is holding steady.</p></div>
+    <div class="actions"><button class="btn secondary sm" onclick="toast('Board pack — exports the executive view to PDF')">Export board pack</button></div>
+  </div>
+
+  <div class="grid g2" style="margin-bottom:18px">
+    <div class="card pad">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><span class="eyebrow">Your morning brief</span><span class="chip gold">1 needs you</span></div>
+      <div class="brief">
+        <div class="briefitem"><div class="bk" style="background:var(--clay-soft);color:var(--clay-ink)">${ic('bell',18)}</div>
+          <div><div class="bt">Oman Oil Services has gone quiet</div><div class="bd">12 days of silence on OMR 54,000 — past your 10-day flag. Draft a follow-up?</div></div>
+          <span class="chip clay bsrc">Act</span></div>
+        <div class="briefitem"><div class="bk" style="background:var(--steel-soft);color:var(--steel-ink)">${ic('chart',18)}</div>
+          <div><div class="bt">Enquiries up 18% this week</div><div class="bd">Driven by organic search — your SEO fixes are landing.</div></div>
+          <span class="chip steel bsrc">Zoho</span></div>
+        <div class="briefitem"><div class="bk" style="background:var(--gold-soft);color:var(--gold-ink)">${ic('work',18)}</div>
+          <div><div class="bt">2 dispatches at risk tomorrow</div><div class="bd">A valve supplier delay affects the Al Madina order.</div></div>
+          <span class="chip gold bsrc">Ops</span></div>
+      </div>
+    </div>
+    <div class="col">
+      ${tile({t:'Company health',state:'live',v:'62',delta:'+4 vs last week',meta:'6 of 6 departments scored',srcs:['Composite']})}
+      <div class="card pad">
+        <div class="eyebrow" style="margin-bottom:12px">Where the product is, for you</div>
+        <div class="cband"><div class="cbar"><i class="live" style="width:28%"></i><i class="lock" style="width:40%"></i><i class="plan" style="width:32%"></i></div>
+          <div style="display:flex;gap:16px;font-size:12px;margin-top:4px;flex-wrap:wrap">
+            <span><span class="sd live"></span> 25 measured now</span>
+            <span><span class="sd gold"></span> 36 waiting on a tool</span>
+            <span><span class="sd off"></span> 28 not built yet</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="font-size:18px;margin:26px 0 12px">Measured today</h3>
+  <div class="grid g4" style="margin-bottom:26px">
+    ${tile({t:'Pipeline value',state:'live',v:'OMR 71k',delta:'+9k this week',meta:'in Negotiation',srcs:['Zoho CRM']})}
+    ${tile({t:'Enquiry conversion',state:'live',v:'2.5%',delta:'+0.4pt',meta:'214 of 8,412 sessions',srcs:['GA4']})}
+    ${tile({t:'On-time dispatch',state:'self',v:'83%',meta:'from your work records · 12 of 12 confirmed'})}
+    ${tile({t:'Cash runway',state:'locked',msg:'Connect accounting to see runway. For now, Finance is self-reported.',cta:'app-settings',ctaLabel:'Connect accounting'})}
+  </div>
+
+  <div class="grid g2">
+    <div class="card pad">
+      <div class="eyebrow" style="margin-bottom:12px">Open on your side</div>
+      <p class="muted" style="font-size:13px;margin-bottom:12px">Answering these sharpens your directors. None of them block anything.</p>
+      ${['What disqualifies a deal outright? · Sales','Which competitors should I watch? · Strategy','Your biggest people risk right now? · People'].map(q=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--hair)"><span class="sd gold"></span><span style="flex:1;font-size:13.5px;color:var(--ink)">${q}</span><button class="btn sm ghost" onclick="toast('Opens the question in your department block')">Answer</button></div>`).join('')}
+    </div>
+    <div class="card pad">
+      <div class="eyebrow" style="margin-bottom:12px">Your seven directors</div>
+      ${DEPTS.map(d=>`<div style="display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid var(--hair);cursor:pointer" onclick="go('${screenForDept(d.k)}')">
+        ${ic('director',16)}<span style="flex:1;font-size:13.5px;color:var(--ink);font-weight:500">${d.name}</span>
+        <span class="chip ${d.score?'forest':''}">${d.score?d.score:'Not scored'}</span></div>`).join('')}
+    </div>
+  </div>
+`,{});
+
+/* ---- director page builder ---- */
+function dirHead(dept){const d=DEPTS.find(x=>x.k===dept);
+ return `<div class="pagehead"><div><span class="eyebrow">Director</span><h1>${d.name}</h1><p class="sub">${d.remit}</p></div>
+   <div class="actions">${d.score?`<span class="chip forest" style="height:34px">Score ${d.score} · 6 of 9 checks</span>`:`<span class="chip" style="height:34px">Not scored — needs a connected source</span>`}
+   <button class="btn secondary sm" onclick="toggleAsst()">${ic('brain',15)} Ask this director</button></div></div>`;
+}
+function dirSrail(active,secs){return `<div class="srail">${secs.map(s=>`<button class="${active===s?'on':''}" onclick="toast('Section: ${s}')">${s}</button>`).join('')}</div>`;}
+function toggleAsst(){const a=device.querySelector('.asst');if(a)a.style.display=a.style.display==='none'?'':'none';}
+function miniChart(){ // 12-week sparkline area
+ const pts=[30,34,31,38,42,40,48,52,49,58,62,66];const w=520,h=120,max=70;
+ const step=w/(pts.length-1);
+ const line=pts.map((p,i)=>`${i*step},${h-(p/max)*h}`).join(' ');
+ const area=`0,${h} ${line} ${w},${h}`;
+ return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="120" preserveAspectRatio="none" style="overflow:visible">
+   <polygon points="${area}" fill="var(--steel-soft)"></polygon>
+   <polyline points="${line}" fill="none" stroke="var(--steel)" stroke-width="2.5"></polyline>
+   <circle cx="${w}" cy="${h-(66/max)*h}" r="4" fill="var(--steel)"></circle></svg>`;
+}
+
+ROUTES['app-marketing']=()=>appShell('app-marketing',
+ dirHead('marketing')+
+ dirSrail('Overview',['Overview','Growth plan','SEO','Brand','Competitors','Setup','Watchlist'])+`
+ <div class="grid g3" style="margin-bottom:18px">
+   ${tile({t:'Marketing score',state:'live',v:'45/65',delta:'6 of 9 checks pass',meta:'needs GA4 for the rest',srcs:['GA4','Audit']})}
+   ${tile({t:'Enquiry conversion',state:'live',v:'2.5%',delta:'+0.4pt vs Aug',meta:'214 of 8,412 sessions',srcs:['GA4']})}
+   ${tile({t:'Brand consistency',state:'live',v:'High',meta:'works day-one from your site',srcs:['Website']})}
+ </div>
+ <div class="card pad" style="margin-bottom:18px">
+   <div style="display:flex;align-items:center;margin-bottom:6px"><div class="eyebrow">Traffic & conversion · 12 weeks</div><span class="chip steel" style="margin-left:auto">GA4 · live</span></div>
+   ${miniChart()}
+   <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:6px"><span>Jul</span><span>Aug</span><span>Sep</span><span>Now</span></div>
+ </div>
+ <div class="grid g3" style="margin-bottom:18px">
+   ${tile({t:'SEO gaps',state:'live',v:'20 found',delta:'3 critical',meta:'meta, schema, speed',srcs:['Search Console']})}
+   ${tile({t:'Content calendar',state:'warming',msg:'First suggestions on 9 October',meta:'learning your cadence'})}
+   ${tile({t:'Ad creative studio',state:'planned',msg:'Arrives with the generation spine.'})}
+ </div>
+ <div class="card pad">
+   <div class="eyebrow" style="margin-bottom:8px">Setup · what this director reads</div>
+   <div class="fact"><div class="fl">What counts as a lead</div><div class="fv">Named contact + live project + budget holder</div><span class="prov you">Layla · 6 Oct · L3</span></div>
+   <div class="fact" style="padding-bottom:0"><div class="fl">Monthly acquisition budget</div><div class="fv">OMR 1,500</div><span class="prov you">Layla · 6 Oct · L3</span></div>
+ </div>
+`,{asst:'Marketing'});
+
+ROUTES['app-sales']=()=>appShell('app-sales',
+ dirHead('sales')+
+ dirSrail('Pipeline',['Overview','Pipeline','Forecast','Accounts','Proposals','Setup'])+`
+ <div class="grid g4" style="margin-bottom:20px">
+   ${tile({t:'Pipeline value',state:'live',v:'OMR 71k',delta:'+9k wk',meta:'open deals',srcs:['Zoho']})}
+   ${tile({t:'Weighted forecast',state:'live',v:'OMR 38k',meta:'this quarter',srcs:['Zoho']})}
+   ${tile({t:'Stale deals',state:'live',v:'1',delta:'past 10-day flag',deltaDir:'dn',meta:'Oman Oil Services',srcs:['Zoho']})}
+   ${tile({t:'Win rate',state:'warming',msg:'First comparison on 30 Oct',meta:'need one closed quarter'})}
+ </div>
+ <div class="card pad">
+   <div style="display:flex;align-items:center;margin-bottom:14px"><div class="eyebrow">Pipeline</div>
+     <span class="chip steel" style="margin-left:auto">Zoho CRM · read-only · synced 2m ago</span></div>
+   <div class="board">
+     ${Object.entries(DEALS).map(([lane,deals])=>`<div class="lane">
+       <div class="lh"><span>${lane}</span><span class="cnt">${deals.length}</span></div>
+       ${deals.map(d=>`<div class="deal" onclick="toast('${d[0]} — opens in Zoho')"><div class="dn">${d[0]}</div><div class="dv">OMR ${d[1]}</div>
+         <div class="dm"><span class="ava c2" style="width:20px;height:20px;font-size:9px">${d[2][0]}${d[2].split(' ')[1]?d[2].split(' ')[1][0]:''}</span>${d[2]} · ${d[3]}</div></div>`).join('')}
+     </div>`).join('')}
+   </div>
+ </div>
+`,{asst:'Sales'});
+
+ROUTES['app-finance']=()=>appShell('app-finance',
+ dirHead('finance')+
+ dirSrail('Overview',['Overview','Revenue','Margin','Cash','Receivables','Setup'])+`
+ <div class="card pad" style="margin-bottom:18px;display:flex;gap:14px;align-items:center;background:var(--clay-soft);border-color:transparent">
+   ${ic('plug',22)}<div style="flex:1"><div style="font-weight:600;color:var(--clay-ink)">Finance is self-reported until you connect accounting.</div>
+   <p style="font-size:13px;color:var(--clay-ink);opacity:.85">Everything below is what you've entered — honest, but not fetched. Connecting turns these live.</p></div>
+   <button class="btn sm" style="background:var(--clay);color:#fff" onclick="go('app-settings')">Connect accounting</button>
+ </div>
+ <div class="grid g3" style="margin-bottom:18px">
+   ${tile({t:'Monthly revenue',state:'self',v:'OMR 84k',meta:'you entered · September'})}
+   ${tile({t:'Gross margin',state:'self',v:'31%',meta:'you entered · September'})}
+   ${tile({t:'Cash runway',state:'locked',msg:'Needs a bank or accounting connection to compute.',cta:'app-settings',ctaLabel:'Connect'})}
+ </div>
+ <div class="grid g3">
+   ${tile({t:'Receivables ageing',state:'locked',msg:'Connect accounting to age your invoices.',cta:'app-settings'})}
+   ${tile({t:'Expenses vs budget',state:'locked',msg:'Connect accounting to track spend.',cta:'app-settings'})}
+   ${tile({t:'Business simulator',state:'planned',msg:'"Can I afford this hire?" — a later phase.'})}
+ </div>
+`,{asst:'Finance'});
+
+ROUTES['app-operations']=()=>appShell('app-operations',
+ dirHead('operations')+
+ dirSrail('Overview',['Overview','Projects','Dispatch','Stock','Suppliers','Issues','Setup'])+`
+ <div class="card pad" style="margin-bottom:18px;display:flex;gap:12px;align-items:center;background:var(--forest-soft);border-color:transparent">
+   ${ic('review',20)}<div style="flex:1;font-size:13.5px;color:var(--forest-ink)"><strong>This is the one layer NEXUS owns.</strong> Figures come from your own work records — so rates appear only once you confirm the records are complete.</div>
+   <button class="btn sm secondary" onclick="go('app-work')">Open Your work</button>
+ </div>
+ <div class="grid g4" style="margin-bottom:18px">
+   ${tile({t:'Active projects',state:'live',v:'8',delta:'2 at risk',deltaDir:'dn',meta:'from your records'})}
+   ${tile({t:'Overdue tasks',state:'live',v:'3',meta:'worst: valve order picking'})}
+   ${tile({t:'On-time dispatch',state:'self',v:'83%',meta:'12 of 12 confirmed complete'})}
+   ${tile({t:'Stock below minimum',state:'live',v:'3 of 12',meta:'ordered by shortfall'})}
+ </div>
+ <div class="grid g2">
+   ${tile({t:'Supplier concentration',state:'self',v:'34%',meta:'one valve supplier · you flagged this'})}
+   ${tile({t:'Issue register',state:'live',v:'5 open',delta:'1 high · 2 med · 2 low',meta:'worst first'})}
+ </div>
+`,{asst:'Operations'});
+
+ROUTES['app-people']=()=>appShell('app-people',
+ dirHead('hr')+
+ dirSrail('Overview',['Overview','Team','Policies','Hiring','Capacity','Setup'])+`
+ <div class="grid g3" style="margin-bottom:18px">
+   ${tile({t:'Headcount',state:'self',v:'—',meta:'the roster is who uses NEXUS, not who works here — tell us'})}
+   ${tile({t:'Policy library',state:'live',v:'Ready',meta:'drafted to Omani labour law',srcs:['Generated']})}
+   ${tile({t:'Capacity & utilisation',state:'locked',msg:'Needs project assignments from Your work.',cta:'app-work',ctaLabel:'Open work'})}
+ </div>
+ <div class="card pad">
+   <div class="eyebrow" style="margin-bottom:8px">Watchlist · what you asked me to watch</div>
+   <div class="fact"><div class="fl">Biggest people risk</div><div class="fv">One warehouse supervisor vacancy holding back dispatch</div>
+     <span class="prov you">Layla · 6 Oct</span></div>
+   <div class="fact" style="padding-bottom:0"><div class="fl">What I'll measure to confirm it</div><div class="fv">Dispatch delays tagged to picking capacity</div><span class="prov">needs ops adoption</span></div>
+ </div>
+`,{asst:'People'});
+
+ROUTES['app-strategy']=()=>appShell('app-strategy',
+ dirHead('strategy')+
+ dirSrail('Overview',['Overview','Market position','Expansion','Risk','Setup','Watchlist'])+`
+ <div class="grid g3" style="margin-bottom:18px">
+   ${tile({t:'Market position',state:'live',v:'Drafted',meta:'from your site + competitors',srcs:['Website']})}
+   ${tile({t:'Bid / no-bid advisor',state:'warming',msg:'Learning your win patterns',meta:'needs 1 closed quarter'})}
+   ${tile({t:'Scenario planning',state:'planned',msg:'Arrives with the simulator.'})}
+ </div>
+ <div class="card pad">
+   <div class="eyebrow" style="margin-bottom:8px">Watchlist · your stated strategy</div>
+   <div class="fact"><div class="fl">Market you're entering</div><div class="fv">Sohar industrial estate</div><span class="prov you">Layla · 6 Oct</span></div>
+   <div class="fact"><div class="fl">Binding constraint today</div><div class="fv">People — one key vacancy</div><span class="prov you">Layla · 6 Oct</span></div>
+   <div class="fact" style="padding-bottom:0"><div class="fl">Deliberately not doing</div><div class="fv">No retail counter, no direct import</div><span class="prov you">Layla · 6 Oct</span></div>
+ </div>
+`,{asst:'Strategy'});
+ROUTES['app-executive']=()=>ROUTES['app-today']();
+
+/* ---- Your work (ops recorder) ---- */
+ROUTES['app-work']=()=>appShell('app-work',`
+  <div class="pagehead"><div><span class="eyebrow">Operations · system of record</span><h1>Your work</h1>
+    <p class="sub">What you record here is the only data NEXUS owns. It turns on 23 Operations figures.</p></div>
+    <div class="actions"><button class="btn primary sm" onclick="newProjectModal()">+ New project</button></div></div>
+  <div class="srail">${['Projects','Tasks','Milestones','Issues','Dispatch','Stock','Suppliers','Deals-lite'].map((t,i)=>`<button class="${i===0?'on':''}" onclick="toast('Tab: '+'${t}')">${t}</button>`).join('')}</div>
+  <div class="card pad" style="margin-bottom:16px;display:flex;gap:12px;align-items:center;background:var(--gold-soft);border-color:transparent">
+    ${ic('flag',18)}<div style="flex:1;font-size:13px;color:var(--gold-ink)"><strong>Is this all of your projects?</strong> Rates stay hidden until you confirm your records are complete — a half-filled list makes a wrong number look right.</div>
+    <button class="btn sm" style="background:var(--gold);color:#2A1C00" onclick="toast('Marked complete — Operations rates are now computable')">Yes, this is complete</button></div>
+  <div class="card">
+    <div class="tblwrap"><table class="tbl"><thead><tr><th>Project</th><th>Customer</th><th>Status</th><th>Progress</th><th>Due</th><th></th></tr></thead><tbody>
+    ${[['Al Madina fit-out supply','Al Madina Contractors','At risk','60%','12 Oct','clay'],
+       ['Sohar Steel valve order','Sohar Steel Works','On track','85%','9 Oct','forest'],
+       ['Barka warehouse restock','Barka Logistics','On track','40%','20 Oct','forest'],
+       ['Salalah resort safety kit','Salalah Resorts','Delivered','100%','—','steel']].map(r=>`
+      <tr><td style="font-weight:600;color:var(--ink)">${r[0]}</td><td>${r[1]}</td>
+        <td><span class="chip ${r[5]}">${r[2]}</span></td>
+        <td><div style="width:80px;height:6px;border-radius:999px;background:var(--sunken);overflow:hidden"><i style="display:block;height:100%;width:${r[3]};background:var(--${r[5]})"></i></div></td>
+        <td class="mono">${r[4]}</td><td><button class="btn sm ghost" onclick="toast('Edit — '+'${r[0]}')">Edit</button></td></tr>`).join('')}
+    </tbody></table></div>
+  </div>
+`,{});
+function newProjectModal(){
+ openModal(`<div class="pad">
+   <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><h3 style="font-size:19px">New project</h3><button class="btn icon ghost" style="margin-left:auto" onclick="closeModal()">✕</button></div>
+   <div class="field"><label>Project name</label><input class="control" placeholder="e.g. Al Madina fit-out supply"></div>
+   <div class="field"><label>Customer</label><input class="control" placeholder="Who it's for"></div>
+   <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Status</label><select class="control"><option>On track</option><option>At risk</option><option>Delivered</option></select></div>
+     <div class="field" style="flex:1"><label>Due date</label><input class="control" type="date"></div></div>
+   <div style="display:flex;gap:10px;margin-top:6px"><button class="btn primary block" onclick="closeModal();toast('Project created — Operations tiles updated')">Create project</button>
+     <button class="btn ghost" onclick="closeModal()">Cancel</button></div></div>`);
+}
+
+/* ---- Documents ---- */
+ROUTES['app-documents']=()=>appShell('app-documents',`
+  <div class="pagehead"><div><span class="eyebrow">Your data</span><h1>Your documents</h1>
+    <p class="sub">What the workspace has given NEXUS to read, and how each was classified.</p></div>
+    <div class="actions"><button class="btn primary sm" onclick="toast('Upload — PDF, DOCX, XLSX, CSV up to 25 MB')">+ Upload</button></div></div>
+  <div class="card">
+    <div class="tblwrap"><table class="tbl"><thead><tr><th>Document</th><th>Added by</th><th>Scope</th><th>Status</th><th>Feeds</th></tr></thead><tbody>
+    ${[['Price list 2026.xlsx','Layla','L2 Internal','Classified','forest','Finance pricing'],
+       ['Standard proposal.docx','Mariam','L2 Internal','Classified','forest','Proposal studio'],
+       ['Warehouse SOP.pdf','Khalid','L3 Operations','Classified','forest','Operations'],
+       ['Payroll Sept.pdf','Layla','L5 Personal','Withheld — in review','clay','— held'],
+       ['Scanned invoice.pdf','Khalid','—','Parse failed','gold','— needs OCR']].map(r=>`
+      <tr><td style="font-weight:600;color:var(--ink)">${ic('doc',15)} ${r[0]}</td><td>${r[1]}</td>
+        <td><span class="chip">${r[2]}</span></td><td><span class="chip ${r[4]}">${r[3]}</span></td><td class="muted">${r[5]}</td></tr>`).join('')}
+    </tbody></table></div>
+  </div>
+  <p class="muted" style="font-size:12.5px;margin-top:14px">Anything that fails classification is withheld to the review queue by default — never silently indexed.</p>
+`,{});
+ROUTES['app-documents-empty']=()=>appShell('app-documents',`
+  <div class="pagehead"><div><span class="eyebrow">Your data</span><h1>Your documents</h1></div></div>
+  <div class="card"><div class="state">
+    <div class="glyph">${ic('doc',24)}</div>
+    <h3>No documents yet</h3>
+    <p>Upload a price list, a proposal, or an SOP and NEXUS reads it into your Company Brain — the same way it read your website.</p>
+    <button class="btn primary" onclick="toast('Upload dialog')">Upload your first document</button>
+  </div></div>
+`,{});
+
+/* ---- Review queue ---- */
+ROUTES['app-review']=()=>appShell('app-review',`
+  <div class="pagehead"><div><span class="eyebrow">Your data · safety queue</span><h1>Waiting for review</h1>
+    <p class="sub">Content the classifier withheld — personal, financial, or low-confidence — awaiting your decision.</p></div></div>
+  <div class="col">
+   ${[['Payroll September.pdf','A table of names and salary figures','L5 Personal','Classifier withheld: contains salary data (L4+)'],
+      ['Supplier contract.pdf','Low-confidence classification (0.42)','Uncertain','Could be Operations or Finance — you decide the scope']].map(r=>`
+    <div class="card pad" style="display:flex;gap:16px;align-items:flex-start">
+      <div class="ava c2" style="border-radius:11px;background:var(--clay-soft);color:var(--clay-ink)">${ic('shield',18)}</div>
+      <div style="flex:1"><div style="font-weight:600;color:var(--ink);font-size:15px">${r[0]}</div>
+        <p class="muted" style="font-size:13px;margin:4px 0 8px">${r[1]} · <span class="prov inf">${r[3]}</span></p>
+        <div style="display:flex;gap:9px;flex-wrap:wrap"><select class="control" style="height:38px;width:auto"><option>Set scope: ${r[2]}</option><option>L2 Internal</option><option>L3 Department</option><option>L4 Restricted</option></select>
+          <button class="btn sm primary" onclick="this.closest('.card').style.opacity=.4;toast('Approved into the Brain at the chosen scope')">Approve</button>
+          <button class="btn sm danger" onclick="this.closest('.card').style.opacity=.4;toast('Rejected — not indexed')">Reject</button></div></div>
+    </div>`).join('')}
+  </div>
+`,{});
+
+/* ---- Settings (tabbed) ---- */
+ROUTES['app-settings']=()=>{const tab=S.setTab;
+ const tabs=[['company','Company'],['you','You'],['reporting','Reporting'],['departments','Departments'],['data','Data & tools'],['activity','Activity']];
+ return appShell('app-settings',`
+  <div class="pagehead"><div><span class="eyebrow">Settings</span><h1>Workspace settings</h1>
+    <p class="sub">Settings holds the denominators — a wrong value here is a wrong number everywhere.</p></div></div>
+  <div class="srail">${tabs.map(t=>`<button class="${tab===t[0]?'on':''}" onclick="S.setTab='${t[0]}';go('app-settings')">${t[1]}</button>`).join('')}</div>
+  <div>${settingsBody(tab)}</div>
+ `,{});
+};
+function settingsBody(tab){
+ if(tab==='company')return `<div class="grid g2">
+   <div class="card pad"><div class="eyebrow" style="margin-bottom:12px">Company</div>
+     <div class="field"><label>Company name</label><input class="control" value="Nakhla Trading LLC"></div>
+     <div class="field"><label>Website · verified</label><input class="control" value="nakhlatrading.om"></div>
+     <button class="btn secondary sm">Save</button></div>
+   <div class="card pad"><div class="eyebrow" style="margin-bottom:12px">Domain verification</div>
+     <p class="muted" style="font-size:13px;margin-bottom:12px">Verifying gates inviting people and connecting company-data tools.</p>
+     <div class="fact" style="padding-top:0"><div class="fl">nakhlatrading.om</div><div class="fv"><span class="chip forest">Verified · DNS TXT</span></div></div>
+     <button class="btn secondary sm" style="margin-top:8px">Re-verify</button></div>
+ </div>`;
+ if(tab==='you')return `<div class="grid g2">
+   <div class="card pad"><div class="eyebrow" style="margin-bottom:12px">How NEXUS talks to you</div>
+     <p class="muted" style="font-size:13px;margin-bottom:12px">Presentation only — this never changes what you can access.</p>
+     <div class="field"><label>Detail level</label><select class="control"><option>Brief — headline + one action</option><option>Standard</option><option>Deep — show the working</option></select></div>
+     <div class="field"><label>Language</label><select class="control"><option>English</option><option>العربية</option></select></div></div>
+   <div class="card pad"><div class="eyebrow" style="margin-bottom:12px">Your department block</div>
+     <div class="fact" style="padding-top:0"><div class="fl">What counts as a lead</div><div class="fv">Named contact + live project + budget</div><span class="prov you">editable</span></div>
+     <div class="fact" style="padding-bottom:0"><div class="fl">Flag stale deal after</div><div class="fv">10 days</div><span class="prov you">editable</span></div></div>
+ </div>`;
+ if(tab==='reporting')return `<div class="card pad" style="max-width:560px">
+   <div class="eyebrow" style="margin-bottom:6px">Reporting assumptions</div>
+   <p class="muted" style="font-size:13px;margin-bottom:16px">Each field moves tiles — changing one marks affected figures stale and re-derives them.</p>
+   <div class="field"><label>Financial year starts <span class="muted" style="font-weight:400">· moves 11 tiles</span></label><select class="control"><option>January</option><option selected>April</option></select></div>
+   <div class="field"><label>Reporting week starts <span class="muted" style="font-weight:400">· moves 4 tiles</span></label><select class="control"><option>Sunday</option><option>Monday</option></select></div>
+   <div class="field"><label>Currency & rounding</label><select class="control"><option>OMR · nearest 1</option></select></div>
+   <button class="btn primary sm" onclick="toast('Saved — 15 tiles marked stale and re-deriving')">Save reporting</button></div>`;
+ if(tab==='departments')return `<div class="card pad">
+   <div class="eyebrow" style="margin-bottom:12px">Departments this company runs</div>
+   <p class="muted" style="font-size:13px;margin-bottom:14px">Adding one creates its director and question block. Removing one names its consequences first.</p>
+   <div class="grid g3">${DEPTS.filter(d=>d.k!=='executive').map(d=>`<label style="display:flex;gap:10px;align-items:center;padding:12px;border:1px solid var(--hair);border-radius:11px;cursor:pointer">
+     <input type="checkbox" ${['marketing','sales','finance','operations'].includes(d.k)?'checked':''}> <span style="font-weight:500;color:var(--ink)">${d.name}</span></label>`).join('')}</div>
+   <button class="btn primary sm" style="margin-top:14px" onclick="toast('Departments updated')">Save</button></div>`;
+ if(tab==='data')return `<div class="grid g2">
+   <div class="card pad"><div class="eyebrow" style="margin-bottom:12px">Tool ledger</div>
+     ${[['Zoho CRM','Connected · unlocks 6 Sales tiles','forest'],['Google Analytics 4','Connected · unlocks 4 tiles','forest'],['Search Console','Not connected · unlocks SEO','off'],['Accounting','Not connected · Finance self-reported','off']].map(c=>`
+       <div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--hair)"><span class="sd ${c[2]==='forest'?'live':'off'}"></span>
+         <div style="flex:1"><div style="font-weight:600;color:var(--ink);font-size:13.5px">${c[0]}</div><div class="muted" style="font-size:12px">${c[1]}</div></div>
+         <button class="btn sm ${c[2]==='forest'?'ghost':'secondary'}" onclick="toast('${c[0]}')">${c[2]==='forest'?'Manage':'Connect'}</button></div>`).join('')}</div>
+   <div class="card pad"><div class="eyebrow" style="margin-bottom:12px">Company Brain</div>
+     <p class="muted" style="font-size:13px;margin-bottom:12px">Read-only here. Every fact keeps its provenance; deleting one cascades to its passages and cached answers.</p>
+     <button class="btn secondary sm" onclick="go('oa-brain')">Open the Brain →</button></div>
+ </div>`;
+ return `<div class="card"><div class="tblwrap"><table class="tbl"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Scope</th></tr></thead><tbody>
+   ${[['2m ago','Layla','Changed fiscal year to April','Workspace'],['1h ago','Khalid','Created project "Barka restock"','Operations'],['3h ago','System','Refused Mariam access to payroll.pdf','L4 — logged refusal'],['Yesterday','Sara','Accepted invitation','Marketing']].map(r=>`
+     <tr><td class="mono muted">${r[0]}</td><td style="font-weight:600;color:var(--ink)">${r[1]}</td><td>${r[2]}</td><td><span class="chip">${r[3]}</span></td></tr>`).join('')}
+   </tbody></table></div></div>`;
+}
+
+/* ---- Account ---- */
+ROUTES['app-account']=()=>appShell('app-account',`
+  <div class="pagehead"><div><span class="eyebrow">Account</span><h1>Your account</h1></div></div>
+  <div class="grid g2">
+   <div class="card pad"><div style="display:flex;align-items:center;gap:14px;margin-bottom:16px"><div class="ava c1" style="width:52px;height:52px;font-size:18px">LA</div>
+     <div><div style="font-weight:600;color:var(--ink);font-size:16px">Layla Al-Harthy</div><div class="muted" style="font-size:13px">layla@nakhlatrading.om</div></div></div>
+     <div class="field"><label>Name</label><input class="control" value="Layla Al-Harthy"></div>
+     <div class="field"><label>Email</label><input class="control" value="layla@nakhlatrading.om"></div>
+     <button class="btn secondary sm">Save</button></div>
+   <div class="col">
+     <div class="card pad"><div class="eyebrow" style="margin-bottom:12px">Your workspaces</div>
+       <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--hair)">${ic('today',16)}<span style="flex:1;font-weight:600;color:var(--ink);font-size:13.5px">Nakhla Trading LLC</span><span class="chip steel">Owner · current</span></div>
+       <div style="display:flex;align-items:center;gap:10px;padding:10px 0">${ic('today',16)}<span style="flex:1;font-size:13.5px">Prosoft Informatics</span><button class="btn sm ghost" onclick="toast('Switching reloads to prevent data bleed')">Switch</button></div></div>
+     <div class="card pad"><button class="btn danger block" onclick="go('a-signin')">${ic('logout',16)} Sign out</button></div>
+   </div>
+  </div>
+`,{});
+
+/* ---- states ---- */
+ROUTES['app-loading']=()=>appShell('app-today',`
+  <div class="pagehead"><div><span class="eyebrow">Tuesday · 6 October</span><h1>Loading your morning…</h1></div></div>
+  <div class="grid g2" style="margin-bottom:18px">
+   <div class="card pad"><div style="height:16px;width:40%;background:var(--sunken);border-radius:6px;margin-bottom:16px"></div>
+     ${[0,1,2].map(()=>`<div style="display:flex;gap:12px;padding:12px 0"><div style="width:36px;height:36px;border-radius:10px;background:var(--sunken)"></div><div style="flex:1"><div style="height:12px;width:70%;background:var(--sunken);border-radius:6px;margin-bottom:8px"></div><div style="height:10px;width:45%;background:var(--sunken);border-radius:6px"></div></div></div>`).join('')}</div>
+   <div class="card pad"><div style="height:60px;width:50%;background:var(--sunken);border-radius:10px;margin-bottom:14px"></div><div style="height:12px;width:80%;background:var(--sunken);border-radius:6px"></div></div>
+  </div>
+  <div class="grid g4">${[0,1,2,3].map(()=>`<div class="card pad"><div style="height:12px;width:60%;background:var(--sunken);border-radius:6px;margin-bottom:16px"></div><div style="height:30px;width:50%;background:var(--sunken);border-radius:8px"></div></div>`).join('')}</div>
+  <p class="muted" style="font-size:12.5px;margin-top:16px;text-align:center">Content-shaped skeletons — null means "unknown," never "empty." Never a zero while loading.</p>
+`,{});
+ROUTES['app-error']=()=>appShell('app-today',`
+  <div class="pagehead"><div><span class="eyebrow">Tuesday · 6 October</span><h1>Today</h1></div></div>
+  <div class="card"><div class="state">
+    <div class="glyph" style="background:var(--clay-soft);color:var(--clay-ink)">${ic('shield',24)}</div>
+    <h3>We couldn't load your brief</h3>
+    <p>The connection to your workspace timed out. Your data is safe — nothing was changed. This is honest: we won't show stale numbers as if they were fresh.</p>
+    <div style="display:flex;gap:10px"><button class="btn primary" onclick="go('app-today')">Try again</button><button class="btn secondary" onclick="toast('Status page')">Check status</button></div>
+  </div></div>
+`,{});
+
+/* ============================================================ OWNER ADMIN CONSOLE ============================================================ */
+ROUTES['oa-overview']=()=>appShell('oa-overview',`
+  <div class="pagehead"><div><span class="eyebrow">Workspace admin · Nakhla Trading</span><h1>Admin overview</h1>
+    <p class="sub">You're the Owner. Administration lives here — there's no separate admin role.</p></div>
+    <div class="actions"><button class="btn primary sm" onclick="go('oa-members')">+ Invite someone</button></div></div>
+  <div class="grid g4" style="margin-bottom:20px">
+    <div class="kpi"><div class="kl">Active members</div><div class="kv">5</div><div class="kd up">+1 this week</div></div>
+    <div class="kpi"><div class="kl">Pending invites</div><div class="kv">3</div><div class="kd">2 awaiting · 1 join request</div></div>
+    <div class="kpi"><div class="kl">Onboarding complete</div><div class="kv">4/6</div><div class="kd dn">1 stalled</div></div>
+    <div class="kpi"><div class="kl">Connected tools</div><div class="kv">2</div><div class="kd">Zoho · GA4</div></div>
+  </div>
+  <div class="grid g2">
+    <div class="card pad"><div class="eyebrow" style="margin-bottom:12px">Needs your attention</div>
+      <div class="brief">
+        <div class="briefitem"><div class="bk" style="background:var(--clay-soft);color:var(--clay-ink)">${ic('user',18)}</div><div><div class="bt">Yusuf hasn't started onboarding</div><div class="bd">Invited 4 days ago · Operations contributor</div></div><button class="btn sm ghost bsrc" onclick="toast('Reminder sent')">Remind</button></div>
+        <div class="briefitem"><div class="bk" style="background:var(--gold-soft);color:var(--gold-ink)">${ic('bell',18)}</div><div><div class="bt">1 join request from your domain</div><div class="bd">ahmed@nakhlatrading.om wants to join</div></div><button class="btn sm ghost bsrc" onclick="go('oa-invites')">Review</button></div>
+        <div class="briefitem"><div class="bk" style="background:var(--steel-soft);color:var(--steel-ink)">${ic('shield',18)}</div><div><div class="bt">1 logged refusal in the last day</div><div class="bd">Mariam was refused payroll.pdf (L4)</div></div><button class="btn sm ghost bsrc" onclick="go('oa-audit')">Audit</button></div>
+      </div></div>
+    <div class="card pad"><div class="eyebrow" style="margin-bottom:12px">Roles at a glance</div>
+      ${[['Owner','1','All departments','c6'],['Dept. Manager','2','Their department','c4'],['Contributor','2','Propose within dept','c1'],['Viewer','1','Read-only','c3']].map(r=>`
+        <div style="display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid var(--hair)">
+          <div class="ava ${r[3]}" style="width:28px;height:28px;border-radius:8px;font-size:10px">${r[0][0]}</div>
+          <div style="flex:1"><div style="font-weight:600;color:var(--ink);font-size:13.5px">${r[0]}</div><div class="muted" style="font-size:12px">${r[2]}</div></div>
+          <span class="chip">${r[1]}</span></div>`).join('')}
+    </div>
+  </div>
+`,{owner:true});
+
+ROUTES['oa-members']=()=>appShell('oa-members',`
+  <div class="pagehead"><div><span class="eyebrow">Workspace admin</span><h1>Members & roles</h1>
+    <p class="sub">Authorisation is (role, departments) — set here by you, never self-declared.</p></div>
+    <div class="actions"><button class="btn primary sm" onclick="inviteModal()">+ Invite</button></div></div>
+  <div class="card pad" style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+    <div class="search" style="flex:1;min-width:200px;max-width:320px">${ic('search',15)} Search members…</div>
+    <select class="control" style="width:auto;height:38px"><option>All roles</option><option>Owner</option><option>Manager</option><option>Contributor</option><option>Viewer</option></select>
+    <select class="control" style="width:auto;height:38px"><option>All departments</option><option>Sales</option><option>Operations</option><option>Marketing</option></select>
+    <select class="control" style="width:auto;height:38px"><option>All statuses</option><option>Active</option><option>Invited</option><option>Disabled</option></select>
+  </div>
+  <div class="card"><div class="tblwrap"><table class="tbl"><thead><tr><th>Member</th><th>Role</th><th>Departments</th><th>Onboarding</th><th>Status</th><th></th></tr></thead><tbody>
+    ${MEMBERS.map((m,i)=>`<tr style="cursor:pointer" onclick="go('oa-member')">
+      <td><div style="display:flex;align-items:center;gap:10px"><div class="ava c${(i%6)+1}">${m.n.split(' ').map(x=>x[0]).join('')}</div>
+        <div><div style="font-weight:600;color:var(--ink)">${m.n}</div><div class="muted" style="font-size:12px">${m.e}</div></div></div></td>
+      <td><span class="chip ${m.role==='Owner'?'ink':''}">${m.role}</span></td><td>${m.dept}</td>
+      <td><span class="chip ${m.ob==='Complete'?'forest':m.ob==='In progress'?'gold':'clay'}">${m.ob}</span></td>
+      <td><span class="chip ${m.st==='Active'?'forest':m.st==='Invited'?'gold':''}">${m.st}</span></td>
+      <td><button class="btn sm ghost" onclick="event.stopPropagation();go('oa-member')">Manage</button></td></tr>`).join('')}
+  </tbody></table></div></div>
+`,{owner:true});
+function inviteModal(){
+ openModal(`<div class="pad"><div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><h3 style="font-size:19px">Invite a person</h3><button class="btn icon ghost" style="margin-left:auto" onclick="closeModal()">✕</button></div>
+   <div class="field"><label>Email</label><input class="control" placeholder="name@nakhlatrading.om"></div>
+   <div class="field"><label>Role</label><select class="control"><option>Contributor</option><option>Dept. Manager</option><option>Viewer</option></select></div>
+   <div class="field"><label>Departments <span class="muted" style="font-weight:400">· up to 3</span></label>
+     <div style="display:flex;gap:8px;flex-wrap:wrap">${['Sales','Marketing','Operations','Finance'].map(d=>`<button class="qb" onclick="this.classList.toggle('sel')" style="font-size:12.5px;padding:6px 12px">${d}</button>`).join('')}</div></div>
+   <p class="muted" style="font-size:12px;margin:4px 0 14px">Inviting requires a verified domain — Nakhla's is verified.</p>
+   <button class="btn primary block" onclick="closeModal();toast('Invitation sent — role set by you')">Send invitation</button></div>`);
+}
+ROUTES['oa-member']=()=>appShell('oa-members',`
+  <div style="margin-bottom:16px"><button class="btn sm ghost" onclick="go('oa-members')">← All members</button></div>
+  <div class="pagehead"><div style="display:flex;align-items:center;gap:16px"><div class="ava c2" style="width:56px;height:56px;font-size:18px">MB</div>
+    <div><h1 style="font-size:26px">Mariam Al-Balushi</h1><p class="sub">mariam@nakhlatrading.om · joined 12 Aug 2026</p></div></div>
+    <div class="actions"><button class="btn secondary sm" onclick="toast('Password reset link sent')">Reset password</button>
+      <button class="btn danger sm" onclick="toast('Member disabled — access revoked, documents transferred')">Disable</button></div></div>
+  <div class="grid g2">
+    <div class="card pad"><div class="eyebrow" style="margin-bottom:12px">Role & scope</div>
+      <div class="field"><label>Role</label><select class="control"><option>Contributor</option><option>Dept. Manager</option><option>Viewer</option></select></div>
+      <div class="field"><label>Departments</label><div style="display:flex;gap:8px"><span class="chip ink">Sales</span><button class="btn sm ghost">+ add</button></div></div>
+      <p class="muted" style="font-size:12.5px">As a Contributor, Mariam's department answers are <em>proposals</em> until a manager confirms them.</p>
+      <button class="btn primary sm" style="margin-top:10px" onclick="toast('Role updated · logged to audit')">Save role</button></div>
+    <div class="col">
+      <div class="card pad"><div class="eyebrow" style="margin-bottom:12px">Activity</div>
+        ${[['Answered 2 Sales questions','1h ago'],['Viewed pipeline','1h ago'],['Refused payroll.pdf (L4)','3h ago']].map(a=>`<div style="display:flex;padding:9px 0;border-bottom:1px solid var(--hair);font-size:13px"><span style="flex:1;color:var(--ink)">${a[0]}</span><span class="muted mono" style="font-size:11.5px">${a[1]}</span></div>`).join('')}</div>
+      <div class="card pad"><div class="eyebrow" style="margin-bottom:10px">Onboarding</div>
+        <div style="display:flex;align-items:center;gap:10px"><span class="chip forest">Complete</span><span class="muted" style="font-size:12.5px">Answered her own Sales block · 12 Aug</span></div>
+        <button class="btn sm secondary" style="margin-top:12px" onclick="toast('Opens her onboarding responses')">View responses</button></div>
+    </div>
+  </div>
+`,{owner:true});
+
+ROUTES['oa-invites']=()=>appShell('oa-invites',`
+  <div class="pagehead"><div><span class="eyebrow">Workspace admin</span><h1>Invitations & requests</h1></div>
+    <div class="actions"><button class="btn primary sm" onclick="inviteModal()">+ Invite</button></div></div>
+  <h3 style="font-size:16px;margin-bottom:10px">Pending invitations</h3>
+  <div class="card" style="margin-bottom:24px"><div class="tblwrap"><table class="tbl"><thead><tr><th>Email</th><th>Role</th><th>Department</th><th>Sent</th><th></th></tr></thead><tbody>
+    ${[['yusuf@nakhlatrading.om','Contributor','Operations','4 days ago'],['noor@nakhlatrading.om','Viewer','Finance','1 day ago']].map(r=>`
+      <tr><td style="font-weight:600;color:var(--ink)">${r[0]}</td><td><span class="chip">${r[1]}</span></td><td>${r[2]}</td><td class="muted">${r[3]}</td>
+        <td style="text-align:right"><button class="btn sm ghost" onclick="toast('Reminder sent')">Remind</button> <button class="btn sm danger" onclick="toast('Invitation revoked')">Revoke</button></td></tr>`).join('')}
+  </tbody></table></div></div>
+  <h3 style="font-size:16px;margin-bottom:10px">Join requests · from your domain</h3>
+  <div class="card"><div class="pad" style="display:flex;align-items:center;gap:14px">
+    <div class="ava c3">AH</div><div style="flex:1"><div style="font-weight:600;color:var(--ink)">Ahmed Al-Habsi</div><div class="muted" style="font-size:12.5px">ahmed@nakhlatrading.om · wants to join Nakhla Trading</div></div>
+    <select class="control" style="width:auto;height:38px"><option>Assign role…</option><option>Contributor</option><option>Viewer</option></select>
+    <button class="btn sm primary" onclick="toast('Approved — invitation created')">Approve</button><button class="btn sm danger" onclick="toast('Request declined')">Decline</button></div></div>
+`,{owner:true});
+
+ROUTES['oa-onboarding']=()=>appShell('oa-onboarding',`
+  <div class="pagehead"><div><span class="eyebrow">Workspace admin</span><h1>Onboarding oversight</h1>
+    <p class="sub">Who's set up their view, who's stalled, and what they told NEXUS.</p></div></div>
+  <div class="grid g4" style="margin-bottom:20px">
+    <div class="kpi"><div class="kl">Members onboarded</div><div class="kv">4<span style="font-size:16px;color:var(--muted)">/6</span></div></div>
+    <div class="kpi"><div class="kl">In progress</div><div class="kv">1</div></div>
+    <div class="kpi"><div class="kl">Not started</div><div class="kv">1</div><div class="kd dn">Yusuf · 4 days</div></div>
+    <div class="kpi"><div class="kl">Avg. questions answered</div><div class="kv">4.4</div><div class="kd">of 5 cap</div></div>
+  </div>
+  <div class="card"><div class="tblwrap"><table class="tbl"><thead><tr><th>Member</th><th>Department</th><th>Progress</th><th>Last activity</th><th></th></tr></thead><tbody>
+    ${MEMBERS.map(m=>`<tr><td style="font-weight:600;color:var(--ink)">${m.n}</td><td>${m.dept}</td>
+      <td><div style="display:flex;align-items:center;gap:8px"><div style="width:90px;height:6px;border-radius:999px;background:var(--sunken);overflow:hidden"><i style="display:block;height:100%;width:${m.ob==='Complete'?'100':m.ob==='In progress'?'45':'0'}%;background:var(--${m.ob==='Complete'?'forest':m.ob==='In progress'?'gold':'clay'})"></i></div><span class="muted" style="font-size:12px">${m.ob}</span></div></td>
+      <td class="muted">${m.last}</td>
+      <td style="text-align:right">${m.ob==='Complete'?`<button class="btn sm ghost" onclick="toast('Opens onboarding transcript')">Responses</button>`:`<button class="btn sm secondary" onclick="toast('Reminder sent')">Nudge</button>`}</td></tr>`).join('')}
+  </tbody></table></div></div>
+`,{owner:true});
+
+ROUTES['oa-brain']=()=>appShell('oa-brain',`
+  <div class="pagehead"><div><span class="eyebrow">Knowledge & data</span><h1>Company Brain</h1>
+    <p class="sub">Every fact NEXUS holds about Nakhla, with where it came from. Deleting one cascades to its passages and cached answers.</p></div>
+    <div class="actions"><div class="search" style="max-width:260px">${ic('search',15)} Search facts…</div></div></div>
+  <div class="card"><div class="tblwrap"><table class="tbl"><thead><tr><th>Item</th><th>Value</th><th>Kind</th><th>Scope</th><th>Source</th><th>Updated</th><th></th></tr></thead><tbody>
+    ${[['What you do','Industrial supplies & distribution','Identity','L1','read · homepage','6 Oct'],
+       ['Ideal customer','Contractors & facilities teams','Market','L2','read · about','6 Oct'],
+       ['Edge over competitors','Lead time, not price','Market','L2','you · Layla','6 Oct'],
+       ['What counts as a lead','Named contact + live project + budget','Threshold','L3 Sales','you · Layla','6 Oct'],
+       ['Monthly acquisition budget','OMR 1,500','Threshold','L3 Marketing','you · Layla','6 Oct'],
+       ['Fiscal year start','April','Assumption','L2','confirmed','6 Oct']].map(r=>`
+      <tr><td style="font-weight:600;color:var(--ink)">${r[0]}</td><td>${r[1]}</td><td><span class="chip">${r[2]}</span></td>
+        <td class="mono" style="font-size:12px">${r[3]}</td><td><span class="prov ${r[4].includes('you')?'you':r[4].includes('read')?'':'inf'}" style="font-size:10px">${r[4]}</span></td>
+        <td class="muted mono" style="font-size:12px">${r[5]}</td>
+        <td><button class="btn sm ghost" onclick="toast('Edit fact — opens with provenance')">Edit</button></td></tr>`).join('')}
+  </tbody></table></div></div>
+  <p class="muted" style="font-size:12.5px;margin-top:14px">Conflict precedence: your confirmation > connected system > crawl > inference. A later crawl that contradicts a confirmed fact raises a re-confirmation, never an overwrite.</p>
+`,{owner:true});
+
+ROUTES['oa-connections']=()=>appShell('oa-connections',`
+  <div class="pagehead"><div><span class="eyebrow">Knowledge & data</span><h1>Tool ledger</h1>
+    <p class="sub">What each tool unlocks, what it still can't answer, and its freshness. Read-only scopes.</p></div></div>
+  <div class="col">
+   ${[['Zoho CRM','Connected','forest','2m ago',['Pipeline value','Weighted forecast','Stale deals','Win/loss'],'Marketing attribution — needs GA4 too'],
+      ['Google Analytics 4','Connected','forest','18m ago',['Enquiry conversion','Channel performance','Traffic trend'],'Revenue — that\'s accounting'],
+      ['Search Console','Not connected','off','—',['SEO intelligence','Keyword gaps'],'—'],
+      ['Accounting','Not connected','off','—',['Cash & runway','Margin','Receivables ageing'],'—']].map(c=>`
+    <div class="card pad"><div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+      <div class="ava c6" style="border-radius:10px">${ic('plug',18)}</div>
+      <div style="flex:1"><div style="font-weight:600;color:var(--ink);font-size:15px">${c[0]}</div><div class="muted" style="font-size:12px">${c[1]==='Connected'?'Synced '+c[3]:'Not connected'}</div></div>
+      <span class="chip ${c[2]==='forest'?'forest':''}">${c[1]}</span>
+      <button class="btn sm ${c[2]==='forest'?'ghost':'secondary'}" onclick="toast('${c[0]} — mocked')">${c[2]==='forest'?'Manage':'Connect'}</button></div>
+      <div class="row" style="gap:20px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><div class="eyebrow" style="color:var(--forest-ink);margin-bottom:6px">Unlocks</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${c[4].map(t=>`<span class="chip forest">${t}</span>`).join('')}</div></div>
+        <div style="flex:1;min-width:200px"><div class="eyebrow" style="color:var(--muted);margin-bottom:6px">Can't answer</div><p class="muted" style="font-size:13px">${c[5]}</p></div></div>
+    </div>`).join('')}
+  </div>
+  <p class="muted" style="font-size:12.5px;margin-top:14px">Revoking a tool degrades its tiles to "stale" with a date — never to zero.</p>
+`,{owner:true});
+
+ROUTES['oa-audit']=()=>appShell('oa-audit',`
+  <div class="pagehead"><div><span class="eyebrow">Knowledge & data</span><h1>Audit log</h1>
+    <p class="sub">Who did what — successes and refusals both. Owner-only.</p></div>
+    <div class="actions"><select class="control" style="width:auto;height:38px"><option>All events</option><option>Refusals only</option><option>Agent actions</option></select></div></div>
+  <div class="card"><div class="tblwrap"><table class="tbl"><thead><tr><th>When</th><th>Actor</th><th>Event</th><th>Scope</th><th>Result</th></tr></thead><tbody>
+    ${[['09:42','Layla','Changed fiscal year to April','Workspace','forest','Applied · 15 tiles re-derived'],
+       ['09:15','System','Refused Mariam read of payroll.pdf','L4 Restricted','clay','Refused · logged'],
+       ['08:50','Khalid','Created project "Barka restock"','Operations','forest','Created'],
+       ['08:30','Marketing agent','Drafted SEO fix plan (propose)','Marketing','gold','Proposed · not sent'],
+       ['Yesterday','Sara','Accepted invitation','Marketing','forest','Joined'],
+       ['Yesterday','Layla','Connected Zoho CRM','Workspace','forest','Connected · read-only']].map(r=>`
+      <tr><td class="mono muted">${r[0]}</td><td style="font-weight:600;color:var(--ink)">${r[1]}</td><td>${r[2]}</td>
+        <td class="mono" style="font-size:12px">${r[3]}</td><td><span class="chip ${r[4]}">${r[5]}</span></td></tr>`).join('')}
+  </tbody></table></div></div>
+`,{owner:true});
+
+/* ============================================================ PLATFORM OPERATOR CONSOLE ============================================================ */
+function barsChart(data,hl){const max=Math.max(...data.map(d=>d[1]));
+ return `<div class="bars">${data.map((d,i)=>`<div class="bcol ${i===hl?'hl':''}"><i style="height:${(d[1]/max)*100}%"></i><span>${d[0]}</span></div>`).join('')}</div>`;}
+ROUTES['po-overview']=()=>appShell('po-overview',`
+  <div class="pagehead"><div><span class="eyebrow">NEXUS · platform operator</span><h1>Operator overview</h1>
+    <p class="sub">Health of every workspace on NEXUS OS. Internal staff only.</p></div>
+    <div class="actions"><span class="chip plum" style="height:34px">${ic('shield',14)} Production</span></div></div>
+  <div class="grid g4" style="margin-bottom:20px">
+    <div class="kpi"><div class="kl">Active workspaces</div><div class="kv">148</div><div class="kd up">+12 this month</div></div>
+    <div class="kpi"><div class="kl">Total users</div><div class="kv">1,042</div><div class="kd up">+8.4%</div></div>
+    <div class="kpi"><div class="kl">Onboarding completion</div><div class="kv">71%</div><div class="kd up">+3pt</div></div>
+    <div class="kpi"><div class="kl">AI cost · 30d</div><div class="kv">$2,840</div><div class="kd">$19.2 / active ws</div></div>
+  </div>
+  <div class="grid g2" style="margin-bottom:18px">
+    <div class="card pad"><div class="eyebrow" style="margin-bottom:10px">New workspaces · last 8 weeks</div>
+      ${barsChart([['W1',8],['W2',11],['W3',9],['W4',14],['W5',13],['W6',17],['W7',15],['W8',19]],7)}</div>
+    <div class="card pad"><div class="eyebrow" style="margin-bottom:12px">Alerts</div>
+      <div class="brief">
+        <div class="briefitem"><div class="bk" style="background:var(--clay-soft);color:var(--clay-ink)">${ic('flag',18)}</div><div><div class="bt">6 workspaces dropped at Stage 4</div><div class="bd">Department questions — highest drop-off point</div></div><button class="btn sm ghost bsrc" onclick="go('po-onboarding')">View</button></div>
+        <div class="briefitem"><div class="bk" style="background:var(--gold-soft);color:var(--gold-ink)">${ic('plug',18)}</div><div><div class="bt">Zoho connector errors up 4%</div><div class="bd">Token refresh failures since 04:00</div></div><span class="chip gold bsrc">Watching</span></div>
+        <div class="briefitem"><div class="bk" style="background:var(--steel-soft);color:var(--steel-ink)">${ic('chart',18)}</div><div><div class="bt">AI spend within budget</div><div class="bd">68% of monthly cap used</div></div><span class="chip forest bsrc">OK</span></div>
+      </div></div>
+  </div>
+  <div class="card pad"><div class="eyebrow" style="margin-bottom:12px">Recent activity across workspaces</div>
+    ${[['Prosoft Informatics','completed onboarding','8m ago'],['Al Madina Contractors','reached the review gate','1h ago'],['Barka Logistics','connected Zoho CRM','20m ago'],['Nizwa Builders','dropped at Stage 2','9d ago']].map(a=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--hair);font-size:13.5px"><span class="sd ${a[1].includes('dropped')?'clay':'live'}"></span><span style="color:var(--ink);font-weight:600">${a[0]}</span><span class="muted">${a[1]}</span><span class="muted mono" style="margin-left:auto;font-size:11.5px">${a[2]}</span></div>`).join('')}
+  </div>
+`,{platform:true});
+
+ROUTES['po-tenants']=()=>appShell('po-tenants',`
+  <div class="pagehead"><div><span class="eyebrow">Platform operator</span><h1>Workspaces</h1></div></div>
+  <div class="card pad" style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+    <div class="search" style="flex:1;min-width:200px;max-width:320px">${ic('search',15)} Search workspaces…</div>
+    <select class="control" style="width:auto;height:38px"><option>All plans</option><option>Starter</option><option>Growth</option><option>Scale</option></select>
+    <select class="control" style="width:auto;height:38px"><option>All statuses</option><option>Active</option><option>At risk</option><option>Churn risk</option></select>
+  </div>
+  <div class="card"><div class="tblwrap"><table class="tbl"><thead><tr><th>Workspace</th><th>Plan</th><th>Seats</th><th>Onboarding</th><th>Health</th><th>Status</th><th>Last active</th></tr></thead><tbody>
+    ${TENANTS.map(t=>`<tr style="cursor:pointer" onclick="go('po-tenant')">
+      <td><div style="font-weight:600;color:var(--ink)">${t.n}</div><div class="muted mono" style="font-size:11.5px">${t.dom}</div></td>
+      <td><span class="chip">${t.plan}</span></td><td class="mono">${t.seats}</td>
+      <td><span class="chip ${t.ob==='Complete'?'forest':t.ob.includes('dropped')?'clay':'gold'}">${t.ob}</span></td>
+      <td class="fig" style="font-size:15px">${t.score}</td>
+      <td><span class="chip ${t.st==='Active'?'forest':'clay'}">${t.st}</span></td>
+      <td class="muted">${t.last}</td></tr>`).join('')}
+  </tbody></table></div></div>
+`,{platform:true});
+
+ROUTES['po-tenant']=()=>appShell('po-tenants',`
+  <div style="margin-bottom:16px"><button class="btn sm ghost" onclick="go('po-tenants')">← All workspaces</button></div>
+  <div class="pagehead"><div><span class="eyebrow">Workspace</span><h1>Nakhla Trading LLC</h1><p class="sub">nakhlatrading.om · Growth plan · Muscat, Oman</p></div>
+    <div class="actions"><button class="btn secondary sm" onclick="toast('Impersonate (read-only, logged)')">View as owner</button>
+      <button class="btn danger sm" onclick="toast('Workspace suspended — owner notified')">Suspend</button></div></div>
+  <div class="grid g4" style="margin-bottom:20px">
+    <div class="kpi"><div class="kl">Members</div><div class="kv">6</div></div>
+    <div class="kpi"><div class="kl">Health score</div><div class="kv">62%</div><div class="kd up">+4</div></div>
+    <div class="kpi"><div class="kl">AI generations · 30d</div><div class="kv">412</div><div class="kd">of 1,000</div></div>
+    <div class="kpi"><div class="kl">Connected tools</div><div class="kv">2</div></div>
+  </div>
+  <div class="grid g2">
+    <div class="card pad"><div class="eyebrow" style="margin-bottom:12px">Onboarding journey</div>
+      ${[['Signed up','done'],['Registered company','done'],['Conversation + departments','done'],['Documents','skipped'],['Connected tools','done'],['Review gate','done'],['Brain built','done']].map(s=>`
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid var(--hair)"><span class="sd ${s[1]==='done'?'live':'off'}"></span><span style="flex:1;color:var(--ink);font-size:13.5px">${s[0]}</span><span class="chip ${s[1]==='done'?'forest':''}">${s[1]}</span></div>`).join('')}
+    </div>
+    <div class="col">
+      <div class="card pad"><div class="eyebrow" style="margin-bottom:12px">Departments</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">${['Chief of Staff','Marketing','Sales','Operations'].map(d=>`<span class="chip ink">${d}</span>`).join('')}</div></div>
+      <div class="card pad"><div class="eyebrow" style="margin-bottom:12px">Billing</div>
+        <div class="fact" style="padding-top:0"><div class="fl">Plan</div><div class="fv">Growth · OMR 89 / mo</div></div>
+        <div class="fact" style="padding-bottom:0"><div class="fl">Next renewal</div><div class="fv">1 November 2026</div></div></div>
+    </div>
+  </div>
+`,{platform:true});
+
+ROUTES['po-users']=()=>appShell('po-users',`
+  <div class="pagehead"><div><span class="eyebrow">Platform operator</span><h1>Users</h1>
+    <p class="sub">Every person across every workspace.</p></div></div>
+  <div class="card pad" style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+    <div class="search" style="flex:1;min-width:200px;max-width:320px">${ic('search',15)} Search by name or email…</div>
+    <select class="control" style="width:auto;height:38px"><option>All workspaces</option></select>
+    <select class="control" style="width:auto;height:38px"><option>All statuses</option><option>Active</option><option>Disabled</option></select>
+  </div>
+  <div class="card"><div class="tblwrap"><table class="tbl"><thead><tr><th>User</th><th>Workspace(s)</th><th>Role</th><th>Status</th><th>Last seen</th><th></th></tr></thead><tbody>
+    ${[['Layla Al-Harthy','layla@nakhlatrading.om','Nakhla · Prosoft','Owner','Active','2m ago'],
+       ['Mariam Al-Balushi','mariam@nakhlatrading.om','Nakhla Trading','Contributor','Active','1h ago'],
+       ['Omar Said','omar@prosoft.om','Prosoft Informatics','Owner','Active','8m ago'],
+       ['Khalid Al-Rashdi','khalid@nakhlatrading.om','Nakhla Trading','Manager','Active','3h ago'],
+       ['Fatima Nasser','fatima@barkalog.om','Barka Logistics','Owner','Active','20m ago'],
+       ['Aisha Said','aisha@nakhlatrading.om','Nakhla Trading','Viewer','Disabled','3w ago']].map((u,i)=>`
+      <tr><td><div style="display:flex;align-items:center;gap:10px"><div class="ava c${(i%6)+1}">${u[0].split(' ').map(x=>x[0]).join('')}</div>
+        <div><div style="font-weight:600;color:var(--ink)">${u[0]}</div><div class="muted" style="font-size:12px">${u[1]}</div></div></div></td>
+        <td>${u[2]}</td><td><span class="chip">${u[3]}</span></td><td><span class="chip ${u[4]==='Active'?'forest':''}">${u[4]}</span></td><td class="muted">${u[5]}</td>
+        <td><button class="btn sm ghost" onclick="toast('${u[4]==='Active'?'Disable user':'Re-enable user'}')">${u[4]==='Active'?'Disable':'Enable'}</button></td></tr>`).join('')}
+  </tbody></table></div></div>
+`,{platform:true});
+
+ROUTES['po-onboarding']=()=>appShell('po-onboarding',`
+  <div class="pagehead"><div><span class="eyebrow">Platform operator</span><h1>Onboarding analytics</h1>
+    <p class="sub">Where new workspaces complete — and where they fall out of the conversation.</p></div></div>
+  <div class="grid g4" style="margin-bottom:20px">
+    <div class="kpi"><div class="kl">Started · 30d</div><div class="kv">96</div></div>
+    <div class="kpi"><div class="kl">Reached review gate</div><div class="kv">74</div><div class="kd">77%</div></div>
+    <div class="kpi"><div class="kl">Completed</div><div class="kv">68</div><div class="kd up">71%</div></div>
+    <div class="kpi"><div class="kl">Median time</div><div class="kv">19m</div><div class="kd">to review gate</div></div>
+  </div>
+  <div class="grid g2">
+    <div class="card pad"><div class="eyebrow" style="margin-bottom:14px">Completion funnel</div>
+      <div class="funnel">
+        ${[['Signed up','96','100%',100],['Registered company','94','98%',98],['Conversation','88','92%',92],['Chose departments','85','89%',89],['Dept. questions','76','79%',79],['Review gate','74','77%',77],['Brain built','68','71%',71]].map((f,i)=>`
+          <div class="frow"><span style="color:var(--ink)">${f[0]}</span><div class="fbar" style="width:${f[3]}%;background:${i>=4&&i<6?'var(--gold)':i===6?'var(--forest)':'var(--plum)'}">${f[1]}</div><span class="muted mono" style="text-align:right">${f[2]}</span></div>`).join('')}
+      </div>
+      <p class="muted" style="font-size:12.5px;margin-top:14px">Biggest drop (−10pt) is at department questions — the only part that needs the founder to type.</p></div>
+    <div class="card pad"><div class="eyebrow" style="margin-bottom:12px">Workspaces that dropped off</div>
+      ${TENANTS.filter(t=>t.ob.includes('dropped')).concat([{n:'Coastal Marine WLL',ob:'Stage 4 (dropped)',last:'5d ago'},{n:'Dhofar Supplies',ob:'Stage 1 (dropped)',last:'6d ago'}]).map(t=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--hair)"><span class="sd clay"></span>
+          <div style="flex:1"><div style="font-weight:600;color:var(--ink);font-size:13.5px">${t.n}</div><div class="muted" style="font-size:12px">${t.ob}</div></div>
+          <button class="btn sm ghost" onclick="toast('View chatbot transcript')">Transcript</button></div>`).join('')}
+    </div>
+  </div>
+`,{platform:true});
+
+ROUTES['po-analytics']=()=>appShell('po-analytics',`
+  <div class="pagehead"><div><span class="eyebrow">Platform operator</span><h1>Growth & engagement</h1></div>
+    <div class="actions"><select class="control" style="width:auto;height:38px"><option>Last 8 weeks</option><option>Last quarter</option><option>Year to date</option></select></div></div>
+  <div class="grid g4" style="margin-bottom:20px">
+    <div class="kpi"><div class="kl">Weekly active users</div><div class="kv">612</div><div class="kd up">+6.1%</div></div>
+    <div class="kpi"><div class="kl">Avg. sessions / user</div><div class="kv">4.3</div><div class="kd up">+0.4</div></div>
+    <div class="kpi"><div class="kl">Directors used / ws</div><div class="kv">3.1</div><div class="kd">of ~4 enabled</div></div>
+    <div class="kpi"><div class="kl">30-day retention</div><div class="kv">82%</div><div class="kd up">+2pt</div></div>
+  </div>
+  <div class="grid g2" style="margin-bottom:18px">
+    <div class="card pad"><div class="eyebrow" style="margin-bottom:10px">Workspace growth · 8 weeks</div>
+      ${barsChart([['W1',88],['W2',96],['W3',104],['W4',112],['W5',121],['W6',129],['W7',139],['W8',148]],7)}</div>
+    <div class="card pad"><div class="eyebrow" style="margin-bottom:10px">Weekly active users · 8 weeks</div>
+      ${barsChart([['W1',410],['W2',448],['W3',470],['W4',505],['W5',540],['W6',566],['W7',588],['W8',612]],7)}</div>
+  </div>
+  <div class="card pad"><div class="eyebrow" style="margin-bottom:12px">Most-used directors</div>
+    ${[['Chief of Staff','96%',96],['Sales','74%',74],['Marketing','68%',68],['Operations','51%',51],['Finance','34%',34],['People','22%',22],['Strategy','18%',18]].map(d=>`
+      <div style="display:flex;align-items:center;gap:12px;padding:8px 0"><span style="width:120px;font-size:13px;color:var(--ink);font-weight:500">${d[0]}</span>
+        <div style="flex:1;height:10px;border-radius:999px;background:var(--sunken);overflow:hidden"><i style="display:block;height:100%;width:${d[2]}%;background:var(--plum)"></i></div>
+        <span class="muted mono" style="width:44px;text-align:right;font-size:12px">${d[1]}</span></div>`).join('')}
+  </div>
+`,{platform:true});
+
+ROUTES['po-settings']=()=>appShell('po-settings',`
+  <div class="pagehead"><div><span class="eyebrow">Platform operator</span><h1>Admin settings</h1></div></div>
+  <div class="grid g2">
+    <div class="card pad"><div class="eyebrow" style="margin-bottom:12px">Staff roles & permissions</div>
+      ${[['Super admin','Full access · billing, suspend, impersonate','2'],['Support','Read workspaces · impersonate (logged)','5'],['Analyst','Read analytics only','3']].map(r=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--hair)">${ic('shield',16)}
+          <div style="flex:1"><div style="font-weight:600;color:var(--ink);font-size:13.5px">${r[0]}</div><div class="muted" style="font-size:12px">${r[1]}</div></div><span class="chip plum">${r[2]}</span></div>`).join('')}
+      <button class="btn secondary sm" style="margin-top:12px" onclick="toast('Add staff member')">+ Add staff</button></div>
+    <div class="col">
+      <div class="card pad"><div class="eyebrow" style="margin-bottom:12px">Feature flags</div>
+        ${[['Anonymous gap scan','on'],['Multi-entity group view','on'],['Arabic UI (beta)','off'],['Director agent autonomy','off']].map(f=>`
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--hair)"><span style="flex:1;font-size:13.5px;color:var(--ink)">${f[0]}</span>
+            <span class="chip ${f[1]==='on'?'forest':''}">${f[1]==='on'?'Enabled':'Off'}</span></div>`).join('')}</div>
+      <div class="card pad"><div class="eyebrow" style="margin-bottom:12px">AI configuration</div>
+        <div class="fact" style="padding-top:0"><div class="fl">Monthly spend cap</div><div class="fv">$4,500</div></div>
+        <div class="fact" style="padding-bottom:0"><div class="fl">Default autonomy</div><div class="fv">Propose — never act without confirmation</div></div></div>
+    </div>
+  </div>
+`,{platform:true});
+
+/* ============================================================ BOOT ============================================================ */
+(function(){
+ try{const d=localStorage.getItem('nx-device');if(d)setDevice(d);const t=localStorage.getItem('nx-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}
+ go('m-landing');
+})();
+</script>
+
+
+
+
+
+
+
+
+
+
+

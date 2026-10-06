@@ -1,0 +1,87 @@
+/*
+  tokens.css — design-preview token file.
+
+  Mirrors apps/web/tailwind.config.ts and apps/web/app/globals.css verbatim:
+  same hex values, same radii, same shadows, same durations/easing. This is
+  the ONE file in apps/web/design-previews/ allowed to carry a literal value —
+  every onboarding-*.html preview links to this file and references custom
+  properties only, exactly as component code in the real app would reference
+  the Tailwind tokens these mirror.
+
+  Per ADR 0043, NEXUS OS's design system is the cut-paper navy/gold palette
+  defined in tailwind.config.ts (ink/steel/slate/bone/gold/clay — Fraunces +
+  Inter + JetBrains Mono), not the ADF magenta/aubergine system. These previews
+  follow what is actually live on /register-company and /onboarding/agent.
+
+  The product has no dark theme anywhere in the codebase (no `dark:` classes,
+  no theme provider) — every screen is a deliberately light paper ground. These
+  previews are therefore single-theme, matching the rest of the app, rather
+  than inventing a dark mode that does not exist elsewhere in the product.
+*/
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap');
+
+:root {
+  /* ---- colour, mirrored verbatim from tailwind.config.ts ---- */
+  --ink-50:#F2F5FA; --ink-100:#E2E8F2; --ink-200:#C2CEE2; --ink-300:#93A8C7;
+  --ink-400:#4A6489; --ink-500:#2F4C7B; --ink-600:#193460; --ink-700:#0F2851;
+  --ink-800:#091F46; --ink-900:#061634; --ink-950:#030C1E;
+
+  --steel-100:#E4EDF4; --steel-200:#C3D8E7; --steel-300:#93B8D1; --steel-400:#5F94B8;
+  --steel-500:#37729C; --steel-600:#2C5C80; --steel-700:#224862;
+
+  --slate-100:#EDF2F6; --slate-200:#D6E1E9; --slate-300:#B4C7D5; --slate-400:#7699AE;
+  --slate-500:#5C8098; --slate-600:#48657A;
+
+  --bone-50:#FBFAF8; --bone-100:#F5F2EF; --bone-200:#E9E4DE; --bone-300:#D8D0C7; --bone-400:#BFB4A7;
+
+  --gold-100:#FDF6E8; --gold-200:#FAE9C7; --gold-300:#F5D89B; --gold-400:#EFBF6A;
+  --gold-500:#DFA542; --gold-600:#B9822B; --gold-700:#8A5F1C;
+
+  --clay-100:#F8EDE6; --clay-200:#EED7C7; --clay-300:#DCB098; --clay-400:#C5825A;
+  --clay-500:#A55D35; --clay-600:#84492A;
+
+  --white:#FFFFFF;
+
+  /* ---- radii (tailwind.config.ts) ---- */
+  --radius-control:0.625rem; --radius-data:0.875rem; --radius-card:1.25rem; --radius-panel:1.5rem;
+
+  /* ---- elevation (tailwind.config.ts boxShadow) ---- */
+  --shadow-e1:0 1px 2px rgba(9,31,70,0.04), 0 4px 12px -6px rgba(9,31,70,0.10);
+  --shadow-e2:0 1px 2px rgba(9,31,70,0.05), 0 12px 28px -12px rgba(9,31,70,0.18);
+  --shadow-e3:0 2px 6px rgba(9,31,70,0.06), 0 32px 64px -24px rgba(9,31,70,0.28);
+
+  /* ---- motion (lib/motion.ts + tailwind.config.ts transitionDuration) ---- */
+  --dur-instant:80ms; --dur-micro:140ms; --dur-base:200ms; --dur-emphasis:320ms; --dur-slow:480ms;
+  --ease-out:cubic-bezier(0.16,1,0.3,1);
+  --ease-in:cubic-bezier(0.4,0,1,1);
+  --ease-inout:cubic-bezier(0.4,0,0.2,1);
+
+  /* ---- type (apps/web/app/layout.tsx: Fraunces, Inter, JetBrains Mono) ---- */
+  --font-display:'Fraunces', Georgia, serif;
+  --font-sans:'Inter', system-ui, sans-serif;
+  --font-mono:'JetBrains Mono', ui-monospace, monospace;
+
+  /* ---- spacing: the project's real scale is Tailwind's default 0.25rem
+     step (px-3.5, gap-5, p-6…), not a bespoke 8px system — kept identical to
+     what every other NEXUS OS screen already uses. ---- */
+  --sp-1:0.25rem; --sp-2:0.5rem; --sp-3:0.75rem; --sp-4:1rem; --sp-5:1.25rem;
+  --sp-6:1.5rem; --sp-8:2rem; --sp-10:2.5rem; --sp-12:3rem; --sp-16:4rem; --sp-20:5rem;
+}
+
+/*
+  Base type assignment, mirrored from apps/web/app/globals.css's base layer
+  (`body { @apply font-sans }`, `h1,h2,h3,h4 { @apply font-display }`).
+
+  Every onboarding-*.html preview applies fonts by *class* only — `.t-display`
+  / `.t-sans` / `.t-mono` — never by writing `font-family` itself, exactly the
+  discipline component code is held to. This file is the one place that
+  declaration is allowed to exist, the same way Tailwind's own `font-display`
+  / `font-sans` / `font-mono` utilities resolve through tailwind.config.ts
+  rather than being spelled out at each call site.
+*/
+body { font-family: var(--font-sans); }
+h1, h2, h3, h4 { font-family: var(--font-display); }
+.t-display { font-family: var(--font-display); }
+.t-sans { font-family: var(--font-sans); }
+.t-mono { font-family: var(--font-mono); }
