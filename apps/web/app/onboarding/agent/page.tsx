@@ -1,17 +1,24 @@
-import { AgentOnboarding } from '@/components/onboarding/AgentOnboarding'
+import { OnboardingEntry } from '@/components/onboarding/OnboardingEntry'
 
 export const dynamic = 'force-dynamic'
 
 export const metadata = { title: 'Setting up your workspace — NEXUS OS' }
 
 /**
- * The guided onboarding route.
+ * The standalone guided-onboarding route.
  *
- * No parameters. Which company is being set up is decided by the session's
- * workspace, server-side — so this URL cannot be used to research somebody
- * else's domain, and a bookmark or a refresh resumes the journey already in
- * progress rather than starting a second one.
+ * ADR 0069 (phase 1) replaces the ADR 0067 catalogue with a conversation and a
+ * live Company Brain panel. Rather than issuing a server redirect to
+ * `/register-company`, this mounts the same `OnboardingEntry` directly — it
+ * resolves the founder's actual position (company created yet or not) from the
+ * API on mount regardless of which of the two URLs was opened, so a bookmark
+ * or a refresh of this route resumes exactly where `/register-company` would
+ * too.
+ *
+ * The eight-phase `AgentOnboarding` component this used to render is
+ * deliberately left in the tree, unmounted, with its own tests intact — ADR
+ * 0069 retires it in a dedicated change, not this one.
  */
 export default function Page() {
-  return <AgentOnboarding />
+  return <OnboardingEntry />
 }
