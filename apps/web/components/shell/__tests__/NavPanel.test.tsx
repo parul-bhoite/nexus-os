@@ -72,9 +72,13 @@ describe('what the panel lists', () => {
     // as `approved`/`L3` with a reviewer and timestamp.
     // '/documents' joined when H4's upload half was built —
     // app/documents/page.tsx, checked against a running stack the same way.
+    // '/brain' joined when ADR 0069 phase 2 built the Company Brain page —
+    // app/brain/page.tsx, shelled by app/brain/layout.tsx the same way every
+    // route above it is.
     const built = new Set([
       '/dashboard',
       '/work',
+      '/brain',
       '/documents',
       '/review-queue',
       '/onboarding',

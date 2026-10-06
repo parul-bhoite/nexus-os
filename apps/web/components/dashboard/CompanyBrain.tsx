@@ -140,12 +140,24 @@ export function CompanyBrain() {
           </div>
         ) : null}
 
-        <Link
-          href="/settings"
-          className="mt-4 inline-block text-sm font-medium text-steel-600 underline decoration-steel-300 underline-offset-2 hover:text-steel-700"
-        >
-          Edit in settings
-        </Link>
+        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
+          <Link
+            href="/settings"
+            className="text-sm font-medium text-steel-600 underline decoration-steel-300 underline-offset-2 hover:text-steel-700"
+          >
+            Edit in settings
+          </Link>
+          {/* ADR 0069 phase 2: this panel stays the glance — four fields and
+              the assumptions that need auditing. The full list, every
+              answered threshold and (stretch) the relationship graph live on
+              their own page rather than growing this one past the fold. */}
+          <Link
+            href="/brain"
+            className="text-sm font-medium text-steel-600 underline decoration-steel-300 underline-offset-2 hover:text-steel-700"
+          >
+            See your full Company Brain →
+          </Link>
+        </div>
       </div>
     </section>
   )
