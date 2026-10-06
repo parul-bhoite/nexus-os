@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { type Tool, type ToolCatalogue, readTools } from '@/lib/agent-onboarding-client'
+import { departmentLabel } from '@/lib/onboarding-client'
 
 /**
  * The tools step: which systems this company runs on. The last thing before
@@ -42,14 +43,37 @@ import { type Tool, type ToolCatalogue, readTools } from '@/lib/agent-onboarding
  * to each other, so they are presented under one heading rather than as four
  * unrelated choices — but more than one can be ticked, because a company
  * mid-migration really does run two, and a radio group would force them to lie.
+ *
+ * **Recommendations add emphasis, they never filter.** `recommendedDepartments`
+ * is the Areas of Interest the founder already chose — a fact already on
+ * record, not a model's guess — so a tool is "recommended" purely because its
+ * department is one of those. The reason sentence names the departments
+ * verbatim rather than claiming analysis this screen did not do. Nothing
+ * recommended is hidden from the full catalogue below it, and nothing
+ * unrecommended is removed from it either: the badge and the "Recommended for
+ * you" shelf are a second view onto the same list, never a shorter one.
+ *
+ * Recommendations are **not** pre-ticked. A box ticked on the founder's behalf
+ * is a declaration they did not make — the same objection the rest of this
+ * docstring raises about writing into the dark — so "Add all recommended" is
+ * one deliberate click, and every individual recommended tool still toggles
+ * on its own.
  */
 export function ToolsStep({
   onContinue,
   disabled,
+  recommendedDepartments = [],
 }: {
   /** The ids to declare, and whether the person chose to skip the step. */
   onContinue: (providers: string[], skipped: boolean) => void
   disabled: boolean
+  /**
+   * The Areas of Interest the founder already chose, as department keys
+   * (`'sales'`, `'marketing'`, …). Optional and empty by default so the
+   * retired `AgentOnboarding` catalogue, which never collected an explicit
+   * Areas-of-Interest step, renders exactly what it always has.
+   */
+  recommendedDepartments?: string[]
 }) {
   const [catalogue, setCatalogue] = useState<ToolCatalogue | null>(null)
   const [picked, setPicked] = useState<Set<string> | null>(null)
@@ -103,6 +127,61 @@ export function ToolsStep({
     return out
   }, [catalogue])
 
+  /**
+   * Which tool ids count as recommended, and the human-readable department
+   * names the reason sentence names.
+   *
+   * A CRM is recommended as a group: the four are alternatives to each other
+   * and presented under one heading, so "we think you want a CRM" has to be
+   * true of the group, not of whichever one happens to come first in the
+   * catalogue.
+   */
+  const { recommendedIds, recommendedLabels } = useMemo(() => {
+    const wanted = new Set(recommendedDepartments)
+    const tools = catalogue?.tools ?? []
+    const crmWanted = tools.some((tool) => tool.kind === 'crm' && wanted.has(tool.department))
+
+    const ids = new Set<string>()
+    for (const tool of tools) {
+      const isRecommended = tool.kind === 'crm' ? crmWanted : wanted.has(tool.department)
+      if (isRecommended) ids.add(tool.id)
+    }
+
+    // The reason sentence names the chosen departments that actually produced a
+    // recommendation — not every chosen area. A chosen area with no tool of its
+    // own (Operations has none in the catalogue) would otherwise be named as
+    // though we were suggesting something for it, and named off its raw key
+    // ("operations") because no tool carried its label. Intersecting with the
+    // recommended tools' own departments fixes both: it drops the empty area,
+    // and it still names the chosen department that pulled in the CRM group
+    // (a chosen "sales" naming "Sales", never the CRM's own "marketing").
+    // Labels come from the canonical `departmentLabel`, so casing is right even
+    // for a department the catalogue never had a tool for.
+    const contributing = new Set<string>()
+    for (const tool of tools) {
+      if (ids.has(tool.id) && wanted.has(tool.department)) contributing.add(tool.department)
+    }
+    const labels: string[] = []
+    for (const department of recommendedDepartments) {
+      if (!contributing.has(department)) continue
+      const label = departmentLabel(department)
+      if (!labels.includes(label)) labels.push(label)
+    }
+    return { recommendedIds: ids, recommendedLabels: labels }
+  }, [catalogue, recommendedDepartments])
+
+  const recommendedTools = useMemo(
+    () => (catalogue?.tools ?? []).filter((tool) => recommendedIds.has(tool.id)),
+    [catalogue, recommendedIds],
+  )
+
+  const addAllRecommended = () =>
+    setPicked((prev) => {
+      const next = new Set(prev ?? [])
+      for (const id of Array.from(recommendedIds)) next.add(id)
+      return next
+    })
+
   const chosen = picked ?? new Set<string>()
 
   const toggle = (id: string) =>
@@ -150,6 +229,82 @@ export function ToolsStep({
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-start">
         <div className="flex flex-col gap-5">
+          {recommendedTools.length > 0 && (
+            <section
+              aria-labelledby="recommended-tools-heading"
+              className="animate-rise rounded-2xl border border-gold bg-gold/10 p-4"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3
+                    id="recommended-tools-heading"
+                    className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-600"
+                  >
+                    Recommended for you
+                  </h3>
+                  {/* The reason is the fact that produced it and nothing more —
+                      the chosen Areas of Interest — never a claim about
+                      analysis this screen did not perform. */}
+                  <p className="mt-1 text-xs leading-relaxed text-ink-500">
+                    For the areas you chose: {recommendedLabels.join(', ')}.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={addAllRecommended}
+                  className="min-h-[44px] rounded-full border border-steel-400 bg-white px-4 text-sm font-medium text-steel-700 transition-colors disabled:opacity-50 [@media(hover:hover)and(pointer:fine)]:hover:bg-steel-100 active:bg-steel-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-steel-500"
+                >
+                  Add all recommended
+                </button>
+              </div>
+
+              <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+                {recommendedTools.map((tool) => {
+                  const on = chosen.has(tool.id)
+                  return (
+                    <li key={tool.id}>
+                      <label
+                        className={`flex min-h-[44px] cursor-pointer items-start gap-3 rounded-xl border p-3 transition-all duration-200 ${
+                          disabled ? 'cursor-not-allowed opacity-50' : ''
+                        } ${
+                          on
+                            ? 'border-steel-400 bg-steel-100 shadow-paper'
+                            : 'border-bone-200 bg-white hover:border-steel-300 hover:shadow-paper'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          disabled={disabled}
+                          onChange={() => toggle(tool.id)}
+                          className="mt-0.5 h-4 w-4 shrink-0 accent-steel-600"
+                        />
+                        <span className="min-w-0">
+                          <span
+                            className={`block text-sm font-medium transition-colors ${
+                              on ? 'text-steel-700' : 'text-ink'
+                            }`}
+                          >
+                            {tool.name}
+                            {/* Gives this checkbox a distinct accessible name
+                                from its twin in the full catalogue below, since
+                                the same tool now has two controls bound to the
+                                same id. */}
+                            <span className="sr-only"> (recommended)</span>
+                          </span>
+                          <span className="mt-0.5 block text-xs leading-snug text-ink-400">
+                            {tool.unlocks ?? tool.records}
+                          </span>
+                        </span>
+                      </label>
+                    </li>
+                  )
+                })}
+              </ul>
+            </section>
+          )}
+
           {groups.map((group, index) => (
             <fieldset
               key={group.key}
@@ -193,12 +348,23 @@ export function ToolsStep({
                           className="mt-0.5 h-4 w-4 shrink-0 accent-steel-600"
                         />
                         <span className="min-w-0">
-                          <span
-                            className={`block text-sm font-medium transition-colors ${
-                              on ? 'text-steel-700' : 'text-ink'
-                            }`}
-                          >
-                            {tool.name}
+                          <span className="flex flex-wrap items-center gap-1.5">
+                            <span
+                              className={`text-sm font-medium transition-colors ${
+                                on ? 'text-steel-700' : 'text-ink'
+                              }`}
+                            >
+                              {tool.name}
+                            </span>
+                            {/* The badge is never the only signal — the word
+                                "Recommended" is in its own text, not conveyed by
+                                colour alone, so it reads the same without the
+                                pill's background. */}
+                            {recommendedIds.has(tool.id) && (
+                              <span className="rounded-full bg-gold/20 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-600">
+                                Recommended
+                              </span>
+                            )}
                           </span>
                           {/* A capability, never a finding — or, for a tool no
                               capability reads yet, what recording it does
