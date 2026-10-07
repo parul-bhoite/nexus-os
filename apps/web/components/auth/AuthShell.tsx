@@ -38,7 +38,7 @@ export function AuthShell({
     <main
       id="main"
       tabIndex={-1}
-      className="flex min-h-screen justify-center bg-bone-100 lg:items-center lg:p-8"
+      className="flex min-h-screen justify-center bg-bone-100"
     >
       {/* The clip-path lives once, here; the right panel references it. */}
       <svg aria-hidden="true" className="absolute h-0 w-0">
@@ -49,7 +49,7 @@ export function AuthShell({
         </defs>
       </svg>
 
-      <div className="relative w-full overflow-hidden bg-white shadow-e3 lg:max-w-6xl lg:rounded-[2rem]">
+      <div className="relative w-full overflow-hidden bg-white">
         {/* ── The brand panel — organic curve, value thesis, grounding proof ── */}
         <div
           aria-hidden="true"
@@ -104,7 +104,7 @@ export function AuthShell({
         </div>
 
         {/* ── The form ── */}
-        <div className="relative z-10 flex min-h-screen flex-col px-6 py-10 sm:px-10 lg:min-h-[46rem] lg:w-[48%] lg:px-14 lg:py-12">
+        <div className="relative z-10 flex min-h-screen flex-col px-6 py-10 sm:px-10 lg:w-[48%] lg:px-14 lg:py-12">
           <Link
             href="/"
             className="inline-flex w-fit rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-500 focus-visible:ring-offset-4 focus-visible:ring-offset-white"
