@@ -68,6 +68,55 @@ export function startTrial(): Promise<Entitlement> {
   return call<Entitlement>('/api/billing/trial', { method: 'POST' })
 }
 
+/* ── Admin (platform-admin only; the API 403s otherwise) ──────── */
+
+export type AdminPrice = {
+  kind: 'department' | 'tool'
+  key: string
+  amount_minor: number
+  currency: string
+  active: boolean
+  updated_at: string
+  updated_by: string | null
+}
+
+export function fetchPrices(): Promise<AdminPrice[]> {
+  return call<AdminPrice[]>('/api/admin/prices')
+}
+
+export function updatePrice(
+  kind: string,
+  key: string,
+  body: { amount_minor: number; active: boolean },
+): Promise<AdminPrice> {
+  return call<AdminPrice>(
+    `/api/admin/prices/${encodeURIComponent(kind)}/${encodeURIComponent(key)}`,
+    { method: 'PUT', body: JSON.stringify(body) },
+  )
+}
+
+/**
+ * Parse a major-unit amount a person typed (e.g. "25.5") into minor units for
+ * `currency`, inverting `formatMinor` — so an admin edits "25.000" OMR, not
+ * 25000 baisa. Returns null when the text is not a non-negative number.
+ */
+export function parseMajorToMinor(text: string, currency: string): number | null {
+  const major = Number(text.trim())
+  if (!Number.isFinite(major) || major < 0) return null
+  const decimals = new Intl.NumberFormat(undefined, { style: 'currency', currency })
+    .resolvedOptions()
+    .maximumFractionDigits ?? 2
+  return Math.round(major * 10 ** decimals)
+}
+
+/** Major-unit value (as a plain number) for prefilling an edit field. */
+export function minorToMajor(amountMinor: number, currency: string): number {
+  const decimals = new Intl.NumberFormat(undefined, { style: 'currency', currency })
+    .resolvedOptions()
+    .maximumFractionDigits ?? 2
+  return amountMinor / 10 ** decimals
+}
+
 /**
  * Format a minor-unit amount in its currency, deriving the right number of
  * decimals from the currency itself (OMR has 3, USD 2) rather than assuming

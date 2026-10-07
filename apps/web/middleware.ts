@@ -43,6 +43,7 @@ const SESSION_COOKIE = 'nexus_session'
  */
 const PROTECTED_PREFIXES = [
   '/account',
+  '/admin',
   '/connections',
   '/dashboard',
   '/documents',
@@ -69,6 +70,7 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     '/account/:path*',
+    '/admin/:path*',
     '/connections/:path*',
     '/dashboard/:path*',
     '/documents/:path*',
