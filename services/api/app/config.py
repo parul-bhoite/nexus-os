@@ -418,6 +418,24 @@ class Settings(BaseSettings):
     crawl_timeout_seconds: int = 15
     crawl_max_redirects: int = 5
 
+    # ── Platform admin, interim (billing's rate card) ─────────
+    # An email allowlist rather than a role or a DB column, deliberately. The
+    # admin surface here is exactly two endpoints — read and edit `price` — and
+    # a proper platform-admin role (a grant independent of any workspace
+    # membership) is a follow-up rather than something this feature should
+    # invent on its own. Same optional-setting shape as `anthropic_api_key`:
+    # absent means no admins, and the admin endpoints 403 for everyone rather
+    # than the process refusing to boot.
+    platform_admin_emails: str = ""
+
+    @property
+    def platform_admin_email_set(self) -> frozenset[str]:
+        return frozenset(
+            email.strip().lower()
+            for email in self.platform_admin_emails.split(",")
+            if email.strip()
+        )
+
     # ── Trusted proxies (ADR 0046, `doc/18` G6) ───────────────
     # Restored — the anonymous scanner is an anonymous crawl again, and needs
     # the address to key its rate limits by. `X-Forwarded-For` is

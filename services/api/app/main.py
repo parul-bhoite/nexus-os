@@ -19,6 +19,7 @@ from app.logging import configure_logging, get_logger, request_id_var
 from app.routes.assistant import router as assistant_router
 from app.routes.audit import router as audit_router
 from app.routes.auth import router as auth_router
+from app.routes.billing import router as billing_router
 from app.routes.companies import router as companies_router
 from app.routes.connections import router as connections_router
 from app.routes.dashboards import router as dashboards_router
@@ -216,6 +217,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router)
     app.include_router(auth_router)
+    app.include_router(billing_router)
     app.include_router(companies_router)
     app.include_router(audit_router)
     app.include_router(onboarding_router)
