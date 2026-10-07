@@ -2,7 +2,8 @@
 
 import { type ReactNode } from 'react'
 import { motion } from 'framer-motion'
-import { OnboardingAura, PresenceMark, type AuraState } from '@/components/onboarding/OnboardingAura'
+import { OnboardingAura, type AuraState } from '@/components/onboarding/OnboardingAura'
+import { Logo } from '@/components/ui/Logo'
 import { fadeUp, useMotionSafe } from '@/lib/motion'
 
 /**
@@ -121,10 +122,7 @@ export function StepperShell({
       <OnboardingAura state={aura} />
       <header className="relative z-10 border-b border-bone-200 bg-white/80 px-6 py-4 backdrop-blur-sm">
         <div className="mx-auto flex w-full max-w-2xl items-center justify-between gap-3">
-          <span className="flex items-center gap-2.5 font-display text-base font-semibold text-ink">
-            <PresenceMark state={aura} />
-            NEXUS <span className="font-normal opacity-60">OS</span>
-          </span>
+          <Logo />
           <span className="rounded-full bg-steel-100 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.1em] text-steel-700">
             Guided setup
           </span>
