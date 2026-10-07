@@ -139,7 +139,7 @@ export function StepperShell({
       <div className="flex min-h-0 flex-1">
         <aside
           aria-hidden
-          className="hidden items-center justify-center border-r border-bone-200 p-10 lg:flex lg:w-[42%]"
+          className="hidden items-center justify-center p-10 lg:flex lg:w-[42%]"
         >
           <StepArt key={current} step={current} active={aura === 'thinking'} />
         </aside>
