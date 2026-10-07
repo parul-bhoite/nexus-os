@@ -5,6 +5,7 @@ import { OnboardingEntry } from '@/components/onboarding/OnboardingEntry'
 import { AuthError } from '@/lib/auth-client'
 import { fetchCompany, fetchDepartments } from '@/lib/settings-client'
 import { readState, type AgentState } from '@/lib/agent-onboarding-client'
+import { fetchEntitlement } from '@/lib/billing-client'
 
 /**
  * `OnboardingEntry` is now the six-step wizard orchestrator (ADR 0073). Its job
@@ -53,6 +54,10 @@ vi.mock('@/components/onboarding/ToolsStep', () => ({
 vi.mock('@/components/onboarding/BrainReview', () => ({
   BrainReview: () => <div>brain step</div>,
 }))
+vi.mock('@/components/onboarding/PaymentStep', () => ({
+  PaymentStep: () => <div>payment step</div>,
+}))
+vi.mock('@/lib/billing-client', () => ({ fetchEntitlement: vi.fn() }))
 
 const company = {
   workspace_id: 'w1',
@@ -101,6 +106,7 @@ beforeEach(() => {
   vi.mocked(fetchCompany).mockReset()
   vi.mocked(fetchDepartments).mockReset()
   vi.mocked(readState).mockReset()
+  vi.mocked(fetchEntitlement).mockReset()
 })
 
 describe('OnboardingEntry resume', () => {
@@ -110,7 +116,7 @@ describe('OnboardingEntry resume', () => {
     render(<OnboardingEntry />)
 
     expect(await screen.findByText('company step')).toBeInTheDocument()
-    expect(screen.getByText(/step 1 of 6/i)).toBeInTheDocument()
+    expect(screen.getByText(/step 1 of 7/i)).toBeInTheDocument()
   })
 
   it('resumes at the areas step when a company exists but no areas are chosen', async () => {
@@ -121,7 +127,7 @@ describe('OnboardingEntry resume', () => {
     render(<OnboardingEntry />)
 
     expect(await screen.findByText('areas step')).toBeInTheDocument()
-    expect(screen.getByText(/step 2 of 6/i)).toBeInTheDocument()
+    expect(screen.getByText(/step 2 of 7/i)).toBeInTheDocument()
   })
 
   it('resumes at the chatbot step when areas are chosen and the interview is live', async () => {
@@ -132,17 +138,30 @@ describe('OnboardingEntry resume', () => {
     render(<OnboardingEntry />)
 
     expect(await screen.findByText('chat step')).toBeInTheDocument()
-    expect(screen.getByText(/step 3 of 6/i)).toBeInTheDocument()
+    expect(screen.getByText(/step 3 of 7/i)).toBeInTheDocument()
   })
 
-  it('goes straight to the dashboard when the session is already complete', async () => {
+  it('goes straight to the dashboard when complete and entitled', async () => {
     vi.mocked(fetchCompany).mockResolvedValue(company)
     vi.mocked(readState).mockResolvedValue(agentState({ completed: true, phase: 'ready' }))
     vi.mocked(fetchDepartments).mockResolvedValue(departments(['sales']))
+    vi.mocked(fetchEntitlement).mockResolvedValue({ entitled: true, kind: 'paid', trial_expires_at: null })
 
     render(<OnboardingEntry />)
 
     await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/dashboard'))
+  })
+
+  it('resumes at the payment step when complete but not yet entitled', async () => {
+    vi.mocked(fetchCompany).mockResolvedValue(company)
+    vi.mocked(readState).mockResolvedValue(agentState({ completed: true, phase: 'ready' }))
+    vi.mocked(fetchEntitlement).mockResolvedValue({ entitled: false, kind: null, trial_expires_at: null })
+
+    render(<OnboardingEntry />)
+
+    expect(await screen.findByText('payment step')).toBeInTheDocument()
+    expect(screen.getByText(/step 7 of 7/i)).toBeInTheDocument()
+    expect(replace).not.toHaveBeenCalled()
   })
 
   it('shows a retryable error on a real failure, rather than guessing which step to show', async () => {

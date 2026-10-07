@@ -26,6 +26,8 @@ import { ChatbotStep } from '@/components/onboarding/ChatbotStep'
 import { DocumentsStep } from '@/components/onboarding/DocumentsStep'
 import { ToolsStep } from '@/components/onboarding/ToolsStep'
 import { BrainReview } from '@/components/onboarding/BrainReview'
+import { PaymentStep } from '@/components/onboarding/PaymentStep'
+import { fetchEntitlement } from '@/lib/billing-client'
 
 /**
  * The stepped onboarding orchestrator (ADR 0073), mounted at both
@@ -159,7 +161,17 @@ export function OnboardingEntry() {
     try {
       const existing = await readState()
       if (existing.completed) {
-        router.replace('/dashboard')
+        // The Brain is assembled. The dashboard now requires entitlement
+        // (payment or an active trial — ADR 0076); an unentitled founder
+        // resumes at the Payment step rather than being waved through.
+        const { entitled } = await fetchEntitlement()
+        if (entitled) {
+          router.replace('/dashboard')
+          return
+        }
+        setState(existing)
+        setStep('payment')
+        setBoot({ status: 'ready' })
         return
       }
       const { departments: all } = await fetchDepartments()
@@ -361,21 +373,31 @@ export function OnboardingEntry() {
     )
   }
 
-  // step === 'brain'
+  if (step === 'brain') {
+    return (
+      <StepperShell current="brain" aura={aura}>
+        {state ? (
+          <BrainReview
+            state={state}
+            departments={departments}
+            building={state.phase !== 'ready'}
+            // The Brain is built; next is Payment (ADR 0076), not the dashboard.
+            onOpen={() => setStep('payment')}
+          />
+        ) : (
+          <p role="status" aria-live="polite" className="text-sm text-ink-400">
+            {ASSEMBLY_LABEL.tools}
+          </p>
+        )}
+      </StepperShell>
+    )
+  }
+
+  // step === 'payment' — the costed summary + dummy gateway; on pay/trial the
+  // workspace is entitled and we open the dashboard.
   return (
-    <StepperShell current="brain" aura={aura}>
-      {state ? (
-        <BrainReview
-          state={state}
-          departments={departments}
-          building={state.phase !== 'ready'}
-          onOpen={() => router.replace('/dashboard')}
-        />
-      ) : (
-        <p role="status" aria-live="polite" className="text-sm text-ink-400">
-          {ASSEMBLY_LABEL.tools}
-        </p>
-      )}
+    <StepperShell current="payment" aura={aura}>
+      <PaymentStep onDone={() => router.replace('/dashboard')} />
     </StepperShell>
   )
 }

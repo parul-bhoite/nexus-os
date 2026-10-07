@@ -15,6 +15,7 @@ import { BlockGridSkeleton, Bone, Loading, PageHeadSkeleton } from '@/components
 import { Failed } from '@/components/ui/States'
 import { AuthError } from '@/lib/auth-client'
 import { readState } from '@/lib/agent-onboarding-client'
+import { fetchEntitlement } from '@/lib/billing-client'
 import { fetchSurface, type DirectorBlock, type Surface } from '@/lib/dashboard-client'
 
 /**
@@ -76,23 +77,30 @@ export function DashboardLanding() {
     let live = true
     setState({ status: 'loading' })
 
-    // The onboarding gate (ADR 0075). The dashboard is where login lands, so it
-    // is also where an unfinished setup is sent back to finish: `readState`
-    // reports whether onboarding completed, and anything short of that forwards
-    // to `/onboarding/agent`, which resumes at the last incomplete step. A 403
-    // means no workspace yet — the very first step — so it forwards too. Only a
-    // completed session goes on to fetch the surface. `OnboardingEntry` makes
-    // the opposite call (completed → `/dashboard`), so the two cannot loop.
+    // The onboarding gate (ADR 0075, extended by ADR 0076). The dashboard is
+    // where login lands, so it is also where an unfinished setup is sent back to
+    // finish: `readState` reports whether the Brain is assembled, and
+    // entitlement reports whether the workspace has paid or has an active trial.
+    // Anything short of both forwards to `/onboarding/agent`, which resumes at
+    // the last incomplete step (the interview, or Payment). A 403 means no
+    // workspace yet. Only an assembled **and** entitled session fetches the
+    // surface. `OnboardingEntry` makes the opposite calls (completed+entitled →
+    // `/dashboard`), so the two cannot loop.
     readState()
-      .then((agent) => {
+      .then(async (agent) => {
         if (!live) return
         if (!agent.completed) {
           router.replace('/onboarding/agent')
           return
         }
-        return fetchSurface().then((surface) => {
-          if (live) setState({ status: 'ready', surface })
-        })
+        const { entitled } = await fetchEntitlement()
+        if (!live) return
+        if (!entitled) {
+          router.replace('/onboarding/agent')
+          return
+        }
+        const surface = await fetchSurface()
+        if (live) setState({ status: 'ready', surface })
       })
       .catch((caught: unknown) => {
         if (!live) return

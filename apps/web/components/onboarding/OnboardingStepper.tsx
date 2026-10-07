@@ -24,7 +24,7 @@ import { fadeUp, useMotionSafe } from '@/lib/motion'
  * scrolls, its composer pins to the bottom) instead of being centred.
  */
 
-export type StepId = 'company' | 'areas' | 'chat' | 'documents' | 'tools' | 'brain'
+export type StepId = 'company' | 'areas' | 'chat' | 'documents' | 'tools' | 'brain' | 'payment'
 
 /** The wizard's spine. Order is the flow; the index is 1-based for display. */
 export const STEPS: { id: StepId; label: string }[] = [
@@ -34,6 +34,7 @@ export const STEPS: { id: StepId; label: string }[] = [
   { id: 'documents', label: 'Documents' },
   { id: 'tools', label: 'Tools' },
   { id: 'brain', label: 'Company Brain' },
+  { id: 'payment', label: 'Payment' },
 ]
 
 export function stepIndex(id: StepId): number {
@@ -86,7 +87,7 @@ function Stepper({ current }: { current: StepId }) {
           )
         })}
       </ol>
-      <ol aria-hidden className="mt-1.5 hidden grid-cols-6 gap-1.5 sm:grid">
+      <ol aria-hidden className="mt-1.5 hidden grid-cols-7 gap-1.5 sm:grid">
         {STEPS.map((step, index) => (
           <li
             key={step.id}

@@ -26,6 +26,7 @@ const CAPTION: Record<StepId, { title: string; body: string }> = {
   documents: { title: 'Your documents', body: 'Real figures and wording, straight from your files.' },
   tools: { title: 'Your stack', body: 'Where your numbers already live.' },
   brain: { title: 'Your Company Brain', body: 'Everything above, assembled with its source.' },
+  payment: { title: 'Your plan', body: 'Priced from the areas and tools you chose.' },
 }
 
 export function StepArt({ step, active = false }: { step: StepId; active?: boolean }) {
@@ -55,6 +56,8 @@ function Scene({ step, active }: { step: StepId; active: boolean }) {
       return <ToolsArt />
     case 'brain':
       return <BrainArt active={active} />
+    case 'payment':
+      return <PaymentArt />
   }
 }
 
@@ -325,6 +328,41 @@ function BrainArt({ active }: { active: boolean }) {
         )
       })}
       <circle cx="100" cy="108" r="5" className="fill-gold-500" />
+    </svg>
+  )
+}
+
+/* ── Payment — a card with a chip, and a "paid" badge that settles in ──── */
+
+function PaymentArt() {
+  const safe = useMotionSafe()
+  return (
+    <svg {...svgProps}>
+      <rect x="36" y="64" width="128" height="84" rx="12" className="fill-white stroke-ink-800" strokeWidth="3" />
+      {/* magnetic stripe */}
+      <rect x="36" y="78" width="128" height="14" className="fill-ink-900" />
+      {/* chip */}
+      <rect x="52" y="104" width="22" height="16" rx="3" className="fill-gold-500" />
+      {/* number lines */}
+      <line x1="52" y1="132" x2="96" y2="132" className="stroke-steel-200" strokeWidth="4" strokeLinecap="round" />
+      <line x1="104" y1="132" x2="134" y2="132" className="stroke-steel-200" strokeWidth="4" strokeLinecap="round" />
+      {/* "paid" badge, settling in */}
+      <motion.g
+        initial={{ opacity: 0.8 }}
+        animate={safe ? { scale: [0.9, 1, 0.9], opacity: [0.8, 1, 0.8] } : { scale: 1, opacity: 1 }}
+        transition={safe ? { duration: 2.4, repeat: Infinity, ease: 'easeInOut' } : undefined}
+        style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+      >
+        <circle cx="150" cy="60" r="18" className="fill-gold-500" />
+        <path
+          d="M142 60 l5 5 l11 -12"
+          className="stroke-white"
+          strokeWidth="3"
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </motion.g>
     </svg>
   )
 }
