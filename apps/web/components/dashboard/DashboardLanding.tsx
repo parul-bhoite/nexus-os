@@ -14,6 +14,7 @@ import { PageBody, PageHeader, Section } from '@/components/ui/Page'
 import { BlockGridSkeleton, Bone, Loading, PageHeadSkeleton } from '@/components/ui/Skeleton'
 import { Failed } from '@/components/ui/States'
 import { AuthError } from '@/lib/auth-client'
+import { readState } from '@/lib/agent-onboarding-client'
 import { fetchSurface, type DirectorBlock, type Surface } from '@/lib/dashboard-client'
 
 /**
@@ -75,9 +76,23 @@ export function DashboardLanding() {
     let live = true
     setState({ status: 'loading' })
 
-    fetchSurface()
-      .then((surface) => {
-        if (live) setState({ status: 'ready', surface })
+    // The onboarding gate (ADR 0075). The dashboard is where login lands, so it
+    // is also where an unfinished setup is sent back to finish: `readState`
+    // reports whether onboarding completed, and anything short of that forwards
+    // to `/onboarding/agent`, which resumes at the last incomplete step. A 403
+    // means no workspace yet — the very first step — so it forwards too. Only a
+    // completed session goes on to fetch the surface. `OnboardingEntry` makes
+    // the opposite call (completed → `/dashboard`), so the two cannot loop.
+    readState()
+      .then((agent) => {
+        if (!live) return
+        if (!agent.completed) {
+          router.replace('/onboarding/agent')
+          return
+        }
+        return fetchSurface().then((surface) => {
+          if (live) setState({ status: 'ready', surface })
+        })
       })
       .catch((caught: unknown) => {
         if (!live) return
@@ -85,8 +100,15 @@ export function DashboardLanding() {
         // `"Not authenticated"` rendered verbatim in a box with nothing
         // clickable in it. The refusal was right; leaving somebody on a dead
         // page was not, and session expiry is the ordinary way into this state.
-        if (caught instanceof AuthError && (caught.status === 401 || caught.status === 403)) {
+        if (caught instanceof AuthError && caught.status === 401) {
           router.replace('/login?next=/dashboard')
+          return
+        }
+        // 403 is "no workspace selected" — a signed-in person who has not begun
+        // setup. Send them to onboarding rather than to a login they have
+        // already passed.
+        if (caught instanceof AuthError && caught.status === 403) {
+          router.replace('/onboarding/agent')
           return
         }
         setState({
