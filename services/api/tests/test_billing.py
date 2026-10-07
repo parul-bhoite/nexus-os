@@ -33,7 +33,7 @@ from app.config import get_settings
 from app.db import _unscoped_session, get_engine, get_sessionmaker
 from app.domain import connections
 from app.domain.departments import select_departments
-from app.domain.pricing import entitlement_for, quote_for
+from app.domain.pricing import entitlement_for, quote_for, rate_card
 from app.domain.scopes import Department, Role
 from app.domain.session import ScopedSession
 from app.main import create_app
@@ -154,6 +154,36 @@ async def test_quote_bills_selected_departments_and_declared_tools(app_db: None)
             assert quote["total_minor"] == 55_000
             assert quote["currency"] == "OMR"
             assert quote["period"] == "monthly"
+        finally:
+            await _cleanup(db, seed)
+
+
+@requires_db
+async def test_rate_card_lists_every_area_with_price_and_included_tools(app_db: None) -> None:
+    """The Areas-step price list: all six selectable areas, each with its price
+    and its included tools — independent of what this workspace has selected.
+
+    `executive` is never listed (it is automatic, never billed). Marketing's
+    tools are its catalogue grouping (GA4 + Search Console); Operations has none.
+    """
+    async with _unscoped_session() as db:
+        seed = await _seed(db)
+        try:
+            # Deliberately select nothing: the rate card is the menu, not the bill.
+            card = await rate_card(db, workspace_id=seed.workspace_id)
+
+            assert card["currency"] == "OMR"
+            by_key = {d["key"]: d for d in card["departments"]}
+            assert set(by_key) == {"marketing", "sales", "finance", "operations", "hr", "strategy"}
+            assert "executive" not in by_key
+
+            # Priced from the seeded `price` table — never invented here (I1).
+            assert by_key["marketing"]["amount_minor"] == 25_000
+            marketing_tools = {t["key"] for t in by_key["marketing"]["tools"]}
+            assert marketing_tools == {"ga4", "search_console"}
+
+            # An area with no catalogue tools carries an empty list, not a guess.
+            assert by_key["operations"]["tools"] == []
         finally:
             await _cleanup(db, seed)
 

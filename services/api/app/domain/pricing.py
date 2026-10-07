@@ -28,7 +28,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import connections
-from app.domain.departments import AUTOMATIC, label_for, selected_departments
+from app.domain.departments import AUTOMATIC, SELECTABLE, label_for, selected_departments
 from app.domain.scopes import Department
 from app.retrieval.scoped import apply_workspace_scope
 
@@ -194,6 +194,44 @@ async def quote_for(db: AsyncSession, *, workspace_id: UUID) -> dict[str, Any]:
         "line_items": line_items,
         "total_minor": total_minor,
     }
+
+
+async def rate_card(db: AsyncSession, *, workspace_id: UUID) -> dict[str, Any]:
+    """The public price list, for the Areas step to show before anything is chosen.
+
+    One entry per **selectable** department (``executive`` excluded — it is
+    automatic and never billed), each carrying its monthly price and the tools
+    that come included with it. Unlike `quote_for` this is not tied to what the
+    workspace has selected or declared: it is the menu, not the bill, so the
+    founder can see what each area costs and what it brings *while* deciding.
+
+    Prices come from the `price` table (I1 — never invented here); a department
+    with no active price is returned with ``amount_minor: None`` so the card can
+    say so rather than imply free (I10). The included tools are the catalogue's
+    own department grouping — the same set `quote_for` bills at zero when the
+    department is selected.
+    """
+    prices = await load_prices(db)
+    currency = await _reporting_currency(db, workspace_id=workspace_id)
+
+    departments: list[dict[str, Any]] = []
+    for department in SELECTABLE:
+        price = prices.get(("department", department.value))
+        tools = [
+            {"key": tool.id, "label": tool.name}
+            for tool in connections.PROVIDERS
+            if tool.department is department
+        ]
+        departments.append(
+            {
+                "key": department.value,
+                "label": label_for(department),
+                "amount_minor": price.amount_minor if price is not None else None,
+                "tools": tools,
+            }
+        )
+
+    return {"currency": currency, "departments": departments}
 
 
 # ── Entitlement ───────────────────────────────────────────────

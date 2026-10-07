@@ -322,7 +322,7 @@ export function OnboardingEntry() {
 
   if (step === 'areas') {
     return (
-      <StepperShell current="areas">
+      <StepperShell current="areas" wide>
         <AreasStage
           onComplete={(selected) => {
             setDepartments(selected)

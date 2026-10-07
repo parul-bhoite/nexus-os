@@ -56,6 +56,27 @@ export function fetchQuote(): Promise<Quote> {
   return call<Quote>('/api/billing/quote')
 }
 
+export type RateCardTool = { key: string; label: string }
+
+export type RateCardDepartment = {
+  key: string
+  label: string
+  /** Monthly price in minor units, or null when no active price exists. */
+  amount_minor: number | null
+  /** Tools that come included with this area. */
+  tools: RateCardTool[]
+}
+
+export type RateCard = {
+  currency: string
+  departments: RateCardDepartment[]
+}
+
+/** The price list for the Areas step — what each area costs and includes. */
+export function fetchRateCard(): Promise<RateCard> {
+  return call<RateCard>('/api/billing/rate-card')
+}
+
 export function fetchEntitlement(): Promise<Entitlement> {
   return call<Entitlement>('/api/billing/status')
 }

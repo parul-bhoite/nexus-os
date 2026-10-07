@@ -113,11 +113,16 @@ export function StepperShell({
   current,
   aura = 'idle',
   fill = false,
+  wide = false,
   children,
 }: {
   current: StepId
   aura?: AuraState
   fill?: boolean
+  /** Drop the decorative art column and let the content span the full width.
+   *  Used by the Areas step, whose cards carry their own pricing detail and
+   *  want the room (user request). */
+  wide?: boolean
   children: ReactNode
 }) {
   const safe = useMotionSafe()
@@ -138,14 +143,16 @@ export function StepperShell({
         <Stepper current={current} />
       </div>
 
-      {/* ── Body: illustration left, step content right ── */}
+      {/* ── Body: illustration left, step content right (art dropped when wide) ── */}
       <div className="flex min-h-0 flex-1">
-        <aside
-          aria-hidden
-          className="hidden items-center justify-center p-10 lg:flex lg:w-[42%]"
-        >
-          <StepArt key={current} step={current} active={aura === 'thinking'} />
-        </aside>
+        {!wide && (
+          <aside
+            aria-hidden
+            className="hidden items-center justify-center p-10 lg:flex lg:w-[42%]"
+          >
+            <StepArt key={current} step={current} active={aura === 'thinking'} />
+          </aside>
+        )}
 
         {fill ? (
           <section className="flex min-h-0 flex-1 flex-col">{children}</section>
@@ -156,7 +163,9 @@ export function StepperShell({
               variants={fadeUp(safe)}
               initial="hidden"
               animate="show"
-              className="mx-auto flex min-h-full w-full max-w-2xl flex-col justify-center px-6 py-12 sm:px-10 lg:px-14"
+              className={`mx-auto flex min-h-full w-full flex-col justify-center px-6 py-12 sm:px-10 lg:px-14 ${
+                wide ? 'max-w-5xl' : 'max-w-2xl'
+              }`}
             >
               {children}
             </motion.div>

@@ -38,7 +38,7 @@ from pydantic import BaseModel, Field
 from app.auth.csrf import require_csrf
 from app.config import Settings, get_settings
 from app.deps import CurrentScope
-from app.domain.pricing import Entitlement, entitlement_for, quote_for
+from app.domain.pricing import Entitlement, entitlement_for, quote_for, rate_card
 from app.logging import get_logger
 from app.retrieval.scoped import scoped_connection
 
@@ -88,6 +88,23 @@ class PriceOut(BaseModel):
 class PriceUpdateIn(BaseModel):
     amount_minor: int = Field(ge=0)
     active: bool
+
+
+class RateCardToolOut(BaseModel):
+    key: str
+    label: str
+
+
+class RateCardDepartmentOut(BaseModel):
+    key: str
+    label: str
+    amount_minor: int | None
+    tools: list[RateCardToolOut]
+
+
+class RateCardOut(BaseModel):
+    currency: str
+    departments: list[RateCardDepartmentOut]
 
 
 # ── Helpers ───────────────────────────────────────────────────
@@ -152,6 +169,27 @@ async def read_quote(scope: CurrentScope) -> QuoteOut:
     async with scoped_connection(scope) as db:
         quote = await quote_for(db, workspace_id=scope.workspace_id)
     return _quote_out(quote)
+
+
+@router.get("/billing/rate-card", response_model=RateCardOut)
+async def read_rate_card(scope: CurrentScope) -> RateCardOut:
+    """The price list the Areas step shows: each area's monthly price and the
+    tools it includes. Reference data, readable by any member — the `price` table
+    is world-readable (migration 0042), so this reveals nothing tenant-specific."""
+    async with scoped_connection(scope) as db:
+        card = await rate_card(db, workspace_id=scope.workspace_id)
+    return RateCardOut(
+        currency=card["currency"],
+        departments=[
+            RateCardDepartmentOut(
+                key=dept["key"],
+                label=dept["label"],
+                amount_minor=dept["amount_minor"],
+                tools=[RateCardToolOut(key=t["key"], label=t["label"]) for t in dept["tools"]],
+            )
+            for dept in card["departments"]
+        ],
+    )
 
 
 @router.get("/billing/status", response_model=EntitlementOut)
