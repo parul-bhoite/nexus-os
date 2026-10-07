@@ -688,6 +688,15 @@ export type BriefItem = {
  * with no API key configured. Ranked by points lost; it reports what was
  * **found** and never what changed, because nothing re-crawls yet.
  */
+export type BriefNudge = {
+  /** What to do, from the tool catalogue — e.g. "Connecting HubSpot". */
+  headline: string
+  /** The capability its connection unlocks — the catalogue's own sentence. */
+  unlocks: string
+  /** Where the action happens (the settings portal). */
+  href: string
+}
+
 export type Brief = {
   /**
    * `not_measured` is not `all_held` with zeroes in it. An audit that never ran
@@ -704,6 +713,12 @@ export type Brief = {
   checks_total: number
   /** Empty only when nothing was measured. */
   measured_on: string
+  /**
+   * Finish-your-setup prompts — a declared tool not yet connected, with the
+   * capability it unlocks. An action, kept apart from the findings ranking (ADR
+   * 0029/0083); present in every state and defaulting to empty.
+   */
+  nudges: BriefNudge[]
 }
 
 /**

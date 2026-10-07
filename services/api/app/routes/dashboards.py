@@ -38,7 +38,9 @@ from app.config import Settings, get_settings
 from app.db import _unscoped_session
 from app.deps import CurrentScope
 from app.deps_scope import enforce_department
-from app.domain.brief import compose
+from app.domain.brief import BriefNudge, compose
+from app.domain.connections import declared as declared_connections
+from app.domain.connections import gaps_for
 from app.domain.dashboards import (
     BY_DEPARTMENT,
     DIRECTORS,
@@ -181,6 +183,15 @@ class Observed:
     anybody reading either half.
     """
 
+    declared_providers: tuple[str, ...] = ()
+    """The tools this workspace said it runs, in catalogue order (ADR 0083).
+
+    Defaulted for the hermetic permission tests that build an `Observed` with no
+    database, exactly as `deals` and `narrations` are. Feeds the brief's
+    finish-your-setup nudges — a declared-but-unconnected tool is an actionable
+    gap, and `connections.gaps_for` turns only the declared ones into prompts.
+    """
+
     @property
     def crawled(self) -> bool:
         return self.crawl is not None
@@ -263,6 +274,12 @@ async def observed_sources(scope: CurrentScope) -> Observed:
             typed_deals=typed,
             ops=await current_ops(db, scope),
             narrations=await current_narrations(db, scope),
+            # One more small read for the brief's setup nudges. Declared providers
+            # are a short list and this is the same scoped transaction, so it is a
+            # `WHERE` clause on this link, not a new page-load cost worth avoiding.
+            declared_providers=tuple(
+                await declared_connections(db, workspace_id=scope.workspace_id)
+            ),
         )
 
 
@@ -1052,6 +1069,16 @@ class BriefItemOut(BaseModel):
     method: str
 
 
+class BriefNudgeOut(BaseModel):
+    """A finish-your-setup prompt. An action, kept apart from the findings — ADR
+    0029/0083: the ranking stays pure, this carries the one honest call to
+    action, grounded in a declared tool and the capability it unlocks."""
+
+    headline: str
+    unlocks: str
+    href: str
+
+
 class BriefOut(BaseModel):
     """The morning brief, computed in code and costing nothing to render."""
 
@@ -1071,6 +1098,9 @@ class BriefOut(BaseModel):
     checks_total: int
     measured_on: str
     """Empty only when nothing was measured."""
+
+    nudges: list[BriefNudgeOut] = []
+    """Declared-but-unconnected tools, independent of `state` and `items`."""
 
 
 class CoverageOut(BaseModel):
@@ -1528,11 +1558,19 @@ async def command_surface(
     ]
 
     bands = coverage(MEASURABLE, departments)
+    # Finish-your-setup nudges: a declared tool that is not connected yet, with the
+    # capability its connection unlocks named from the catalogue. `gaps_for`
+    # returns only the declared ones — a gap for a tool nobody runs is noise.
+    nudges = tuple(
+        BriefNudge(headline=gap["unlocked_by"], unlocks=gap["topic"])
+        for gap in gaps_for(observed.declared_providers)
+    )
     brief = compose(
         computations,
         expected=mine,
         unobserved=bands.not_built,
         also_measured=frozenset(block.key for block in blocks),
+        nudges=nudges,
     )
     # `mine` rather than every capability with a calculator: a question is only
     # in the first tier if its consumer produces a figure **this reader can
@@ -1616,6 +1654,10 @@ async def command_surface(
             checks_passed=brief.checks_passed,
             checks_total=brief.checks_total,
             measured_on=brief.measured_on,
+            nudges=[
+                BriefNudgeOut(headline=nudge.headline, unlocks=nudge.unlocks, href=nudge.href)
+                for nudge in brief.nudges
+            ],
         ),
     )
 
