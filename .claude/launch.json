@@ -57,6 +57,20 @@
         "3100"
       ],
       "port": 3100
+    },
+    {
+      "name": "nexus-web-fresh",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "apps/web",
+        "run",
+        "dev",
+        "--",
+        "-p",
+        "3200"
+      ],
+      "port": 3200
     }
   ]
 }
