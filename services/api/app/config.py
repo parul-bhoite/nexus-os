@@ -368,6 +368,16 @@ class Settings(BaseSettings):
     # reports `unconfigured` and the product runs without AI features.
     anthropic_api_key: SecretStr = Field(default=SecretStr(""))
 
+    # ── PageSpeed Insights (ADR 0082) ─────────────────────────
+    # A platform-held API key, not a per-workspace connection: PSI analyses any
+    # public URL, so one key lets us score a company's own site the moment
+    # onboarding completes, with no Connect step. Optional, and absent is a
+    # supported state — the `anthropic_api_key` shape (ADR 0011): no key means no
+    # PageSpeed insight, never a fabricated score. Not passed through `require()`.
+    # Wired ahead of its doc/12 Phase-18 slot because, unlike GA4/Search Console,
+    # it needs no OAuth and so does not wait on D3.
+    pagespeed_api_key: SecretStr = Field(default=SecretStr(""))
+
     anthropic_model: str = "claude-sonnet-5"
     """The fallback tier, for any call that does not pin one.
 
