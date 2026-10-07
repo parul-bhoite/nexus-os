@@ -1,17 +1,20 @@
 import type { Metadata, Viewport } from 'next'
-import { Fraunces, Inter, JetBrains_Mono } from 'next/font/google'
+import { Bricolage_Grotesque, Hanken_Grotesk, JetBrains_Mono } from 'next/font/google'
 import { MotionProvider } from '@/components/motion/MotionProvider'
 import { site } from '@/lib/content'
 import './globals.css'
 
-const display = Fraunces({
+// Display — a contemporary grotesque with real character at large sizes; the
+// personality of the monochrome system lives here rather than in colour (ADR 0072).
+const display = Bricolage_Grotesque({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-display',
-  weight: ['400', '500', '600', '700'],
+  weight: ['500', '600', '700', '800'],
 })
 
-const sans = Inter({
+// Body — a clean, friendly grotesque, less overexposed than the previous Inter.
+const sans = Hanken_Grotesk({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-sans',

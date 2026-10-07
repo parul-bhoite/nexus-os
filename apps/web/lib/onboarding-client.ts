@@ -95,6 +95,40 @@ async function call(path: string, init: RequestInit = {}): Promise<unknown> {
   return payload
 }
 
+export type Member = {
+  user_id: string
+  email: string
+  display_name: string | null
+  role: string
+}
+
+/** The whole catalogue, plus whatever of it this caller may see. One request
+ *  drives the tailored-questions stage of the combined onboarding flow. */
+export type Questions = {
+  questions: Question[]
+  can_administer: boolean
+  members: Member[]
+}
+
+/** One answer to store. No `scope` field, ever — the API classifies by `key`. */
+export type Answer = { key: string; value: unknown }
+
+/** Every question, across stages and departments. The flow filters to the
+ *  chosen Areas of Interest (and the company-level questions, `department:
+ *  null`) before rendering. */
+export async function fetchQuestions(): Promise<Questions> {
+  return (await call('/api/onboarding/questions')) as Questions
+}
+
+/** Persist a step's answers. Returns the keys the API accepted. */
+export async function saveAnswers(answers: Answer[]): Promise<string[]> {
+  const payload = (await call('/api/onboarding/answers', {
+    method: 'POST',
+    body: JSON.stringify({ answers }),
+  })) as { saved: string[] }
+  return payload.saved
+}
+
 export type DepartmentOption = {
   value: string
   /** How to name it on screen. Optional so a client built against an older API

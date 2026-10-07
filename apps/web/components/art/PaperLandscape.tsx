@@ -43,7 +43,7 @@ function Cloud({
   y,
   scale = 1,
   opacity = 1,
-  fill = '#FFFFFF',
+  fill = 'var(--c-white)',
 }: {
   x: number
   y: number
@@ -70,8 +70,8 @@ function Boat({
   x,
   y,
   scale = 1,
-  hull = '#A55D35',
-  sail = '#E9E4DE',
+  hull = 'var(--c-grey-600)',
+  sail = 'var(--c-surface-3)',
   className = '',
 }: {
   x: number
@@ -84,7 +84,7 @@ function Boat({
   return (
     <g transform={`translate(${x} ${y}) scale(${scale})`} className={className}>
       <g className="origin-bottom">
-        <path d="M20 4v30" stroke="#84492A" strokeWidth="2" strokeLinecap="round" />
+        <path d="M20 4v30" stroke="var(--c-grey-700)" strokeWidth="2" strokeLinecap="round" />
         <path d="M21 6c9 6 13 12 14 20H21z" fill={sail} />
         <path d="M19 10c-7 5-10 10-11 16h11z" fill={sail} opacity="0.82" />
       </g>
@@ -100,7 +100,7 @@ function Swirl({
   y,
   rings = 4,
   radius = 10,
-  stroke = '#FFFFFF',
+  stroke = 'var(--c-white)',
   opacity = 0.5,
 }: {
   x: number
@@ -141,32 +141,32 @@ export function PaperLandscape({ parallax = { x: 0, y: 0 }, className = '' }: Pr
         </clipPath>
 
         <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#F5F2EF" />
-          <stop offset="55%" stopColor="#E4EDF4" />
-          <stop offset="100%" stopColor="#C3D8E7" />
+          <stop offset="0%" stopColor="var(--c-surface-2)" />
+          <stop offset="55%" stopColor="var(--c-surface-3)" />
+          <stop offset="100%" stopColor="var(--c-surface-3)" />
         </linearGradient>
 
         <linearGradient id="seaFar" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#93B8D1" />
-          <stop offset="100%" stopColor="#5F94B8" />
+          <stop offset="0%" stopColor="var(--c-grey-300)" />
+          <stop offset="100%" stopColor="var(--c-grey-400)" />
         </linearGradient>
 
         <linearGradient id="seaNear" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#37729C" />
-          <stop offset="100%" stopColor="#224862" />
+          <stop offset="0%" stopColor="var(--c-grey-600)" />
+          <stop offset="100%" stopColor="var(--c-ink-800)" />
         </linearGradient>
 
         <radialGradient id="sunGlow" cx="0.5" cy="0.5" r="0.5">
-          <stop offset="0%" stopColor="#EFBF6A" stopOpacity="0.55" />
-          <stop offset="100%" stopColor="#EFBF6A" stopOpacity="0" />
+          <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.55" />
+          <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
         </radialGradient>
 
         <filter id="paperLift" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="4" stdDeviation="6" floodColor="#091F46" floodOpacity="0.18" />
+          <feDropShadow dx="0" dy="4" stdDeviation="6" floodColor="var(--c-ink)" floodOpacity="0.18" />
         </filter>
 
         <filter id="paperLiftSoft" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor="#091F46" floodOpacity="0.12" />
+          <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor="var(--c-ink)" floodOpacity="0.12" />
         </filter>
       </defs>
 
@@ -185,35 +185,35 @@ export function PaperLandscape({ parallax = { x: 0, y: 0 }, className = '' }: Pr
               cy="196"
               r="88"
               fill="none"
-              stroke="#DFA542"
+              stroke="var(--accent-strong)"
               strokeWidth="1.5"
               strokeDasharray="4 10"
               opacity="0.75"
             />
           </g>
-          <circle cx="360" cy="196" r="62" fill="#EFBF6A" filter="url(#paperLiftSoft)" />
-          <path d="M330 152a62 62 0 0 1 52 100 62 62 0 1 0-52-100z" fill="#FFFFFF" opacity="0.22" />
+          <circle cx="360" cy="196" r="62" fill="var(--accent)" filter="url(#paperLiftSoft)" />
+          <path d="M330 152a62 62 0 0 1 52 100 62 62 0 1 0-52-100z" fill="var(--c-white)" opacity="0.22" />
         </g>
 
         {/* ── Far range ───────────────────────────────────────── */}
         <g {...shift(parallax, DEPTH.farRange)} opacity="0.75">
-          <path d="M-20 380 120 246l86 74 74-58 92 86 96-70 132 102v106H-20z" fill="#B4C7D5" />
+          <path d="M-20 380 120 246l86 74 74-58 92 86 96-70 132 102v106H-20z" fill="var(--c-grey-200)" />
         </g>
 
         {/* ── Far clouds ──────────────────────────────────────── */}
         <g {...shift(parallax, DEPTH.cloudsFar)} className="motion-safe:animate-drift">
-          <Cloud x={64} y={196} scale={1.05} opacity={0.9} fill="#F5F2EF" />
-          <Cloud x={508} y={150} scale={0.85} opacity={0.85} fill="#F5F2EF" />
+          <Cloud x={64} y={196} scale={1.05} opacity={0.9} fill="var(--c-surface-2)" />
+          <Cloud x={508} y={150} scale={0.85} opacity={0.85} fill="var(--c-surface-2)" />
         </g>
 
         {/* ── Mid range with snow caps ────────────────────────── */}
         <g {...shift(parallax, DEPTH.midRange)} filter="url(#paperLiftSoft)">
-          <path d="M356 452 500 214l166 238z" fill="#7699AE" />
-          <path d="M500 214l50 72-24 10-20-16-22 20-18-14z" fill="#F5F2EF" />
+          <path d="M356 452 500 214l166 238z" fill="var(--c-grey-500)" />
+          <path d="M500 214l50 72-24 10-20-16-22 20-18-14z" fill="var(--c-surface-2)" />
           <path d="M500 214 666 452h-58L500 260z" fill="#000" opacity="0.08" />
 
-          <path d="M-20 452 130 268l144 184z" fill="#93B8D1" />
-          <path d="M130 268l34 42-18 8-14-10-14 12-12-10z" fill="#FBFAF8" />
+          <path d="M-20 452 130 268l144 184z" fill="var(--c-grey-300)" />
+          <path d="M130 268l34 42-18 8-14-10-14 12-12-10z" fill="var(--c-surface)" />
         </g>
 
         {/* ── Near clouds ─────────────────────────────────────── */}
@@ -222,30 +222,30 @@ export function PaperLandscape({ parallax = { x: 0, y: 0 }, className = '' }: Pr
           className="motion-safe:animate-float"
           filter="url(#paperLiftSoft)"
         >
-          <Cloud x={196} y={148} scale={1.25} fill="#FFFFFF" />
-          <Cloud x={430} y={222} scale={0.72} opacity={0.95} fill="#FFFFFF" />
+          <Cloud x={196} y={148} scale={1.25} fill="var(--c-white)" />
+          <Cloud x={430} y={222} scale={0.72} opacity={0.95} fill="var(--c-white)" />
         </g>
 
         {/* ── Rolling hills ───────────────────────────────────── */}
         <g {...shift(parallax, DEPTH.hills)} filter="url(#paperLift)">
-          <path d="M-20 452c120-46 208-4 300 20s180 28 440-22v112H-20z" fill="#5F94B8" />
-          <path d="M-20 496c140-40 232 6 322 26s186 16 418-30v100H-20z" fill="#37729C" />
+          <path d="M-20 452c120-46 208-4 300 20s180 28 440-22v112H-20z" fill="var(--c-grey-400)" />
+          <path d="M-20 496c140-40 232 6 322 26s186 16 418-30v100H-20z" fill="var(--c-grey-600)" />
         </g>
 
         {/* ── Village and trees ───────────────────────────────── */}
         <g {...shift(parallax, DEPTH.village)}>
           {/* Right-hand cluster of roofs */}
           <g filter="url(#paperLiftSoft)">
-            <path d="M566 486l30-22 30 22v34h-60z" fill="#A55D35" />
-            <rect x="576" y="502" width="40" height="20" fill="#C5825A" />
-            <path d="M622 500l24-18 24 18v22h-48z" fill="#84492A" />
-            <rect x="630" y="512" width="32" height="12" fill="#A55D35" />
+            <path d="M566 486l30-22 30 22v34h-60z" fill="var(--c-grey-600)" />
+            <rect x="576" y="502" width="40" height="20" fill="var(--c-grey-400)" />
+            <path d="M622 500l24-18 24 18v22h-48z" fill="var(--c-grey-700)" />
+            <rect x="630" y="512" width="32" height="12" fill="var(--c-grey-600)" />
           </g>
           {/* Left-hand pagoda, echoing the reference silhouette */}
           <g filter="url(#paperLiftSoft)">
-            <path d="M96 494l22-26 22 26z" fill="#A55D35" />
-            <path d="M104 512l14-18 14 18z" fill="#C5825A" />
-            <rect x="112" y="510" width="12" height="22" fill="#84492A" />
+            <path d="M96 494l22-26 22 26z" fill="var(--c-grey-600)" />
+            <path d="M104 512l14-18 14 18z" fill="var(--c-grey-400)" />
+            <rect x="112" y="510" width="12" height="22" fill="var(--c-grey-700)" />
           </g>
           {/* Trees */}
           {[
@@ -255,9 +255,9 @@ export function PaperLandscape({ parallax = { x: 0, y: 0 }, className = '' }: Pr
             { x: 496, y: 524, s: 0.72 },
           ].map((t, i) => (
             <g key={i} transform={`translate(${t.x} ${t.y}) scale(${t.s})`}>
-              <rect x="-2" y="8" width="4" height="14" fill="#84492A" />
-              <circle cx="0" cy="2" r="12" fill="#2C5C80" />
-              <circle cx="-5" cy="-4" r="8" fill="#37729C" />
+              <rect x="-2" y="8" width="4" height="14" fill="var(--c-grey-700)" />
+              <circle cx="0" cy="2" r="12" fill="var(--c-grey-700)" />
+              <circle cx="-5" cy="-4" r="8" fill="var(--c-grey-600)" />
             </g>
           ))}
         </g>
@@ -285,7 +285,7 @@ export function PaperLandscape({ parallax = { x: 0, y: 0 }, className = '' }: Pr
             className="motion-safe:animate-sway"
             style={{ transformOrigin: '452px 706px', animationDelay: '-2.4s' }}
           >
-            <Boat x={430} y={668} scale={0.82} hull="#C5825A" sail="#FBFAF8" />
+            <Boat x={430} y={668} scale={0.82} hull="var(--c-grey-400)" sail="var(--c-surface)" />
           </g>
         </g>
 
@@ -294,7 +294,7 @@ export function PaperLandscape({ parallax = { x: 0, y: 0 }, className = '' }: Pr
           {...shift(parallax, DEPTH.foreground)}
           className="motion-safe:animate-float"
           fill="none"
-          stroke="#FBFAF8"
+          stroke="var(--c-surface)"
           strokeWidth="2.5"
           strokeLinecap="round"
           opacity="0.9"
@@ -308,7 +308,7 @@ export function PaperLandscape({ parallax = { x: 0, y: 0 }, className = '' }: Pr
       <path
         d="M40 360C40 183 183 40 360 40s320 143 320 320v297c0 34-27 61-61 61H101c-34 0-61-27-61-61z"
         fill="none"
-        stroke="#D8D0C7"
+        stroke="var(--c-line)"
         strokeWidth="2"
       />
     </svg>

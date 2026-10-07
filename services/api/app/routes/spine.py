@@ -16,6 +16,7 @@ from typing import Final
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from app.auth.csrf import require_csrf
 from app.db import _unscoped_session
@@ -332,12 +333,37 @@ async def read_brain(scope: CurrentScope) -> BrainOut:
         held = await brain.current(db, workspace_id=scope.workspace_id)
         if held is None:
             built = await brain.build(db, workspace_id=scope.workspace_id)
-            version = await brain.store(db, workspace_id=scope.workspace_id, brain=built)
-            await db.commit()
-            return _brain_out(built, version)
+            try:
+                version = await brain.store(db, workspace_id=scope.workspace_id, brain=built)
+                await db.commit()
+                return _brain_out(built, version)
+            except IntegrityError:
+                # A concurrent first read built and stored the brain first. The
+                # partial unique index on the un-superseded row (and the version
+                # uniqueness) reject this second insert — which is the index doing
+                # its job, not a failure the founder caused. Two clients hitting an
+                # unbuilt brain at once is ordinary: the dashboard panel and this
+                # page both read `/brain`, and a dev double-mount fires it twice.
+                # Roll back and fall through to return whichever write won, rather
+                # than 500 and make the page show "that did not load" on a brain
+                # that was in fact built a millisecond earlier.
+                await db.rollback()
+                held = None
 
-    row = None
+    # Either a brain already existed, or we just lost a first-build race. In the
+    # race case `held` is the stale None from before the losing insert, so re-read
+    # it here against the live row the winner committed.
     async with scoped_connection(scope) as db:
+        if held is None:
+            held = await brain.current(db, workspace_id=scope.workspace_id)
+            if held is None:
+                # Nothing is current and nothing raced us — the store genuinely
+                # left no live row. Surface that rather than return an empty brain
+                # that would read on screen as "nothing is known about you".
+                raise HTTPException(
+                    status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    "Could not read the company brain.",
+                )
         row = (
             await db.execute(
                 text(

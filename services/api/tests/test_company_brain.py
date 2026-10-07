@@ -233,3 +233,79 @@ async def test_the_brain_is_built_from_answers_and_names_its_sources(app_db: Non
                 sa.text("DELETE FROM company_brain WHERE workspace_id = :w"), {"w": str(ws)}
             )
             await _cleanup(db, user, ws)
+
+
+@requires_db
+async def test_a_lost_first_build_race_returns_the_winners_brain_not_a_500(
+    app_db: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The losing side of a concurrent first build reads the winner's brain.
+
+    `GET /brain` builds on first access. Two clients hitting an unbuilt brain at
+    once — the dashboard panel and this page, or a dev double-mount — both see no
+    live row and both insert version 1; the partial unique index on the
+    un-superseded row rejects the second. The loser must return the brain that
+    won, not surface the index doing its job as "that did not load".
+
+    Simulated deterministically rather than with real concurrency (two cold
+    connections to a managed database race on DNS, not on the row): a brain is
+    seeded, then `read_brain` is forced down the build path with a `current` that
+    reports None once, and a `store` that raises `IntegrityError` exactly as the
+    database would for the losing insert. The fix must roll back, re-read, and
+    return the seeded brain.
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    from app.db import _unscoped_session
+    from app.domain import company_brain
+    from app.routes import spine
+
+    async with _unscoped_session() as db:
+        user, ws = await _workspace(db)
+
+    scope = _owner_scope(user, ws)
+    try:
+        # The winner's brain already exists and is current.
+        async with _unscoped_session() as db:
+            await db.execute(
+                sa.text("SELECT set_config('nexus.workspace_id', :w, true)"), {"w": str(ws)}
+            )
+            built = await company_brain.build(db, workspace_id=ws)
+            await company_brain.store(db, workspace_id=ws, brain=built)
+            await db.commit()
+
+        real_current = company_brain.current
+        calls = {"n": 0}
+
+        async def current_blind_once(db: object, *, workspace_id: UUID) -> object:
+            # First call (read_brain's opening check) reports no brain, forcing the
+            # build path — this is the losing racer's stale view. Every later call,
+            # including the fallback re-read, tells the truth.
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return None
+            return await real_current(db, workspace_id=workspace_id)  # type: ignore[arg-type]
+
+        async def store_conflict(db: object, *, workspace_id: UUID, brain: object) -> int:
+            raise IntegrityError("INSERT", {}, Exception("duplicate un-superseded brain"))
+
+        # Patch the module directly, not via `spine.brain` (an implicit re-export):
+        # `spine` holds `company_brain` under that alias, so patching the module
+        # object here is what `read_brain`'s `brain.current`/`brain.store` resolve.
+        monkeypatch.setattr(company_brain, "current", current_blind_once)
+        monkeypatch.setattr(company_brain, "store", store_conflict)
+
+        out = await spine.read_brain(scope)
+
+        # No 500: the losing request returned the brain the winner wrote.
+        assert out.version == 1
+        assert calls["n"] >= 2, "the fallback must re-read current after the conflict"
+    finally:
+        async with _unscoped_session() as db:
+            await db.execute(
+                sa.text("SELECT set_config('nexus.workspace_id', :w, true)"), {"w": str(ws)}
+            )
+            await db.execute(
+                sa.text("DELETE FROM company_brain WHERE workspace_id = :w"), {"w": str(ws)}
+            )
+            await _cleanup(db, user, ws)

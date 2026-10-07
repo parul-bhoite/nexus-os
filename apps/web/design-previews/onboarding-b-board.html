@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NEXUS OS — Onboarding, Direction B: The Board</title>
+<!--
+  STATIC DESIGN PREVIEW — not wired into the app. No Bash, no build step.
+  All raw values live in ./tokens.css (mirrors tailwind.config.ts / globals.css
+  verbatim). This file references custom properties and the `.t-display` /
+  `.t-sans` / `.t-mono` type classes only — never `font-family` itself.
+
+  Per ADR 0043 the design system is the cut-paper navy/gold palette, not ADF
+  magenta. The product has no dark theme anywhere in the codebase, so this
+  preview is single-theme, matching every other screen.
+-->
+<link rel="stylesheet" href="tokens.css" />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; }
+  body {
+    background:var(--bone-100);
+    color:var(--ink-800);
+    font-size:0.9375rem;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3 { color:var(--ink-900); margin:0; }
+  p { margin:0; }
+  button { font:inherit; color:inherit; }
+  :focus-visible { outline:2px solid var(--steel-500); outline-offset:2px; border-radius:4px; }
+  .meta { color:var(--ink-500); font-size:0.8125rem; }
+
+  /* ---------- preview harness chrome ---------- */
+  .harness-bar {
+    position:sticky; top:0; z-index:40;
+    background:var(--ink-900); color:var(--bone-50);
+    padding:var(--sp-3) var(--sp-5);
+    display:flex; align-items:center; gap:var(--sp-4); flex-wrap:wrap;
+    font-size:0.8125rem;
+  }
+  .harness-bar .tag { font-size:0.6875rem; letter-spacing:0.08em; color:var(--gold-400); text-transform:uppercase; }
+  .harness-nav { display:flex; gap:var(--sp-2); margin-left:auto; flex-wrap:wrap; }
+  .harness-nav button {
+    border:1px solid var(--ink-700); background:transparent; color:var(--bone-200);
+    padding:var(--sp-2) var(--sp-3); border-radius:999px; cursor:pointer;
+    transition:background-color var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
+    min-height:32px;
+  }
+  .harness-nav button[aria-current="step"] { background:var(--gold-400); color:var(--ink-900); border-color:var(--gold-400); font-weight:600; }
+  .harness-nav button:hover { background:var(--ink-700); }
+  .harness-nav button[aria-current="step"]:hover { background:var(--gold-300); }
+
+  .state-switch { display:flex; gap:var(--sp-2); align-items:center; flex-wrap:wrap; margin-top:var(--sp-8); justify-content:center; }
+  .state-switch span { font-size:0.75rem; color:var(--ink-400); }
+  .state-switch button {
+    border:1px solid var(--bone-300); background:var(--white); color:var(--ink-600);
+    padding:var(--sp-1) var(--sp-3); border-radius:999px; cursor:pointer; font-size:0.75rem;
+    min-height:32px;
+  }
+  .state-switch button[aria-pressed="true"] { background:var(--ink-800); color:var(--bone-50); border-color:var(--ink-800); }
+
+  .screen { display:none; }
+  .screen.is-active { display:block; }
+  .screen[data-state="ready"] [data-state-for="ready"],
+  .screen[data-state="loading"] [data-state-for="loading"],
+  .screen[data-state="empty"] [data-state-for="empty"],
+  .screen[data-state="error"] [data-state-for="error"] { display:block; }
+
+  @keyframes rise { from{opacity:0; transform:translateY(0.75rem) scale(0.99);} to{opacity:1; transform:none;} }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration:0.001ms !important; transition-duration:0.001ms !important; }
+  }
+
+  /* ================= SCREEN 1 — COMPANY ================= */
+  .canvas-narrow { max-width:30rem; margin:0 auto; padding:var(--sp-16) var(--sp-6) var(--sp-20); animation:rise var(--dur-slow) var(--ease-out) both; }
+  .eyebrow { text-transform:uppercase; letter-spacing:0.16em; font-size:0.6875rem; color:var(--steel-600); }
+  .canvas-narrow h1 { font-size:clamp(1.75rem, 3vw, 2.25rem); margin-top:var(--sp-3); letter-spacing:-0.02em; }
+  .canvas-narrow .intro { margin-top:var(--sp-3); color:var(--ink-600); }
+  .field { margin-top:var(--sp-6); }
+  .field label { display:block; font-size:0.8125rem; font-weight:500; color:var(--ink-700); margin-bottom:var(--sp-2); }
+  .field input {
+    width:100%; height:2.75rem; border-radius:var(--radius-control); border:1px solid var(--ink-200);
+    background:var(--white); padding:0 var(--sp-4); font-size:0.9375rem; color:var(--ink-900);
+    transition:border-color var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
+  }
+  .field input:hover { border-color:var(--ink-300); }
+  .field input:focus-visible { border-color:var(--steel-500); box-shadow:0 0 0 3px var(--steel-200); outline:none; }
+  .btn {
+    display:inline-flex; align-items:center; justify-content:center; gap:var(--sp-2);
+    height:3rem; padding:0 var(--sp-6); border-radius:999px; border:none; cursor:pointer;
+    font-weight:500; font-size:0.9375rem;
+    transition:background-color var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+  }
+  .btn:active { transform:translateY(1px); }
+  .btn-primary { background:var(--ink-800); color:var(--bone-50); box-shadow:var(--shadow-e1); }
+  .btn-primary:hover { background:var(--ink-700); box-shadow:var(--shadow-e2); }
+  .btn-danger { background:var(--clay-600); color:var(--bone-50); }
+  .btn-danger:hover { background:var(--clay-500); }
+  .btn-quiet { background:transparent; color:var(--ink-500); text-decoration:underline; text-decoration-color:var(--ink-300); height:auto; padding:var(--sp-1) var(--sp-2); }
+  .actions { margin-top:var(--sp-10); display:flex; align-items:center; gap:var(--sp-5); }
+
+  /* ================= SCREEN 2 — THE BOARD (areas of interest) ================= */
+  .board-wrap { max-width:62rem; margin:0 auto; padding:var(--sp-10) var(--sp-6) var(--sp-20); animation:rise var(--dur-slow) var(--ease-out) both; }
+  .board-head { text-align:center; max-width:34rem; margin:0 auto; }
+  .board-head h1 { font-size:clamp(1.75rem, 3vw, 2.25rem); letter-spacing:-0.02em; }
+  .board-head p { margin-top:var(--sp-3); color:var(--ink-600); }
+
+  /* The tray: the team being assembled. Empty state shows placeholder slots. */
+  .tray {
+    margin:var(--sp-8) auto 0; max-width:40rem; min-height:4.5rem;
+    border-radius:var(--radius-panel); border:1.5px dashed var(--bone-400);
+    background:var(--bone-50); display:flex; align-items:center; gap:var(--sp-3);
+    padding:var(--sp-3) var(--sp-5); flex-wrap:wrap; justify-content:center;
+    transition:border-color var(--dur-base) var(--ease-out);
+  }
+  .tray-empty-note { color:var(--ink-400); font-size:0.8125rem; }
+  .tray-chip {
+    display:inline-flex; align-items:center; gap:var(--sp-2);
+    background:var(--white); border:1px solid var(--bone-300); border-radius:999px;
+    padding:var(--sp-1) var(--sp-3) var(--sp-1) var(--sp-1); box-shadow:var(--shadow-e1);
+    animation:popin var(--dur-emphasis) var(--ease-out) both;
+  }
+  @keyframes popin { from{ opacity:0; transform:scale(0.85); } to{ opacity:1; transform:scale(1); } }
+  .tray-mark { width:1.75rem; height:1.75rem; border-radius:999px; display:flex; align-items:center; justify-content:center; }
+
+  .grid {
+    margin-top:var(--sp-10); display:grid; grid-template-columns:repeat(3, 1fr); gap:var(--sp-5);
+  }
+  @media (max-width:46rem) { .grid { grid-template-columns:repeat(2, 1fr); } }
+
+  .tile { position:relative; }
+  .tile input { position:absolute; opacity:0; width:1px; height:1px; }
+  .tile-face {
+    display:block; border-radius:var(--radius-card); border:1.5px solid var(--bone-300);
+    background:var(--white); padding:var(--sp-5); cursor:pointer; box-shadow:var(--shadow-e1);
+    transition:border-color var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+    min-height:44px;
+  }
+  .tile-face:hover { box-shadow:var(--shadow-e2); transform:translateY(-2px); }
+  .tile-face:active { transform:translateY(0); }
+  .tile input:focus-visible ~ .tile-face { box-shadow:0 0 0 3px var(--steel-200), var(--shadow-e2); }
+  .tile input:checked ~ .tile-face { border-color:var(--ink-800); box-shadow:var(--shadow-e2); }
+  .tile-mark {
+    width:3rem; height:3rem; border-radius:999px; display:flex; align-items:center; justify-content:center;
+    margin-bottom:var(--sp-4);
+  }
+  .tile-face h3 { font-size:1.0625rem; font-weight:600; }
+  .tile-face p { margin-top:var(--sp-2); font-size:0.8125rem; color:var(--ink-500); }
+  .tile-check {
+    position:absolute; top:var(--sp-4); right:var(--sp-4);
+    width:1.5rem; height:1.5rem; border-radius:999px; border:1.5px solid var(--bone-400);
+    background:var(--white); display:flex; align-items:center; justify-content:center;
+    transition:background-color var(--dur-micro) var(--ease-out), border-color var(--dur-micro) var(--ease-out);
+  }
+  .tile-check svg { opacity:0; width:12px; height:12px; transition:opacity var(--dur-micro) var(--ease-out); }
+  .tile input:checked ~ .tile-face .tile-check { background:var(--ink-800); border-color:var(--ink-800); }
+  .tile input:checked ~ .tile-face .tile-check svg { opacity:1; }
+  .check-icon { stroke:var(--bone-50); }
+
+  .accent-steel .tile-mark, .accent-steel .tray-mark { background:var(--steel-100); color:var(--steel-600); }
+  .accent-clay .tile-mark, .accent-clay .tray-mark { background:var(--clay-100); color:var(--clay-600); }
+  .accent-ink .tile-mark, .accent-ink .tray-mark { background:var(--ink-100); color:var(--ink-700); }
+  .accent-slate .tile-mark, .accent-slate .tray-mark { background:var(--slate-100); color:var(--slate-600); }
+  .accent-gold .tile-mark, .accent-gold .tray-mark { background:var(--gold-100); color:var(--gold-700); }
+
+  .board-count { margin-top:var(--sp-8); text-align:center; font-size:0.8125rem; color:var(--ink-500); }
+  .board-count strong { color:var(--ink-800); font-variant-numeric:tabular-nums; }
+  .board-foot { margin-top:var(--sp-8); display:flex; justify-content:center; gap:var(--sp-5); }
+
+  .sk-tile { height:9.5rem; border-radius:var(--radius-card); background:var(--bone-200); animation:breathe 1.6s var(--ease-inout) infinite; }
+  @keyframes breathe { 0%,100%{opacity:1;} 50%{opacity:0.5;} }
+
+  .empty-block, .error-block {
+    margin:var(--sp-10) auto 0; max-width:30rem; padding:var(--sp-6); border-radius:var(--radius-data);
+    border:1px dashed var(--bone-400); text-align:center;
+  }
+  .error-block { border-style:solid; border-color:var(--clay-300); background:var(--clay-100); }
+  .empty-block h3, .error-block h3 { font-size:1rem; font-weight:600; }
+  .empty-block p, .error-block p { margin-top:var(--sp-2); font-size:0.875rem; color:var(--ink-600); }
+  .error-block p { color:var(--clay-600); }
+
+  .legend { margin:var(--sp-12) auto 0; max-width:40rem; padding-top:var(--sp-6); border-top:1px solid var(--bone-200); }
+  .legend .eyebrow { display:block; text-align:center; margin-bottom:var(--sp-4); }
+  .legend-row { display:flex; gap:var(--sp-4); justify-content:center; flex-wrap:wrap; align-items:center; }
+  .legend-row .lbl { font-size:0.75rem; color:var(--ink-400); margin-right:var(--sp-1); }
+
+  /* ================= SCREEN 3 — QUESTION DECK ================= */
+  .deck-wrap { max-width:38rem; margin:0 auto; padding:var(--sp-12) var(--sp-6) var(--sp-20); animation:rise var(--dur-slow) var(--ease-out) both; }
+  .deck-dots { display:flex; justify-content:center; gap:var(--sp-2); }
+  .deck-dots .dot { width:0.5rem; height:0.5rem; border-radius:999px; background:var(--bone-300); }
+  .deck-dots .dot.is-done { background:var(--steel-500); }
+  .deck-dots .dot.is-current { background:var(--ink-800); width:1.25rem; border-radius:999px; }
+
+  .deck-card {
+    margin-top:var(--sp-8); background:var(--white); border-radius:var(--radius-panel);
+    border:1px solid var(--bone-300); box-shadow:var(--shadow-e2); padding:var(--sp-10) var(--sp-8);
+    text-align:center;
+  }
+  .deck-scope { font-size:0.75rem; color:var(--steel-600); text-transform:uppercase; letter-spacing:0.1em; }
+  .deck-why { margin-top:var(--sp-3); font-size:0.8125rem; color:var(--ink-500); }
+  .deck-prompt { margin-top:var(--sp-4); font-size:1.5rem; line-height:1.3; }
+  .illustrative {
+    display:inline-flex; align-items:center; gap:4px; margin-left:var(--sp-2);
+    font-size:0.625rem; text-transform:uppercase; letter-spacing:0.08em;
+    color:var(--gold-700); background:var(--gold-100); border:1px solid var(--gold-300);
+    padding:2px 7px; border-radius:999px; vertical-align:middle;
+  }
+
+  .cloud { margin-top:var(--sp-8); display:flex; flex-wrap:wrap; gap:var(--sp-3); justify-content:center; }
+  .chip {
+    border:1px solid var(--bone-300); background:var(--bone-50); color:var(--ink-700);
+    padding:var(--sp-3) var(--sp-5); border-radius:999px; cursor:pointer; font-size:0.9375rem;
+    min-height:44px; display:inline-flex; align-items:center;
+    transition:border-color var(--dur-base) var(--ease-out), background-color var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+  }
+  .chip:hover { border-color:var(--steel-400); transform:translateY(-1px); }
+  .chip:active { transform:translateY(0); }
+  .chip[aria-pressed="true"] { background:var(--ink-800); border-color:var(--ink-800); color:var(--bone-50); }
+  .chip.force-hover { border-color:var(--steel-400); transform:translateY(-1px); }
+  .chip.force-active { transform:translateY(0); border-color:var(--steel-500); }
+  .chip.force-focus { outline:2px solid var(--steel-500); outline-offset:2px; }
+
+  .deck-write { margin-top:var(--sp-6); }
+  .deck-write input {
+    width:100%; height:2.75rem; border-radius:var(--radius-control); border:1px solid var(--ink-200);
+    padding:0 var(--sp-4); font-size:0.9375rem; background:var(--white); text-align:center;
+  }
+  .deck-nav { margin-top:var(--sp-8); display:flex; justify-content:center; gap:var(--sp-4); align-items:center; }
+  .deck-arrow {
+    width:2.75rem; height:2.75rem; border-radius:999px; border:1px solid var(--bone-300); background:var(--white);
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
+  .deck-arrow:hover { border-color:var(--steel-400); }
+
+  /* ================= SCREEN 4 — SCAN & ARRIVAL ================= */
+  .arrival-wrap { max-width:34rem; margin:0 auto; padding:var(--sp-16) var(--sp-6) var(--sp-20); text-align:center; animation:rise var(--dur-slow) var(--ease-out) both; }
+  .orbit {
+    width:9rem; height:9rem; margin:0 auto; position:relative;
+  }
+  .orbit-ring { position:absolute; inset:0; border-radius:999px; border:1.5px dashed var(--steel-400); animation:spin 16s linear infinite; }
+  .orbit-ring.r2 { inset:1rem; border-color:var(--gold-400); animation-duration:11s; animation-direction:reverse; }
+  .orbit-core {
+    position:absolute; inset:2.75rem; border-radius:999px; background:var(--ink-800);
+    display:flex; align-items:center; justify-content:center; box-shadow:var(--shadow-e2);
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .found-row { margin-top:var(--sp-8); display:flex; gap:var(--sp-3); justify-content:center; flex-wrap:wrap; }
+  .found-chip {
+    background:var(--white); border:1px solid var(--bone-300); border-radius:999px;
+    padding:var(--sp-2) var(--sp-4); font-size:0.8125rem; color:var(--ink-600); box-shadow:var(--shadow-e1);
+    animation:popin var(--dur-emphasis) var(--ease-out) both;
+  }
+  .brief-card { margin-top:var(--sp-8); padding:var(--sp-6); border-radius:var(--radius-card); border:1px solid var(--bone-300); background:var(--white); box-shadow:var(--shadow-e1); text-align:left; }
+  .brief-card p { margin-top:var(--sp-3); font-size:0.9375rem; line-height:1.7; color:var(--ink-700); }
+  .arrival-wrap .actions { justify-content:center; }
+  .empty-block2, .error-block2 { margin-top:var(--sp-8); padding:var(--sp-6); border-radius:var(--radius-data); border:1px dashed var(--bone-400); text-align:left; }
+  .error-block2 { border-style:solid; border-color:var(--clay-300); background:var(--clay-100); }
+  .empty-block2 h3, .error-block2 h3 { font-size:1rem; font-weight:600; }
+  .empty-block2 p, .error-block2 p { margin-top:var(--sp-2); font-size:0.875rem; color:var(--ink-600); }
+  .error-block2 p { color:var(--clay-600); }
+</style>
+</head>
+<body>
+
+<div class="harness-bar">
+  <span class="tag t-mono">Design preview</span>
+  <strong>Direction B — The Board</strong>
+  <span style="color:var(--bone-300)">tactile · card-driven · assembling your team</span>
+  <div class="harness-nav" role="tablist" aria-label="Preview screens">
+    <button data-goto="company" aria-current="step">1 · Company</button>
+    <button data-goto="board">2 · Areas of interest</button>
+    <button data-goto="deck">3 · Tailored questions</button>
+    <button data-goto="arrival">4 · Scan &amp; wrap-up</button>
+  </div>
+</div>
+
+<!-- ============ SCREEN 1 — COMPANY ============ -->
+<section class="screen is-active" id="screen-company" data-state="ready">
+  <div class="canvas-narrow" data-state-for="ready">
+    <span class="eyebrow t-mono">Part 1 of 3</span>
+    <h1>Let's start with your company.</h1>
+    <p class="intro">Just enough to begin — the board comes next.</p>
+
+    <div class="field"><label for="b-name">Company name</label><input id="b-name" type="text" placeholder="Acme Trading LLC" /></div>
+    <div class="field"><label for="b-url">Website</label><input id="b-url" type="url" placeholder="acme.om" /></div>
+    <div class="field"><label for="b-role">Your role <span style="color:var(--ink-400);">(optional)</span></label><input id="b-role" type="text" placeholder="Founder, Head of Sales…" /></div>
+
+    <div class="actions">
+      <button class="btn btn-primary" onclick="go('board')">Continue</button>
+      <span class="meta">Takes under a minute</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SCREEN 2 — THE BOARD ============ -->
+<section class="screen" id="screen-board" data-state="ready">
+  <div class="board-wrap" data-state-for="ready">
+    <div class="board-head">
+      <span class="eyebrow t-mono">Part 2 of 3</span>
+      <h1>Build your executive team.</h1>
+      <p>Tap what you run. Each one adds a director to your workspace — a Chief of Staff view comes with every team, automatically.</p>
+    </div>
+
+    <div class="tray" id="tray" aria-live="polite">
+      <span class="tray-empty-note" id="tray-empty">Your team appears here as you choose</span>
+    </div>
+
+    <div class="grid">
+      <div class="tile accent-steel">
+        <input type="checkbox" id="t-marketing" onchange="onTileChange(this,'Marketing','steel')" checked />
+        <label class="tile-face" for="t-marketing">
+          <span class="tile-check"><svg class="check-icon" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="tile-mark"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 18V9l8-5 8 5v9" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 18v-5h6v5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <h3>Marketing</h3>
+          <p>Campaigns, SEO, brand positioning</p>
+        </label>
+      </div>
+
+      <div class="tile accent-clay">
+        <input type="checkbox" id="t-sales" onchange="onTileChange(this,'Sales','clay')" checked />
+        <label class="tile-face" for="t-sales">
+          <span class="tile-check"><svg class="check-icon" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="tile-mark"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 14l5-5 4 4 7-7" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 6h5v5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <h3>Sales</h3>
+          <p>Pipeline, forecasting, proposals</p>
+        </label>
+      </div>
+
+      <div class="tile accent-ink">
+        <input type="checkbox" id="t-finance" onchange="onTileChange(this,'Finance','ink')" checked />
+        <label class="tile-face" for="t-finance">
+          <span class="tile-check"><svg class="check-icon" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="tile-mark"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v18M7 7h6.5a2.5 2.5 0 0 1 0 5H8a2.5 2.5 0 0 0 0 5h7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <h3>Finance</h3>
+          <p>Revenue, margin, cash flow</p>
+        </label>
+      </div>
+
+      <div class="tile accent-steel">
+        <input type="checkbox" id="t-operations" onchange="onTileChange(this,'Operations','steel')" />
+        <label class="tile-face" for="t-operations">
+          <span class="tile-check"><svg class="check-icon" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="tile-mark"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.2-1.6l2-1.4-2-3.4-2.3.6a7 7 0 0 0-2.8-1.6L13 2h-2l-.7 2.6a7 7 0 0 0-2.8 1.6l-2.3-.6-2 3.4 2 1.4A7 7 0 0 0 5 12" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <h3>Operations</h3>
+          <p>SOPs, workflows, bottlenecks</p>
+        </label>
+      </div>
+
+      <div class="tile accent-slate">
+        <input type="checkbox" id="t-people" onchange="onTileChange(this,'People','slate')" />
+        <label class="tile-face" for="t-people">
+          <span class="tile-check"><svg class="check-icon" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="tile-mark"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke-linecap="round"/><path d="M16 5.5a3 3 0 0 1 0 5.9M21 20c0-2.8-2-5.2-4.6-5.8" stroke-linecap="round"/></svg></span>
+          <h3>People</h3>
+          <p>Policies, recruitment, onboarding</p>
+        </label>
+      </div>
+
+      <div class="tile accent-gold">
+        <input type="checkbox" id="t-strategy" onchange="onTileChange(this,'Strategy','gold')" />
+        <label class="tile-face" for="t-strategy">
+          <span class="tile-check"><svg class="check-icon" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="tile-mark"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12h4l3-8 4 16 3-8h4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <h3>Strategy</h3>
+          <p>Expansion planning, market entry</p>
+        </label>
+      </div>
+    </div>
+
+    <div class="board-count"><strong id="b-count">3</strong> of 6 on your team — <span style="color:var(--steel-600)">a good range</span>, three to five is typical</div>
+
+    <div class="board-foot">
+      <button class="btn btn-primary" onclick="go('deck')">Continue</button>
+      <button class="btn btn-quiet" onclick="go('company')">Back</button>
+    </div>
+
+    <div class="legend">
+      <span class="eyebrow t-mono">States — a director tile</span>
+      <div class="legend-row">
+        <span class="lbl">Rest</span>
+        <span class="tile-check" style="position:static; display:inline-flex;"></span>
+        <span class="lbl">Hover (lifts)</span>
+        <span class="tile-check" style="position:static; display:inline-flex;"></span>
+        <span class="lbl">Selected</span>
+        <span class="tile-check" style="position:static; display:inline-flex; background:var(--ink-800); border-color:var(--ink-800);"><svg class="check-icon" viewBox="0 0 16 16" fill="none" style="width:12px;height:12px;opacity:1;"><path d="M3 8.5l3 3 7-7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="lbl">Focus-visible</span>
+        <span class="tile-check" style="position:static; display:inline-flex; box-shadow:0 0 0 3px var(--steel-200);"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="board-wrap" data-state-for="loading">
+    <div class="board-head">
+      <span class="eyebrow t-mono">Part 2 of 3</span>
+      <h1>Build your executive team.</h1>
+      <p>Loading the department list…</p>
+    </div>
+    <div class="grid">
+      <div class="sk-tile"></div><div class="sk-tile" style="animation-delay:0.1s"></div><div class="sk-tile" style="animation-delay:0.2s"></div>
+      <div class="sk-tile" style="animation-delay:0.1s"></div><div class="sk-tile" style="animation-delay:0.2s"></div><div class="sk-tile" style="animation-delay:0.3s"></div>
+    </div>
+  </div>
+
+  <div class="board-wrap" data-state-for="empty">
+    <div class="board-head"><span class="eyebrow t-mono">Part 2 of 3</span><h1>Build your executive team.</h1></div>
+    <div class="empty-block">
+      <h3>The department list didn't load</h3>
+      <p>Nothing to choose from yet — this is unusual. You can still continue; Settings lets you set this any time.</p>
+      <button class="btn btn-primary" style="margin-top:var(--sp-4)" onclick="setState('board','ready')">Try again</button>
+    </div>
+  </div>
+
+  <div class="board-wrap" data-state-for="error">
+    <div class="board-head"><span class="eyebrow t-mono">Part 2 of 3</span><h1>Build your executive team.</h1></div>
+    <div class="error-block">
+      <h3>Could not reach the account service</h3>
+      <p>Try again in a moment — nothing you've chosen so far has been lost.</p>
+      <button class="btn btn-danger" style="margin-top:var(--sp-4)" onclick="setState('board','ready')">Retry</button>
+    </div>
+  </div>
+
+  <div class="state-switch">
+    <span>Preview state:</span>
+    <button aria-pressed="true" onclick="setState('board','ready',this)">Ready</button>
+    <button onclick="setState('board','loading',this)">Loading</button>
+    <button onclick="setState('board','empty',this)">Empty</button>
+    <button onclick="setState('board','error',this)">Error</button>
+  </div>
+</section>
+
+<!-- ============ SCREEN 3 — QUESTION DECK ============ -->
+<section class="screen" id="screen-deck" data-state="ready">
+  <div class="deck-wrap" data-state-for="ready">
+    <div class="deck-dots" aria-hidden="true">
+      <span class="dot is-done"></span><span class="dot is-done"></span><span class="dot is-done"></span>
+      <span class="dot is-current"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    </div>
+
+    <div class="deck-card">
+      <div class="deck-scope t-mono">Sales</div>
+      <div class="deck-why">Why we ask — used for pipeline value and forecasting.<span class="illustrative t-mono">illustrative</span></div>
+      <h2 class="deck-prompt">What's your average deal size?</h2>
+      <div class="cloud" role="group" aria-label="Suggested deal sizes">
+        <button class="chip" onclick="toggleChip(this)">Under 1,000 OMR</button>
+        <button class="chip" aria-pressed="true" onclick="toggleChip(this)">1,000–10,000 OMR</button>
+        <button class="chip" onclick="toggleChip(this)">10,000+ OMR</button>
+      </div>
+      <div class="deck-write"><input type="text" placeholder="Or type an exact figure…" /></div>
+    </div>
+
+    <div class="deck-nav">
+      <button class="deck-arrow" aria-label="Previous question" onclick="void(0)">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 3 5 8l5 5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="btn btn-primary" onclick="go('arrival')">Next question</button>
+      <button class="deck-arrow" aria-label="Skip" onclick="go('arrival')">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 3l5 5-5 5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+    <p class="meta" style="text-align:center; margin-top:var(--sp-5);">Question 4 of 9 — scoped to Marketing, Sales and Finance</p>
+
+    <div class="legend">
+      <span class="eyebrow t-mono">States — a suggestion chip</span>
+      <div class="legend-row">
+        <span class="lbl">Rest</span><button class="chip" aria-pressed="false">Chip</button>
+        <span class="lbl">Hover</span><button class="chip force-hover" aria-pressed="false">Chip</button>
+        <span class="lbl">Active</span><button class="chip force-active" aria-pressed="false">Chip</button>
+        <span class="lbl">Focus-visible</span><button class="chip force-focus" aria-pressed="false">Chip</button>
+        <span class="lbl">Selected</span><button class="chip" aria-pressed="true">Chip</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="deck-wrap" data-state-for="loading">
+    <div class="deck-card" style="text-align:left;">
+      <div class="sk-tile" style="height:1rem; width:30%; border-radius:999px;"></div>
+      <div class="sk-tile" style="height:1.75rem; width:90%; margin-top:var(--sp-5); border-radius:var(--radius-control);"></div>
+      <div style="display:flex; gap:var(--sp-2); margin-top:var(--sp-6); justify-content:center;">
+        <div class="sk-tile" style="height:2.75rem; width:7rem; border-radius:999px;"></div>
+        <div class="sk-tile" style="height:2.75rem; width:7rem; border-radius:999px; animation-delay:0.1s;"></div>
+      </div>
+    </div>
+    <p class="meta" style="text-align:center; margin-top:var(--sp-5);">Preparing questions for Marketing, Sales and Finance…</p>
+  </div>
+
+  <div class="deck-wrap" data-state-for="empty">
+    <div class="deck-card">
+      <h2 class="deck-prompt">That's everything for the areas you chose.</h2>
+      <p class="meta" style="margin-top:var(--sp-4);">Add another area of interest in Settings any time, and NEXUS will ask what it needs then.</p>
+      <div class="deck-nav"><button class="btn btn-primary" onclick="go('arrival')">Continue to your workspace</button></div>
+    </div>
+  </div>
+
+  <div class="deck-wrap" data-state-for="error">
+    <div class="deck-card">
+      <h2 class="deck-prompt">That answer didn't save.</h2>
+      <p class="meta" style="margin-top:var(--sp-4); color:var(--clay-600);">Could not reach the account service. Your other answers are safe.</p>
+      <div class="deck-nav"><button class="btn btn-danger" onclick="setState('deck','ready')">Retry</button></div>
+    </div>
+  </div>
+
+  <div class="state-switch">
+    <span>Preview state:</span>
+    <button aria-pressed="true" onclick="setState('deck','ready',this)">Ready</button>
+    <button onclick="setState('deck','loading',this)">Loading</button>
+    <button onclick="setState('deck','empty',this)">Empty</button>
+    <button onclick="setState('deck','error',this)">Error</button>
+  </div>
+</section>
+
+<!-- ============ SCREEN 4 — SCAN & ARRIVAL ============ -->
+<section class="screen" id="screen-arrival" data-state="ready">
+  <div class="arrival-wrap" data-state-for="ready">
+    <span class="eyebrow t-mono">Reading your website</span>
+    <div class="orbit">
+      <div class="orbit-ring"></div>
+      <div class="orbit-ring r2"></div>
+      <div class="orbit-core">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--bone-50)" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18Z"/></svg>
+      </div>
+    </div>
+    <h1 style="margin-top:var(--sp-8);">Learning acme.om.</h1>
+    <p class="meta" style="margin-top:var(--sp-2);">You don't need to wait here — we'll bring you back the second it's ready.</p>
+    <div class="found-row">
+      <span class="found-chip">Home read</span>
+      <span class="found-chip" style="animation-delay:0.08s;">About read</span>
+      <span class="found-chip" style="animation-delay:0.16s;">Industry noted</span>
+    </div>
+    <div class="brief-card">
+      <span class="illustrative t-mono">illustrative</span>
+      <p>"Acme Trading looks like a B2B logistics company based in Muscat, serving retail and FMCG clients. We'll use this as a starting point — correct anything that's wrong."</p>
+      <div class="actions"><button class="btn btn-primary" onclick="go('company')">That's right — continue</button><button class="btn btn-quiet">Something's off</button></div>
+    </div>
+  </div>
+
+  <div class="arrival-wrap" data-state-for="loading">
+    <div class="orbit"><div class="orbit-ring"></div><div class="orbit-ring r2"></div><div class="orbit-core"><span class="dot" style="width:0.6rem; height:0.6rem; border-radius:999px; background:var(--gold-400);"></span></div></div>
+    <h1 style="margin-top:var(--sp-8);">Putting your team together.</h1>
+    <p class="meta" style="margin-top:var(--sp-2);">Your directors, your dashboard, your first audit — assembling from what you've told us.</p>
+  </div>
+
+  <div class="arrival-wrap" data-state-for="empty">
+    <span class="eyebrow t-mono">No language model configured</span>
+    <h1 style="margin-top:var(--sp-3);">Starting from your answers alone.</h1>
+    <div class="empty-block2">
+      <p>No site scan this time — that's a fully supported way to begin. Your workspace builds from the team and questions you've just answered.</p>
+    </div>
+    <div class="actions" style="justify-content:center;"><button class="btn btn-primary" onclick="setState('arrival','loading')">Continue</button></div>
+  </div>
+
+  <div class="arrival-wrap" data-state-for="error">
+    <span class="eyebrow t-mono">Reading your website</span>
+    <h1 style="margin-top:var(--sp-3);">We couldn't read acme.om.</h1>
+    <div class="error-block2">
+      <h3>The site didn't respond</h3>
+      <p>That's fine — you can carry on without it. Nothing about your workspace depends on this succeeding.</p>
+      <button class="btn btn-danger" style="margin-top:var(--sp-4)" onclick="setState('arrival','empty')">Continue without scanning</button>
+    </div>
+  </div>
+
+  <div class="state-switch">
+    <span>Preview state:</span>
+    <button aria-pressed="true" onclick="setState('arrival','ready',this)">Scan + brief</button>
+    <button onclick="setState('arrival','loading',this)">Assembling</button>
+    <button onclick="setState('arrival','empty',this)">No model configured</button>
+    <button onclick="setState('arrival','error',this)">Scan failed</button>
+  </div>
+</section>
+
+<script>
+  function go(id){
+    document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('is-active'); });
+    document.getElementById('screen-'+id).classList.add('is-active');
+    document.querySelectorAll('[data-goto]').forEach(function(b){
+      if (b.dataset.goto===id) b.setAttribute('aria-current','step'); else b.removeAttribute('aria-current');
+    });
+    window.scrollTo({top:0, behavior:'instant'});
+  }
+  document.querySelectorAll('[data-goto]').forEach(function(b){ b.addEventListener('click', function(){ go(b.dataset.goto); }); });
+
+  function setState(screen, state, btn){
+    var el = document.getElementById('screen-'+screen);
+    el.dataset.state = state;
+    if (btn) {
+      Array.prototype.forEach.call(btn.parentElement.querySelectorAll('button'), function(b){ b.setAttribute('aria-pressed','false'); });
+      btn.setAttribute('aria-pressed','true');
+    }
+  }
+
+  function toggleChip(btn){
+    var pressed = btn.getAttribute('aria-pressed') === 'true';
+    btn.setAttribute('aria-pressed', String(!pressed));
+  }
+
+  var MARK = {
+    Marketing: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 18V9l8-5 8 5v9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    Sales: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 14l5-5 4 4 7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    Finance: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v18M7 7h6.5a2.5 2.5 0 0 1 0 5H8a2.5 2.5 0 0 0 0 5h7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    Operations: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/></svg>',
+    People: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke-linecap="round"/></svg>',
+    Strategy: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l3-8 4 16 3-8h4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+  };
+
+  function renderTray(){
+    var tray = document.getElementById('tray');
+    var checked = Array.prototype.slice.call(document.querySelectorAll('#screen-board .tile input:checked'));
+    tray.innerHTML = '';
+    if (checked.length === 0) {
+      tray.innerHTML = '<span class="tray-empty-note" id="tray-empty">Your team appears here as you choose</span>';
+      return;
+    }
+    checked.forEach(function(input){
+      var name = input.dataset.name;
+      var accent = input.dataset.accent;
+      var chip = document.createElement('span');
+      chip.className = 'tray-chip accent-' + accent;
+      chip.innerHTML = '<span class="tray-mark">' + (MARK[name] || '') + '</span><span>' + name + '</span>';
+      tray.appendChild(chip);
+    });
+    document.getElementById('b-count').textContent = checked.length;
+  }
+
+  function onTileChange(input, name, accent){
+    input.dataset.name = name;
+    input.dataset.accent = accent;
+    renderTray();
+  }
+
+  // initial paint of the tray for the three pre-checked tiles
+  document.addEventListener('DOMContentLoaded', function(){
+    document.getElementById('t-marketing').dataset.name = 'Marketing'; document.getElementById('t-marketing').dataset.accent = 'steel';
+    document.getElementById('t-sales').dataset.name = 'Sales'; document.getElementById('t-sales').dataset.accent = 'clay';
+    document.getElementById('t-finance').dataset.name = 'Finance'; document.getElementById('t-finance').dataset.accent = 'ink';
+    document.getElementById('t-operations').dataset.name = 'Operations'; document.getElementById('t-operations').dataset.accent = 'steel';
+    document.getElementById('t-people').dataset.name = 'People'; document.getElementById('t-people').dataset.accent = 'slate';
+    document.getElementById('t-strategy').dataset.name = 'Strategy'; document.getElementById('t-strategy').dataset.accent = 'gold';
+    renderTray();
+  });
+</script>
+</body>
+</html>

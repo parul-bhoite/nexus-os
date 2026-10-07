@@ -61,7 +61,8 @@ type NavGroup = { key: string; label: string; items: NavItem[] }
  * Every destination is a route that exists.
  *
  * `doc/14` sketched a *Your data* group of four — Company Brain, Documents,
- * Connections, Your answers. Only one of those is a page today; the rest are
+ * Connections, Your answers. Company Brain is now a real page (ADR 0069
+ * phase 2) rather than the dashboard glance panel alone; the rest are still
  * panels inside setup and settings. A nav entry pointing at a route nobody
  * built is a 404 with a friendly name, so the group holds what is real and
  * grows when the pages do.
@@ -90,6 +91,11 @@ export function groupsFor(all: Dashboards | null): NavGroup[] {
       label: 'Your data',
       items: [
         { href: '/work', label: 'Your work', hint: 'Projects and tasks' },
+        {
+          href: '/brain',
+          label: 'Company Brain',
+          hint: 'Everything NEXUS knows, and where it came from',
+        },
         { href: '/documents', label: 'Your documents', hint: 'What NEXUS has read' },
         // Listed unconditionally, with no count. A badge would need the queue
         // fetched on every page to render the nav, and an *absent* badge would
