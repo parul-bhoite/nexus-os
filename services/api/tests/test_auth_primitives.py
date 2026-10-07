@@ -19,7 +19,7 @@ from app.auth.passwords import (
 )
 from app.auth.tokens import csrf_matches, hash_token, new_csrf_token, new_token, tokens_match
 
-PASSWORD = "correct-horse-battery-staple"
+PASSWORD = "Correct-horse-battery-staple1"
 
 
 # ── Passwords ─────────────────────────────────────────────────
@@ -59,7 +59,24 @@ def test_malformed_stored_hash_fails_closed(bad_hash: str) -> None:
 
 def test_short_password_is_rejected() -> None:
     with pytest.raises(WeakPasswordError):
-        hash_password("x" * (MIN_PASSWORD_LENGTH - 1))
+        hash_password("X1" + "x" * (MIN_PASSWORD_LENGTH - 3))
+
+
+def test_password_without_a_capital_is_rejected() -> None:
+    # Long enough and has a digit, but no uppercase letter.
+    with pytest.raises(WeakPasswordError):
+        hash_password("lowercase-only-1")
+
+
+def test_password_without_a_number_is_rejected() -> None:
+    # Long enough and has a capital, but no digit.
+    with pytest.raises(WeakPasswordError):
+        hash_password("No-Digits-Here")
+
+
+def test_minimum_compliant_password_is_accepted() -> None:
+    # Exactly the floor: eight characters, one capital, one number.
+    assert hash_password("Abcdefg1").startswith("$argon2id$")
 
 
 def test_absurdly_long_password_is_rejected() -> None:

@@ -17,7 +17,7 @@ import {
   start,
 } from '@/lib/agent-onboarding-client'
 import { AuthError } from '@/lib/auth-client'
-import { fetchCompany, fetchDepartments } from '@/lib/settings-client'
+import { type CurrentCompany, fetchCompany, fetchDepartments } from '@/lib/settings-client'
 import { type AuraState } from '@/components/onboarding/OnboardingAura'
 import { StepperShell, type StepId } from '@/components/onboarding/OnboardingStepper'
 import { CompanyStage } from '@/components/onboarding/stages/CompanyStage'
@@ -61,6 +61,30 @@ type Boot =
   | { status: 'error'; message: string }
   | { status: 'blocked'; message: string }
   | { status: 'ready' }
+
+/**
+ * `fetchCompany`, retried on a transient server fault.
+ *
+ * The mount probe doubles as "does this founder have a company yet?" — a 403 or
+ * 401 is the *answer* and must pass straight through to `resolve`, which places
+ * the founder on step 1. A 5xx is not an answer: it is a blip in the account
+ * service (a restart, a connection-pool hiccup) and must not eject somebody to
+ * an error wall on what is their first authenticated page. So a 5xx is retried a
+ * few times with a short backoff, and only a persistent one is surfaced. Any
+ * other status (a 4xx) is a real response and is not retried.
+ */
+async function probeCompany(): Promise<CurrentCompany> {
+  const backoffMs = [300, 800, 1500]
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await fetchCompany()
+    } catch (error) {
+      const transient = error instanceof AuthError && error.status >= 500
+      if (!transient || attempt >= backoffMs.length) throw error
+      await new Promise((resolve) => setTimeout(resolve, backoffMs[attempt]))
+    }
+  }
+}
 
 export function OnboardingEntry() {
   const router = useRouter()
@@ -143,7 +167,7 @@ export function OnboardingEntry() {
   async function resolve() {
     setBoot({ status: 'loading' })
     try {
-      await fetchCompany()
+      await probeCompany()
     } catch (error) {
       if (error instanceof AuthError && (error.status === 403 || error.status === 401)) {
         setStep('company')

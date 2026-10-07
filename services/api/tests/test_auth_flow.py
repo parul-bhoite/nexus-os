@@ -17,7 +17,7 @@ from sqlalchemy import Connection, Engine, create_engine
 
 from tests.dburl import database_url
 
-PASSWORD = "correct-horse-battery-staple"
+PASSWORD = "Correct-horse-battery-staple1"
 
 
 DB_URL = database_url()

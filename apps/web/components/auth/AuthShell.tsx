@@ -68,21 +68,22 @@ export function AuthShell({
             <line x1="50" y1="50" x2="74" y2="26" className="stroke-gold-500/30" strokeWidth="11" strokeLinecap="round" />
           </svg>
 
-          <div className="relative flex h-full flex-col justify-center py-16 pl-28 pr-14 xl:pl-32">
-            <span className="flex items-center gap-2 font-mono text-2xs uppercase tracking-[0.2em] text-slate-300">
-              <span className="h-1.5 w-1.5 rounded-full bg-gold-500" />
-              AI business operating system
-            </span>
+          <div className="relative flex h-full flex-col items-center justify-center px-14 py-16">
+            <div className="w-full max-w-sm">
+              <span className="flex items-center gap-2 font-mono text-2xs uppercase tracking-[0.2em] text-slate-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-gold-500" />
+                AI business operating system
+              </span>
 
-            <p className="mt-6 max-w-sm text-balance font-display text-[1.9rem] font-bold leading-[1.15] text-bone-50">
-              One Company Brain. Every number traceable to a real source.
-            </p>
+              <p className="mt-6 text-balance font-display text-[1.9rem] font-bold leading-[1.15] text-bone-50">
+                One Company Brain. Every number traceable to a real source.
+              </p>
 
-            <div className="my-9 h-px w-12 bg-white/15" />
+              <div className="my-9 h-px w-12 bg-white/15" />
 
-            <ul className="space-y-5">
-              {PROOF.map((p) => (
-                <li key={p.title} className="flex items-start gap-3.5">
+              <ul className="space-y-5">
+                {PROOF.map((p) => (
+                  <li key={p.title} className="flex items-start gap-3.5">
                   <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-gold-500 text-ink-950">
                     <IconCheck className="h-4 w-4" />
                   </span>
@@ -94,7 +95,8 @@ export function AuthShell({
                   </div>
                 </li>
               ))}
-            </ul>
+              </ul>
+            </div>
           </div>
 
           {/* A small corner label. */}
@@ -113,7 +115,7 @@ export function AuthShell({
             <Logo />
           </Link>
 
-          <div className="flex w-full max-w-md flex-1 flex-col justify-center py-10">
+          <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center py-10">
             <h1 className="font-display text-page font-bold tracking-tight text-ink-950">
               {title}
               <span className="text-gold-500">.</span>
@@ -130,7 +132,7 @@ export function AuthShell({
             <div className="mt-8">{children}</div>
           </div>
 
-          {footer ? <div className="w-full max-w-md text-meta text-ink-500">{footer}</div> : null}
+          {footer ? <div className="mx-auto w-full max-w-md text-meta text-ink-500">{footer}</div> : null}
         </div>
       </div>
     </main>

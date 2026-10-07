@@ -45,7 +45,13 @@ function initials(email: string): string {
   return local.slice(0, 2).toUpperCase() || '··'
 }
 
-export function AccountMenu() {
+/**
+ * @param signOutOnly Drop the "Your account" and "Workspace settings" links,
+ *   leaving identity plus Sign out. Used in the onboarding header, where neither
+ *   destination is reachable yet — there is no workspace until onboarding
+ *   finishes — so the only honest action is to leave.
+ */
+export function AccountMenu({ signOutOnly = false }: { signOutOnly?: boolean } = {}) {
   const safe = useMotionSafe()
   const variants = useMemo(() => popover(safe, 'bottom'), [safe])
   const [open, setOpen] = useState(false)
@@ -132,27 +138,33 @@ export function AccountMenu() {
               </p>
             </div>
 
-            <Link
-              href="/account"
-              onClick={() => setOpen(false)}
-              className="mt-1 block rounded-control px-2.5 py-2 text-body text-ink-700 transition-colors duration-micro ease-out hover:bg-bone-100 hover:text-ink-900"
-            >
-              Your account
-            </Link>
-            <Link
-              href="/settings"
-              onClick={() => setOpen(false)}
-              className="block rounded-control px-2.5 py-2 text-body text-ink-700 transition-colors duration-micro ease-out hover:bg-bone-100 hover:text-ink-900"
-            >
-              Workspace settings
-            </Link>
+            {signOutOnly ? null : (
+              <>
+                <Link
+                  href="/account"
+                  onClick={() => setOpen(false)}
+                  className="mt-1 block rounded-control px-2.5 py-2 text-body text-ink-700 transition-colors duration-micro ease-out hover:bg-bone-100 hover:text-ink-900"
+                >
+                  Your account
+                </Link>
+                <Link
+                  href="/settings"
+                  onClick={() => setOpen(false)}
+                  className="block rounded-control px-2.5 py-2 text-body text-ink-700 transition-colors duration-micro ease-out hover:bg-bone-100 hover:text-ink-900"
+                >
+                  Workspace settings
+                </Link>
+              </>
+            )}
 
             <button
               type="button"
               onClick={() => void signOut()}
               disabled={leaving}
               aria-busy={leaving || undefined}
-              className="mt-1 block w-full rounded-control border-t border-ink-100 px-2.5 py-2 pt-2.5 text-left text-body text-ink-700 transition-colors duration-micro ease-out hover:bg-bone-100 hover:text-ink-900 disabled:text-ink-400"
+              className={`mt-1 block w-full rounded-control px-2.5 py-2 text-left text-body text-ink-700 transition-colors duration-micro ease-out hover:bg-bone-100 hover:text-ink-900 disabled:text-ink-400 ${
+                signOutOnly ? '' : 'border-t border-ink-100 pt-2.5'
+              }`}
             >
               {leaving ? 'Signing out…' : 'Sign out'}
             </button>

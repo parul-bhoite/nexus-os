@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { OnboardingEntry } from '@/components/onboarding/OnboardingEntry'
 import { AuthError } from '@/lib/auth-client'
@@ -109,6 +109,12 @@ beforeEach(() => {
   vi.mocked(fetchEntitlement).mockReset()
 })
 
+// The retry tests below swap in fake timers; make sure one that throws
+// mid-assertion cannot leave them on for the next test.
+afterEach(() => {
+  vi.useRealTimers()
+})
+
 describe('OnboardingEntry resume', () => {
   it('starts at the company step when no workspace exists yet', async () => {
     vi.mocked(fetchCompany).mockRejectedValue(new AuthError('no workspace selected', 403))
@@ -164,12 +170,38 @@ describe('OnboardingEntry resume', () => {
     expect(replace).not.toHaveBeenCalled()
   })
 
-  it('shows a retryable error on a real failure, rather than guessing which step to show', async () => {
+  it('shows a retryable error only after exhausting retries on a persistent 5xx', async () => {
     vi.mocked(fetchCompany).mockRejectedValue(new AuthError('database unavailable', 500))
 
+    vi.useFakeTimers()
     render(<OnboardingEntry />)
+    // Fire the three backoff sleeps (300 + 800 + 1500ms) rather than sleeping
+    // ~2.6s of real time. A fixed budget, not runAllTimers, so a step's
+    // framer-motion animation loop is not drained frame by frame forever.
+    await vi.advanceTimersByTimeAsync(2600)
+    vi.useRealTimers()
 
     expect(await screen.findByText(/something went wrong/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument()
+    // One initial attempt plus three retries.
+    expect(vi.mocked(fetchCompany)).toHaveBeenCalledTimes(4)
+  })
+
+  it('recovers from a transient 5xx and still places the founder, no error wall', async () => {
+    // One blip, then the real answer — no company yet (403) → step 1.
+    vi.mocked(fetchCompany)
+      .mockRejectedValueOnce(new AuthError('restarting', 503))
+      .mockRejectedValue(new AuthError('no workspace selected', 403))
+
+    vi.useFakeTimers()
+    render(<OnboardingEntry />)
+    // Just the first backoff (300ms); the retried call answers 403.
+    await vi.advanceTimersByTimeAsync(300)
+    vi.useRealTimers()
+
+    expect(await screen.findByText('company step')).toBeInTheDocument()
+    expect(screen.queryByText(/something went wrong/i)).not.toBeInTheDocument()
+    // The 503 was retried, the 403 answered it.
+    expect(vi.mocked(fetchCompany)).toHaveBeenCalledTimes(2)
   })
 })

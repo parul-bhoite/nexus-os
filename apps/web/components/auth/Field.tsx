@@ -1,6 +1,7 @@
 'use client'
 
 import { useId, useState } from 'react'
+import { IconEye, IconEyeOff } from '@/components/art/Icons'
 
 /**
  * A labelled input with its error wired up for screen readers.
@@ -144,7 +145,7 @@ export function Field({
               error
                 ? 'border-clay-500 focus:border-clay-500 focus:ring-2 focus:ring-clay-200'
                 : 'border-ink-200 focus:border-steel-500 focus:ring-2 focus:ring-steel-200'
-            } ${revealable ? 'pr-20' : ''}`}
+            } ${revealable ? 'pr-12' : ''}`}
           />
         )}
 
@@ -166,13 +167,14 @@ export function Field({
           <button
             type="button"
             onClick={() => setRevealed((r) => !r)}
-            className="absolute inset-y-0 right-2 my-auto h-8 rounded-lg px-2.5 font-mono text-2xs uppercase tracking-[0.1em] text-ink-500 transition-colors hover:bg-bone-100 hover:text-ink-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold-500"
-            // The label says what will happen, and the state is announced
-            // separately — a button reading "Hide" while the value is hidden is
-            // the classic version of this bug.
+            className="absolute inset-y-0 right-2 my-auto grid h-8 w-8 place-items-center rounded-lg text-ink-500 transition-colors hover:bg-bone-100 hover:text-ink-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold-500"
+            // The accessible label says what pressing will do; `aria-pressed`
+            // announces the current state separately — a control labelled "Hide"
+            // while the value is hidden is the classic version of this bug.
+            aria-label={revealed ? 'Hide password' : 'Show password'}
             aria-pressed={revealed}
           >
-            {revealed ? 'Hide' : 'Show'}
+            {revealed ? <IconEyeOff className="h-5 w-5" /> : <IconEye className="h-5 w-5" />}
           </button>
         ) : null}
       </div>

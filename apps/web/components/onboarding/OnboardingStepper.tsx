@@ -3,6 +3,7 @@
 import { type ReactNode } from 'react'
 import { motion } from 'framer-motion'
 import { Logo } from '@/components/ui/Logo'
+import { AccountMenu } from '@/components/shell/AccountMenu'
 import { type AuraState } from '@/components/onboarding/OnboardingAura'
 import { StepArt } from '@/components/onboarding/OnboardingStepArt'
 import { fadeUp, useMotionSafe } from '@/lib/motion'
@@ -126,21 +127,10 @@ export function StepperShell({
       {/* ── Frozen header, separated from the rest by a hairline ── */}
       <header className="flex shrink-0 items-center justify-between border-b border-bone-200 bg-white px-6 py-4 sm:px-8">
         <Logo />
-        <span
-          role="img"
-          aria-label="Your account"
-          className="grid h-9 w-9 place-items-center rounded-full border border-bone-300 bg-white text-ink-600"
-        >
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden>
-            <circle cx="12" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.6" />
-            <path
-              d="M5 20c0-3.3 3.1-5.6 7-5.6s7 2.3 7 5.6"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-            />
-          </svg>
-        </span>
+        {/* Identity plus Sign out only — the account and settings pages are not
+            reachable until onboarding creates a workspace, so leaving is the one
+            honest action here (user request). */}
+        <AccountMenu signOutOnly />
       </header>
 
       {/* ── The step tracker, its own band below the header ── */}
