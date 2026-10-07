@@ -71,17 +71,6 @@ function BrainDiagram() {
           <circle cx={CX} cy={CY} r={58} fill="none" stroke="var(--accent)" strokeWidth="1.5" opacity="0.5" />
         </g>
 
-        {/* Contour lines inside the core, echoing the water swirls */}
-        <g stroke="var(--c-grey-500)" fill="none" opacity="0.55" strokeLinecap="round">
-          {[16, 26, 36, 46].map((r, i) => (
-            <path
-              key={r}
-              d={`M${CX - r} ${CY + 4 - i * 3}a${r} ${r * 0.5} 0 0 1 ${r * 2} 0`}
-              strokeWidth="1.3"
-            />
-          ))}
-        </g>
-
         <text
           x={CX}
           y={CY + 3}

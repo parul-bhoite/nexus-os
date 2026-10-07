@@ -13,25 +13,18 @@ export function Trust() {
         {/* A contained dark panel rather than a full-bleed band — the page stays
             light, and this section still gets the gravity it needs. */}
         <Reveal>
-          <div className="relative overflow-hidden rounded-panel bg-ink-800 px-7 py-16 shadow-paper-xl sm:px-12 lg:px-16 lg:py-20">
-            {/* Contour texture, echoing the illustration's water swirls. */}
+          <div className="relative overflow-hidden rounded-panel bg-ink-950 px-7 py-16 shadow-e3 sm:px-12 lg:px-16 lg:py-20">
+            {/* The brand X, ghosted in the corner — the monochrome replacement
+                for the old water-swirl contour texture (ADR 0072). */}
             <svg
+              viewBox="0 0 100 100"
               aria-hidden="true"
-              className="pointer-events-none absolute inset-0 h-full w-full text-white/[0.045]"
-              viewBox="0 0 1200 700"
-              preserveAspectRatio="none"
+              className="pointer-events-none absolute -right-20 -top-24 h-[32rem] w-[32rem]"
+              fill="none"
             >
-              {Array.from({ length: 9 }).map((_, i) => (
-                <path
-                  key={i}
-                  d={`M-40 ${90 + i * 72}C260 ${30 + i * 72} 460 ${170 + i * 72} 720 ${
-                    120 + i * 72
-                  }s320 -60 560 -20`}
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                />
-              ))}
+              <line x1="26" y1="26" x2="74" y2="74" className="stroke-white/[0.04]" strokeWidth="11" strokeLinecap="round" />
+              <line x1="26" y1="74" x2="50" y2="50" className="stroke-white/[0.04]" strokeWidth="11" strokeLinecap="round" />
+              <line x1="50" y1="50" x2="74" y2="26" className="stroke-gold-500/20" strokeWidth="11" strokeLinecap="round" />
             </svg>
 
             <div className="relative">

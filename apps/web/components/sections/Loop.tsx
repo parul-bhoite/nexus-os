@@ -47,26 +47,8 @@ export function Loop() {
       ref={sectionRef}
       className="relative scroll-mt-24 overflow-hidden bg-bone-50 py-section"
     >
-      {/* Topographic contour lines — the paper-layer motif as background texture. */}
-      <svg
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-full w-full text-steel-300/25"
-        preserveAspectRatio="none"
-        viewBox="0 0 1200 800"
-      >
-        {Array.from({ length: 7 }).map((_, i) => (
-          <path
-            key={i}
-            d={`M-50 ${180 + i * 78}C220 ${120 + i * 78} 420 ${250 + i * 78} 700 ${
-              200 + i * 78
-            }s340 -70 560 -30`}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.2"
-          />
-        ))}
-      </svg>
-
+      {/* The cut-paper topographic contour background is gone (ADR 0072); the
+          section rests on a clean neutral ground. */}
       <div className="shell relative">
         <SectionHeading eyebrow={loop.eyebrow} headline={loop.headline} sub={loop.sub} />
 
