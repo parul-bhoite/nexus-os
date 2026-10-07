@@ -2,27 +2,20 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { Logo } from '@/components/ui/Logo'
 import { PaperLandscape } from '@/components/art/PaperLandscape'
+import { IconSparkle } from '@/components/art/Icons'
 
 /**
- * The frame around every auth page.
+ * The frame around every auth page (ADR 0072).
  *
- * Two columns on desktop: the form on the left, the paper-cut landscape on the
- * right. The landscape is the landing page's own artwork rather than a stock
- * illustration, so signing in does not feel like leaving the product — but it is
- * `aria-hidden` and drops away entirely below `lg`, where a form has better uses
- * for the space.
+ * A single framed "slide" floating on a soft grey ground: the form on the left,
+ * and on the right an image panel whose left edge is an organic S-curve that the
+ * white form column flows into, with a floating glass card over it. The image is
+ * the landing page's own grayscale artwork rather than stock, so signing in does
+ * not feel like leaving the product — it is `aria-hidden` and drops away below
+ * `lg`, where a form has better uses for the space.
  *
- * ## The artwork reaches the edge of the glass
- *
- * It did not. The grid was `max-w-6xl mx-auto`, so at 1440 the whole two-column
- * layout was 1152px wide and centred — which left a 144px strip of bone
- * page-background to the right of a full-bleed navy artwork panel. A dark panel
- * that stops 144px short of the window reads as a layout that failed to finish
- * loading, and it was the first thing anybody saw on the sign-in page.
- *
- * The grid is now full width. The *form* is what stays measured: its column
- * centres a `max-w-md` block, so the reading column is unchanged and only the
- * artwork gained the space it should always have had.
+ * The curve is one objectBoundingBox clip-path, so it scales with the panel at
+ * any height without re-measuring.
  */
 export function AuthShell({
   title,
@@ -36,59 +29,82 @@ export function AuthShell({
   footer?: ReactNode
 }) {
   return (
-    <main id="main" tabIndex={-1} className="min-h-screen bg-bone-50">
-      <div className="grid min-h-screen w-full grid-cols-1 lg:grid-cols-2">
-        {/* ── The form ── */}
-        <div className="flex flex-col items-center px-6 py-8 sm:px-10 lg:py-12">
-          <div className="w-full max-w-md">
-            <Link
-              href="/"
-              className="inline-flex w-fit rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steel-500 focus-visible:ring-offset-4 focus-visible:ring-offset-bone-50"
-              aria-label="NEXUS OS home"
-            >
-              <Logo />
-            </Link>
-          </div>
+    <main
+      id="main"
+      tabIndex={-1}
+      className="flex min-h-screen justify-center bg-bone-100 lg:items-center lg:p-8"
+    >
+      {/* The clip-path lives once, here; the image panel references it. */}
+      <svg aria-hidden="true" className="absolute h-0 w-0">
+        <defs>
+          <clipPath id="authCurve" clipPathUnits="objectBoundingBox">
+            <path d="M0.18,0 C0.02,0.26 0.28,0.46 0.14,0.66 C0.05,0.82 0.2,0.92 0.16,1 L1,1 L1,0 Z" />
+          </clipPath>
+        </defs>
+      </svg>
 
-          {/* `justify-center` with a bounded gap rather than `py-10`: the form
-              was pinned to the vertical centre of the column while the logo sat
-              at the top, which on a 900px window left ~180px of nothing between
-              them and put the heading below the midpoint. */}
-          <div className="flex w-full max-w-md flex-1 flex-col justify-center py-8">
-            <h1 className="text-page text-ink-900">{title}</h1>
-            <p className="mt-3 text-body leading-relaxed text-ink-600">{intro}</p>
-            <div className="mt-7">{children}</div>
+      <div className="relative w-full overflow-hidden bg-white shadow-e3 lg:max-w-6xl lg:rounded-[2rem]">
+        {/* ── The image panel — organic curve, grayscale artwork, floating card ── */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-y-0 right-0 hidden w-[58%] bg-ink-950 lg:block"
+          style={{ clipPath: 'url(#authCurve)' }}
+        >
+          <PaperLandscape className="absolute inset-0 h-full w-full" />
+          {/* A faint wash to seat the floating card and the corner label. */}
+          <div className="absolute inset-0 bg-gradient-to-t from-ink-950/35 via-transparent to-transparent" />
+        </div>
+
+        {/* The floating glass card — a sibling of the clipped panel, so it is not
+            clipped. Mirrors the reference card: an accent chip, a title, a line.
+            Real content, per the product's own rule. */}
+        <div className="pointer-events-none absolute bottom-[16%] left-[44%] z-20 hidden w-72 lg:block">
+          <div className="rounded-2xl border border-white/70 bg-white/85 p-5 shadow-e2 backdrop-blur-md">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-gold-500 text-white shadow-e1">
+              <IconSparkle className="h-4 w-4" />
+            </span>
+            <h2 className="mt-3.5 font-display text-card font-semibold text-ink-900">
+              Never invent a number
+            </h2>
+            <p className="mt-1 text-meta leading-relaxed text-ink-500">
+              Every figure is fetched or computed — and cites where it came from.
+            </p>
+          </div>
+        </div>
+
+        {/* A small corner label, echoing the reference's slide caption. */}
+        <span className="absolute bottom-7 right-9 z-20 hidden font-mono text-2xs uppercase tracking-[0.22em] text-slate-300 lg:block">
+          NEXUS · built on grounded data
+        </span>
+
+        {/* ── The form ── */}
+        <div className="relative z-10 flex min-h-screen flex-col px-6 py-10 sm:px-10 lg:min-h-[46rem] lg:w-[48%] lg:px-14 lg:py-12">
+          <Link
+            href="/"
+            className="inline-flex w-fit rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-500 focus-visible:ring-offset-4 focus-visible:ring-offset-white"
+            aria-label="NEXUS home"
+          >
+            <Logo />
+          </Link>
+
+          <div className="flex w-full max-w-md flex-1 flex-col justify-center py-10">
+            <h1 className="font-display text-page font-bold tracking-tight text-ink-950">
+              {title}
+              <span className="text-gold-500">.</span>
+            </h1>
+
+            {/* The accent dots — amber spark, then two neutral steps. */}
+            <div className="mt-5 flex items-center gap-2" aria-hidden="true">
+              <span className="h-2 w-2 rounded-full bg-gold-500" />
+              <span className="h-2 w-2 rounded-full bg-ink-300" />
+              <span className="h-2 w-2 rounded-full bg-ink-200" />
+            </div>
+
+            <p className="mt-6 max-w-sm text-body leading-relaxed text-ink-500">{intro}</p>
+            <div className="mt-8">{children}</div>
           </div>
 
           {footer ? <div className="w-full max-w-md text-meta text-ink-500">{footer}</div> : null}
-        </div>
-
-        {/* ── The artwork ──
-            A column, not a stack. The caption used to be absolutely positioned
-            over the illustration, which worked while the grid was 1152px wide
-            and the SVG letterboxed well short of the bottom. Giving the column
-            the full half of a 1440px window made the artwork taller than its
-            own scrim, and the promise — the one line on this page that states
-            what the product is for — printed across a boat.
-
-            The artwork now takes the space that is left after the caption has
-            had what it needs, so the two cannot collide at any height. */}
-        <div className="hidden flex-col overflow-hidden bg-ink-900 lg:flex" aria-hidden="true">
-          {/* No `object-cover`: it has no effect on inline SVG. The viewBox
-              letterboxes against `bg-ink-900`, which is the artwork's own
-              ground, so the fit is invisible. */}
-          <div className="relative min-h-0 flex-1">
-            <PaperLandscape className="absolute inset-0 h-full w-full" />
-          </div>
-          <div className="shrink-0 px-10 pb-10 pt-8">
-            <p className="max-w-sm font-display text-xl leading-snug text-bone-50">
-              Every number NEXUS shows you is fetched or computed. None of them are
-              generated.
-            </p>
-            <p className="mt-3 text-2xs uppercase tracking-[0.14em] text-slate-300">
-              The rule the product is built on
-            </p>
-          </div>
         </div>
       </div>
     </main>
