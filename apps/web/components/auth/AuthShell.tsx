@@ -1,22 +1,28 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { Logo } from '@/components/ui/Logo'
-import { PaperLandscape } from '@/components/art/PaperLandscape'
-import { IconSparkle } from '@/components/art/Icons'
+import { IconCheck } from '@/components/art/Icons'
 
 /**
  * The frame around every auth page (ADR 0072).
  *
  * A single framed "slide" floating on a soft grey ground: the form on the left,
- * and on the right an image panel whose left edge is an organic S-curve that the
- * white form column flows into, with a floating glass card over it. The image is
- * the landing page's own grayscale artwork rather than stock, so signing in does
- * not feel like leaving the product — it is `aria-hidden` and drops away below
- * `lg`, where a form has better uses for the space.
+ * and on the right a dark branded panel whose left edge is an organic S-curve the
+ * white form column flows into. The right panel carries the product's thesis and
+ * its grounding promise rather than decorative scenery — it is `aria-hidden` and
+ * drops away below `lg`, where a form has better uses for the space and the task
+ * lives entirely in the form.
  *
  * The curve is one objectBoundingBox clip-path, so it scales with the panel at
  * any height without re-measuring.
  */
+
+const PROOF = [
+  { title: 'Fetched or computed', body: 'Never guessed by a language model.' },
+  { title: 'Cited to its source', body: 'Every figure names where it came from.' },
+  { title: 'Auditable forever', body: 'Any card can show its working.' },
+] as const
+
 export function AuthShell({
   title,
   intro,
@@ -34,48 +40,68 @@ export function AuthShell({
       tabIndex={-1}
       className="flex min-h-screen justify-center bg-bone-100 lg:items-center lg:p-8"
     >
-      {/* The clip-path lives once, here; the image panel references it. */}
+      {/* The clip-path lives once, here; the right panel references it. */}
       <svg aria-hidden="true" className="absolute h-0 w-0">
         <defs>
           <clipPath id="authCurve" clipPathUnits="objectBoundingBox">
-            <path d="M0.18,0 C0.02,0.26 0.28,0.46 0.14,0.66 C0.05,0.82 0.2,0.92 0.16,1 L1,1 L1,0 Z" />
+            <path d="M0.14,0 C0.03,0.24 0.18,0.46 0.1,0.66 C0.03,0.82 0.14,0.93 0.12,1 L1,1 L1,0 Z" />
           </clipPath>
         </defs>
       </svg>
 
       <div className="relative w-full overflow-hidden bg-white shadow-e3 lg:max-w-6xl lg:rounded-[2rem]">
-        {/* ── The image panel — organic curve, grayscale artwork, floating card ── */}
+        {/* ── The brand panel — organic curve, value thesis, grounding proof ── */}
         <div
           aria-hidden="true"
-          className="absolute inset-y-0 right-0 hidden w-[58%] bg-ink-950 lg:block"
+          className="absolute inset-y-0 right-0 hidden w-[58%] overflow-hidden bg-ink-950 lg:block"
           style={{ clipPath: 'url(#authCurve)' }}
         >
-          <PaperLandscape className="absolute inset-0 h-full w-full" />
-          {/* A faint wash to seat the floating card and the corner label. */}
-          <div className="absolute inset-0 bg-gradient-to-t from-ink-950/35 via-transparent to-transparent" />
-        </div>
+          {/* The brand X, ghosted large and bled off the top-right corner. */}
+          <svg
+            viewBox="0 0 100 100"
+            aria-hidden="true"
+            className="pointer-events-none absolute -right-20 -top-24 h-[34rem] w-[34rem]"
+            fill="none"
+          >
+            <line x1="26" y1="26" x2="74" y2="74" className="stroke-white/[0.05]" strokeWidth="11" strokeLinecap="round" />
+            <line x1="26" y1="74" x2="50" y2="50" className="stroke-white/[0.05]" strokeWidth="11" strokeLinecap="round" />
+            <line x1="50" y1="50" x2="74" y2="26" className="stroke-gold-500/30" strokeWidth="11" strokeLinecap="round" />
+          </svg>
 
-        {/* The floating glass card — a sibling of the clipped panel, so it is not
-            clipped. Mirrors the reference card: an accent chip, a title, a line.
-            Real content, per the product's own rule. */}
-        <div className="pointer-events-none absolute bottom-[16%] left-[44%] z-20 hidden w-72 lg:block">
-          <div className="rounded-2xl border border-white/70 bg-white/85 p-5 shadow-e2 backdrop-blur-md">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-gold-500 text-white shadow-e1">
-              <IconSparkle className="h-4 w-4" />
+          <div className="relative flex h-full flex-col justify-center py-16 pl-28 pr-14 xl:pl-32">
+            <span className="flex items-center gap-2 font-mono text-2xs uppercase tracking-[0.2em] text-slate-300">
+              <span className="h-1.5 w-1.5 rounded-full bg-gold-500" />
+              AI business operating system
             </span>
-            <h2 className="mt-3.5 font-display text-card font-semibold text-ink-900">
-              Never invent a number
-            </h2>
-            <p className="mt-1 text-meta leading-relaxed text-ink-500">
-              Every figure is fetched or computed — and cites where it came from.
-            </p>
-          </div>
-        </div>
 
-        {/* A small corner label, echoing the reference's slide caption. */}
-        <span className="absolute bottom-7 right-9 z-20 hidden font-mono text-2xs uppercase tracking-[0.22em] text-slate-300 lg:block">
-          NEXUS · built on grounded data
-        </span>
+            <p className="mt-6 max-w-sm text-balance font-display text-[1.9rem] font-bold leading-[1.15] text-bone-50">
+              One Company Brain. Every number traceable to a real source.
+            </p>
+
+            <div className="my-9 h-px w-12 bg-white/15" />
+
+            <ul className="space-y-5">
+              {PROOF.map((p) => (
+                <li key={p.title} className="flex items-start gap-3.5">
+                  <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-gold-500 text-ink-950">
+                    <IconCheck className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <span className="block text-[0.95rem] font-medium text-bone-50">{p.title}</span>
+                    <span className="mt-0.5 block text-meta leading-relaxed text-slate-400">
+                      {p.body}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* A small corner label. */}
+          <span className="absolute bottom-7 right-9 font-mono text-2xs uppercase tracking-[0.22em] text-slate-500">
+            NEXUS · built on grounded data
+          </span>
+        </div>
 
         {/* ── The form ── */}
         <div className="relative z-10 flex min-h-screen flex-col px-6 py-10 sm:px-10 lg:min-h-[46rem] lg:w-[48%] lg:px-14 lg:py-12">
