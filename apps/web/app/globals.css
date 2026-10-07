@@ -13,6 +13,35 @@
     --app-x: clamp(1rem, 2.5vw, 2rem);
     --app-header-h: 3.5rem;
     --app-nav-w: 15rem;
+
+    /* The accent and ink as CSS variables, so SVG `fill`/`stroke` (which Tailwind
+       cannot reach) can take the tokens instead of hard-coded hex — see
+       components/ui/Logo.tsx. Sourced from the token scales via theme(). */
+    --accent: theme('colors.gold.500');
+    --accent-strong: theme('colors.gold.600');
+    --ink: theme('colors.ink.950');
+
+    /* The decorative palette for the bespoke SVG illustrations (the hero
+       landscape, the Brain diagram, the Directors dials, the onboarding aura).
+       These components paint with SVG fill/stroke, which Tailwind cannot reach,
+       so they reference these variables instead of hard-coded hex. Every value
+       is a token — the monochrome ladder plus the amber accent — so the art
+       stays in step with the rest of the system (ADR 0072). */
+    --c-white: theme('colors.white');
+    --c-surface: theme('colors.bone.50');
+    --c-surface-2: theme('colors.bone.100');
+    --c-surface-3: theme('colors.bone.200');
+    --c-line: theme('colors.bone.300');
+    --c-grey-200: theme('colors.ink.200');
+    --c-grey-300: theme('colors.ink.300');
+    --c-grey-400: theme('colors.ink.400');
+    --c-grey-500: theme('colors.ink.500');
+    --c-grey-600: theme('colors.ink.600');
+    --c-grey-700: theme('colors.ink.700');
+    --c-ink-800: theme('colors.ink.800');
+    --c-ink: theme('colors.ink.950');
+    --c-warn: theme('colors.clay.500');
+    --c-warn-soft: theme('colors.clay.400');
   }
 
   html {
@@ -30,22 +59,21 @@
   }
 
   body {
+    /* Clean monochrome ground — the cut-paper grain is gone (ADR 0072). */
     @apply bg-white text-ink-800 font-sans antialiased;
-    /* Fine paper grain — sells the cut-paper concept without an image request. */
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
   }
 
   ::selection {
-    @apply bg-gold-300 text-ink-900;
+    @apply bg-gold-200 text-ink-900;
   }
 
-  /* One focus style for the whole product.
+  /* One focus style for the whole product — the amber accent, the single spark.
      The audit found three: a `ring-2` here, an `outline` with a different
      offset there, and several controls with nothing at all. A keyboard user
      cannot learn an interface whose focus indicator changes shape between two
      buttons in the same row. */
   :focus-visible {
-    @apply outline-none ring-2 ring-steel-500 ring-offset-2 ring-offset-white rounded-sm;
+    @apply outline-none ring-2 ring-gold-500 ring-offset-2 ring-offset-white rounded-sm;
   }
 
   /* Any element that declares itself a surface re-bases the ring offset onto
@@ -141,7 +169,7 @@
     @apply w-full rounded-control border border-ink-200 bg-white px-3.5 py-2.5 text-body text-ink-800;
     @apply transition-[border-color,box-shadow] duration-base ease-out;
     @apply placeholder:text-ink-300 hover:border-ink-300;
-    @apply focus:outline-none focus:ring-2 focus:ring-steel-500 focus:ring-offset-2 focus:ring-offset-white;
+    @apply focus:outline-none focus:ring-2 focus:ring-gold-500 focus:ring-offset-2 focus:ring-offset-white;
     @apply disabled:cursor-not-allowed disabled:bg-bone-100 disabled:text-ink-400;
   }
 
@@ -152,7 +180,7 @@
      inherited (see the element rule in the base layer). */
   select.control {
     @apply cursor-pointer appearance-none bg-no-repeat pr-10;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none'%3E%3Cpath d='m4 6.25 4 4 4-4' stroke='%234A6489' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none'%3E%3Cpath d='m4 6.25 4 4 4-4' stroke='%238A909A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
     background-position: right 0.875rem center;
   }
 

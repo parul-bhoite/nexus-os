@@ -16,13 +16,13 @@ function HorizonStrip() {
     >
       <defs>
         <linearGradient id="ctaSea" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#5F94B8" />
-          <stop offset="100%" stopColor="#37729C" />
+          <stop offset="0%" stopColor="var(--c-grey-400)" />
+          <stop offset="100%" stopColor="var(--c-grey-600)" />
         </linearGradient>
       </defs>
-      <path d="M0 118c180-40 320 10 520 32s400 8 680-40v150H0z" fill="#93B8D1" opacity="0.55" />
+      <path d="M0 118c180-40 320 10 520 32s400 8 680-40v150H0z" fill="var(--c-grey-300)" opacity="0.55" />
       <path d="M0 158c200-36 350 14 540 34s420 4 660-34v102H0z" fill="url(#ctaSea)" opacity="0.75" />
-      <g stroke="#FFFFFF" fill="none" opacity="0.3" strokeLinecap="round" strokeWidth="1.5">
+      <g stroke="var(--c-white)" fill="none" opacity="0.3" strokeLinecap="round" strokeWidth="1.5">
         <path d="M140 206a26 14 0 0 1 52 0M154 218a18 10 0 0 1 36 0" />
         <path d="M1010 194a26 14 0 0 1 52 0M1024 206a18 10 0 0 1 36 0" />
         <path d="M600 224a22 12 0 0 1 44 0" />
@@ -42,10 +42,10 @@ function HorizonStrip() {
           animation, so the CSS transform has nothing to overwrite. */}
       <g transform="translate(560 168) scale(1.1)">
       <g className="motion-safe:animate-sway" style={{ transformOrigin: '20px 32px' }}>
-        <path d="M20 4v26" stroke="#84492A" strokeWidth="2" strokeLinecap="round" />
-        <path d="M21 6c8 5 11 10 12 17H21z" fill="#F5F2EF" />
-        <path d="M19 10c-6 4-8 8-9 13h9z" fill="#E9E4DE" />
-        <path d="M4 30h32l-5 8c-.8 1.3-2.2 2-3.7 2H12.7c-1.5 0-2.9-.7-3.7-2z" fill="#A55D35" />
+        <path d="M20 4v26" stroke="var(--c-grey-700)" strokeWidth="2" strokeLinecap="round" />
+        <path d="M21 6c8 5 11 10 12 17H21z" fill="var(--c-surface-2)" />
+        <path d="M19 10c-6 4-8 8-9 13h9z" fill="var(--c-surface-3)" />
+        <path d="M4 30h32l-5 8c-.8 1.3-2.2 2-3.7 2H12.7c-1.5 0-2.9-.7-3.7-2z" fill="var(--c-grey-600)" />
       </g>
       </g>
     </svg>
@@ -77,14 +77,14 @@ export function FinalCta() {
                   cy="32"
                   r="29"
                   fill="none"
-                  stroke="#DFA542"
+                  stroke="var(--accent-strong)"
                   strokeWidth="1.5"
                   strokeDasharray="3 8"
                   className="motion-safe:animate-spin-slow"
                   style={{ transformOrigin: '32px 32px' }}
                 />
-                <circle cx="32" cy="32" r="20" fill="#EFBF6A" />
-                <path d="M22 22a20 20 0 0 1 17 32 20 20 0 1 0-17-32z" fill="#FFFFFF" opacity="0.25" />
+                <circle cx="32" cy="32" r="20" fill="var(--accent)" />
+                <path d="M22 22a20 20 0 0 1 17 32 20 20 0 1 0-17-32z" fill="var(--c-white)" opacity="0.25" />
               </svg>
             </motion.div>
 

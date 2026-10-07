@@ -32,14 +32,15 @@ export type AuraState =
   | 'ready'
 
 const TONE: Record<AuraState, { core: string; ring: string; wash: string }> = {
-  // steel — what the product uses everywhere for "read from a source".
-  thinking: { core: '#37729C', ring: '#5F94B8', wash: 'rgba(95,148,184,0.20)' },
-  // clay. A microphone that looks like everything else is one somebody forgets
-  // is open.
-  listening: { core: '#A55D35', ring: '#C5825A', wash: 'rgba(197,130,90,0.20)' },
-  idle: { core: '#7699AE', ring: '#B4C7D5', wash: 'rgba(118,153,174,0.13)' },
-  // gold, used once, for the only moment in the journey that is an arrival.
-  ready: { core: '#DFA542', ring: '#EFBF6A', wash: 'rgba(239,191,106,0.20)' },
+  // Working — the neutral grey the rest of the monochrome UI uses (ADR 0072).
+  thinking: { core: 'var(--c-grey-600)', ring: 'var(--c-grey-400)', wash: 'rgba(67,72,82,0.14)' },
+  // The one place a warning red appears: a microphone that looks like everything
+  // else is one somebody forgets is open.
+  listening: { core: 'var(--c-warn)', ring: 'var(--c-warn-soft)', wash: 'rgba(177,74,56,0.18)' },
+  idle: { core: 'var(--c-grey-400)', ring: 'var(--c-grey-300)', wash: 'rgba(138,144,154,0.12)' },
+  // The amber accent, used once, for the only moment in the journey that is an
+  // arrival — the single spark.
+  ready: { core: 'var(--accent-strong)', ring: 'var(--accent)', wash: 'rgba(226,136,31,0.20)' },
 }
 
 /**

@@ -57,75 +57,111 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        /* ── Monochrome system (ADR 0072) ──────────────────────────────────
+         * The palette was navy/bone/gold "cut paper". It is now a cool-biased
+         * neutral ladder with a single amber accent. The token *names* are
+         * unchanged on purpose — redefining the values in place reskins every
+         * component that composes these names, so the diff stays in this file
+         * and the logo rather than spreading across the app. A later cleanup
+         * may rename `gold`→`accent` and `clay`→`warning`; not in this change.
+         *
+         * Contrast is checked against the surface each step is used on: ink-500
+         * and darker pass 4.5:1 on white and on bone-50; gold-700 and clay-600
+         * pass for small text on white. The greys carry a faint cool cast so
+         * they read as chosen rather than as a default mid-grey. */
+
+        // The neutral ink ladder — text, borders and the true blacks. ink-950
+        // is the primary action/ink; ink-800/700 are text; ink-200/100 borders.
         ink: {
-          DEFAULT: '#091F46',
-          50: '#F2F5FA',
-          100: '#E2E8F2',
-          200: '#C2CEE2',
-          300: '#93A8C7',
-          // Was #5C769E — 4.43:1 on bone-50, which failed 4.5 for the eyebrows,
-          // sidebar group labels and the "Illustrative" tag that all used it.
-          // Darkened to clear it on both white and bone-50 (5.6:1 / 5.4:1).
-          400: '#4A6489',
-          500: '#2F4C7B',
-          600: '#193460',
-          700: '#0F2851',
-          800: '#091F46',
-          900: '#061634',
-          950: '#030C1E',
+          DEFAULT: '#0B0C0E',
+          50: '#F4F5F7',
+          100: '#E7E9EC',
+          200: '#D4D8DD',
+          300: '#B0B5BD',
+          // Muted — large text and decoration only (3.0:1 on white).
+          400: '#8A909A',
+          // The muted-text floor that still passes on white (5.9:1) and on
+          // bone-50 (5.6:1): secondary copy, meta, eyebrows, group labels.
+          500: '#5E646E',
+          600: '#434852',
+          700: '#2E323A',
+          800: '#1C1F25',
+          900: '#121419',
+          950: '#0B0C0E',
         },
+
+        // Was the blue "chrome" tone (links, focus, UI). Now neutral grey, so
+        // anything still reaching for steel renders monochrome. The focus ring
+        // and links move to the amber accent in globals.css.
         steel: {
-          DEFAULT: '#37729C',
-          100: '#E4EDF4',
-          200: '#C3D8E7',
-          300: '#93B8D1',
-          400: '#5F94B8',
-          500: '#37729C',
-          600: '#2C5C80',
-          700: '#224862',
+          DEFAULT: '#5E646E',
+          100: '#E7E9EC',
+          200: '#D4D8DD',
+          300: '#B0B5BD',
+          400: '#8A909A',
+          500: '#5E646E',
+          600: '#434852',
+          700: '#2E323A',
         },
+
+        // A second muted grey, kept distinct only so the two historical "muted"
+        // call sites do not collapse onto one value mid-reskin.
         slate: {
-          DEFAULT: '#7699AE',
-          100: '#EDF2F6',
-          200: '#D6E1E9',
-          300: '#B4C7D5',
-          400: '#7699AE',
-          500: '#5C8098',
-          600: '#48657A',
+          DEFAULT: '#7A808A',
+          100: '#EDEEF1',
+          200: '#D4D8DD',
+          300: '#B0B5BD',
+          400: '#8A909A',
+          500: '#5E646E',
+          600: '#434852',
         },
+
+        // Surfaces. Was a warm bone wash; now cool light greys and white. These
+        // are the backgrounds — cards are white, sunken fills are bone-50/100,
+        // hairlines are bone-300.
         bone: {
-          DEFAULT: '#E9E4DE',
-          50: '#FBFAF8',
-          100: '#F5F2EF',
-          200: '#E9E4DE',
-          300: '#D8D0C7',
-          400: '#BFB4A7',
+          DEFAULT: '#E7E9EC',
+          50: '#F7F8FA',
+          100: '#F1F3F5',
+          200: '#E7E9EC',
+          300: '#D4D8DD',
+          400: '#AEB4BD',
         },
+
+        // The one accent — warm amber, the complement of the cool neutrals.
+        // The single spark: active state, focus ring, key-metric highlight, the
+        // logo arm. It never fills a button (black does), so 500 need not carry
+        // white text; gold-700 is the step for amber *text* on white (5.0:1).
         gold: {
-          DEFAULT: '#EFBF6A',
-          100: '#FDF6E8',
-          200: '#FAE9C7',
-          300: '#F5D89B',
-          400: '#EFBF6A',
-          500: '#DFA542',
-          600: '#B9822B',
-          // Was gold-600 at 11px — 3.34:1 on white. This step exists only so
-          // small type on a light surface has a gold that passes (5.2:1).
-          700: '#8A5F1C',
+          DEFAULT: '#E2881F',
+          50: '#FDF3E6',
+          100: '#FBE8CE',
+          200: '#F6D09B',
+          300: '#EFB264',
+          400: '#E89A3C',
+          500: '#E2881F',
+          600: '#C4710F',
+          700: '#9A560A',
         },
+
+        // Restrained semantic warning — genuine error state only, never
+        // decoration. A muted brick red that holds its own on white (clay-600
+        // passes AA for small text).
         clay: {
-          DEFAULT: '#A55D35',
-          100: '#F8EDE6',
-          200: '#EED7C7',
-          300: '#DCB098',
-          400: '#C5825A',
-          500: '#A55D35',
-          600: '#84492A',
+          DEFAULT: '#B14A38',
+          100: '#F7E7E4',
+          200: '#ECC9C3',
+          300: '#DCA59B',
+          400: '#C8705F',
+          500: '#B14A38',
+          600: '#8F3A2C',
         },
       },
 
       fontFamily: {
-        display: ['var(--font-display)', 'Georgia', 'serif'],
+        // Display is now a grotesque (Bricolage), not a serif — the fallback is
+        // a sans stack, not Georgia. See ADR 0072 and app/layout.tsx.
+        display: ['var(--font-display)', 'system-ui', 'sans-serif'],
         sans: ['var(--font-sans)', 'system-ui', 'sans-serif'],
         mono: ['var(--font-mono)', 'ui-monospace', 'monospace'],
       },
@@ -141,14 +177,17 @@ const config: Config = {
       fontSize: {
         '2xs': ['0.6875rem', { lineHeight: '1rem' }],
 
-        // Marketing only. The hero earns one size nothing else may use.
-        display: ['clamp(2.5rem, 6.2vw, 4.75rem)', { lineHeight: '1.02', letterSpacing: '-0.03em' }],
-        headline: ['clamp(1.875rem, 3.6vw, 3rem)', { lineHeight: '1.08', letterSpacing: '-0.022em' }],
+        // Marketing only. The hero earns one size nothing else may use. Tracked
+        // tight — Bricolage Grotesque is built to close up at display sizes
+        // (ADR 0072), and the tight set is what makes the monochrome hero read
+        // as designed rather than plain.
+        display: ['clamp(2.5rem, 6.2vw, 4.75rem)', { lineHeight: '1.0', letterSpacing: '-0.04em' }],
+        headline: ['clamp(1.875rem, 3.6vw, 3rem)', { lineHeight: '1.06', letterSpacing: '-0.032em' }],
 
         // Product. `page` is an h1, `section` an h2, `card` an h3 — and the gap
         // between page and section is now large enough to read as a hierarchy.
         // It was 34px against 30px, which is not a hierarchy, it is a wobble.
-        page: ['clamp(1.75rem, 2.6vw, 2.25rem)', { lineHeight: '1.12', letterSpacing: '-0.02em' }],
+        page: ['clamp(1.75rem, 2.6vw, 2.25rem)', { lineHeight: '1.1', letterSpacing: '-0.028em' }],
         section: ['1.3125rem', { lineHeight: '1.25', letterSpacing: '-0.012em' }],
         card: ['1.0625rem', { lineHeight: '1.35', letterSpacing: '-0.006em' }],
         // Alias of `section`. Sixteen files already say `text-title`, and
@@ -177,9 +216,11 @@ const config: Config = {
        * product and generous on the landing page.
        */
       borderRadius: {
-        control: '0.625rem',
-        data: '0.875rem',
-        card: '1.25rem',
+        // Softer than the cut-paper set (ADR 0072) — the monochrome surfaces
+        // lean on hairline borders and generous rounding rather than colour.
+        control: '0.75rem',
+        data: '1rem',
+        card: '1.125rem',
         panel: '1.5rem',
       },
 
@@ -195,17 +236,20 @@ const config: Config = {
        * `paper*` and `lift` are kept as aliases of the new three so nothing
        * has to be renamed in one pass, but new code uses `e1`/`e2`/`e3`.
        */
+      // Shadows are cast in near-black (11,12,14) rather than navy, and are soft
+      // and diffuse — depth by blur, not by line (ADR 0072).
       boxShadow: {
-        e1: '0 1px 2px rgba(9,31,70,0.04), 0 4px 12px -6px rgba(9,31,70,0.10)',
-        e2: '0 1px 2px rgba(9,31,70,0.05), 0 12px 28px -12px rgba(9,31,70,0.18)',
-        e3: '0 2px 6px rgba(9,31,70,0.06), 0 32px 64px -24px rgba(9,31,70,0.28)',
-        paper: '0 1px 2px rgba(9,31,70,0.04), 0 4px 12px -6px rgba(9,31,70,0.10)',
-        'paper-lg': '0 1px 2px rgba(9,31,70,0.05), 0 12px 28px -12px rgba(9,31,70,0.18)',
-        'paper-xl': '0 2px 6px rgba(9,31,70,0.06), 0 32px 64px -24px rgba(9,31,70,0.28)',
-        lift: '0 1px 2px rgba(9,31,70,0.05), 0 12px 28px -12px rgba(9,31,70,0.18)',
+        e1: '0 1px 2px rgba(11,12,14,0.04), 0 8px 24px -14px rgba(11,12,14,0.12)',
+        e2: '0 2px 6px -2px rgba(11,12,14,0.06), 0 16px 32px -16px rgba(11,12,14,0.16)',
+        e3: '0 2px 8px rgba(11,12,14,0.06), 0 32px 64px -24px rgba(11,12,14,0.24)',
+        paper: '0 1px 2px rgba(11,12,14,0.04), 0 8px 24px -14px rgba(11,12,14,0.12)',
+        'paper-lg': '0 2px 6px -2px rgba(11,12,14,0.06), 0 16px 32px -16px rgba(11,12,14,0.16)',
+        'paper-xl': '0 2px 8px rgba(11,12,14,0.06), 0 32px 64px -24px rgba(11,12,14,0.24)',
+        lift: '0 2px 6px -2px rgba(11,12,14,0.06), 0 16px 32px -16px rgba(11,12,14,0.16)',
         inset: 'inset 0 1px 0 rgba(255,255,255,0.75)',
         // The focus ring, as a shadow, for controls that cannot spare an outline.
-        focus: '0 0 0 2px #FBFAF8, 0 0 0 4px #37729C',
+        // White gap, then the amber accent.
+        focus: '0 0 0 2px #FFFFFF, 0 0 0 4px #E2881F',
       },
 
       spacing: {

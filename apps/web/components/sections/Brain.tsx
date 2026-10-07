@@ -20,22 +20,22 @@ function BrainDiagram() {
       <svg viewBox="0 0 420 420" className="h-full w-full" role="img" aria-label="Diagram: six connected data sources feeding one central Company Brain.">
         <defs>
           <radialGradient id="coreGlow" cx="0.5" cy="0.5" r="0.5">
-            <stop offset="0%" stopColor="#EFBF6A" stopOpacity="0.4" />
-            <stop offset="100%" stopColor="#EFBF6A" stopOpacity="0" />
+            <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.4" />
+            <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
           </radialGradient>
           <filter id="brainLift" x="-30%" y="-30%" width="160%" height="160%">
-            <feDropShadow dx="0" dy="6" stdDeviation="10" floodColor="#091F46" floodOpacity="0.2" />
+            <feDropShadow dx="0" dy="6" stdDeviation="10" floodColor="var(--c-ink)" floodOpacity="0.2" />
           </filter>
         </defs>
 
         {/* Orbit rings */}
-        <circle cx={CX} cy={CY} r={R} fill="none" stroke="#D8D0C7" strokeWidth="1" />
+        <circle cx={CX} cy={CY} r={R} fill="none" stroke="var(--c-line)" strokeWidth="1" />
         <circle
           cx={CX}
           cy={CY}
           r={R - 34}
           fill="none"
-          stroke="#D8D0C7"
+          stroke="var(--c-line)"
           strokeWidth="1"
           strokeDasharray="3 7"
           opacity="0.8"
@@ -51,7 +51,7 @@ function BrainDiagram() {
               y1={p.y}
               x2={CX}
               y2={CY}
-              stroke="#7699AE"
+              stroke="var(--c-grey-500)"
               strokeWidth="1.4"
               strokeDasharray="5 9"
               opacity="0.6"
@@ -66,13 +66,13 @@ function BrainDiagram() {
 
         {/* Core — stacked paper discs */}
         <g filter="url(#brainLift)">
-          <circle cx={CX} cy={CY + 6} r={58} fill="#37729C" />
-          <circle cx={CX} cy={CY} r={58} fill="#091F46" />
-          <circle cx={CX} cy={CY} r={58} fill="none" stroke="#EFBF6A" strokeWidth="1.5" opacity="0.5" />
+          <circle cx={CX} cy={CY + 6} r={58} fill="var(--c-grey-600)" />
+          <circle cx={CX} cy={CY} r={58} fill="var(--c-ink)" />
+          <circle cx={CX} cy={CY} r={58} fill="none" stroke="var(--accent)" strokeWidth="1.5" opacity="0.5" />
         </g>
 
         {/* Contour lines inside the core, echoing the water swirls */}
-        <g stroke="#7699AE" fill="none" opacity="0.55" strokeLinecap="round">
+        <g stroke="var(--c-grey-500)" fill="none" opacity="0.55" strokeLinecap="round">
           {[16, 26, 36, 46].map((r, i) => (
             <path
               key={r}
@@ -112,13 +112,13 @@ function BrainDiagram() {
               viewport={{ once: true, amount: 0.4 }}
               transition={{ delay: 0.2 + i * 0.09, duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
             >
-              <circle cx={p.x} cy={p.y} r={26} fill="#FFFFFF" stroke="#D8D0C7" strokeWidth="1.5" />
-              <circle cx={p.x} cy={p.y} r={7} fill="#37729C" />
+              <circle cx={p.x} cy={p.y} r={26} fill="var(--c-white)" stroke="var(--c-line)" strokeWidth="1.5" />
+              <circle cx={p.x} cy={p.y} r={7} fill="var(--c-grey-600)" />
               <circle
                 cx={p.x}
                 cy={p.y}
                 r={7}
-                fill="#37729C"
+                fill="var(--c-grey-600)"
                 opacity="0.35"
                 className="motion-safe:animate-pulse-ring"
                 style={{ transformOrigin: `${p.x}px ${p.y}px`, animationDelay: `${i * -0.6}s` }}
