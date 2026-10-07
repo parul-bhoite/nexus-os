@@ -2,27 +2,31 @@
 
 import { type ReactNode } from 'react'
 import { motion } from 'framer-motion'
-import { OnboardingAura, type AuraState } from '@/components/onboarding/OnboardingAura'
 import { Logo } from '@/components/ui/Logo'
+import { type AuraState } from '@/components/onboarding/OnboardingAura'
+import { StepArt } from '@/components/onboarding/OnboardingStepArt'
 import { fadeUp, useMotionSafe } from '@/lib/motion'
 
 /**
- * The visible wizard chrome for the stepped onboarding flow (ADR 0073).
+ * The visible wizard chrome for the stepped onboarding flow (ADR 0073, layout
+ * revised in ADR 0074).
  *
- * ADR 0069's conversation had only a phase label to say where you were; this
- * replaces it with an explicit stepper so the founder can see how many beats
- * are left. The six steps are a fixed, ordered list with a true denominator —
- * the same discipline the retired step rail used — so "Step 3 of 6" means
- * something, unlike a fraction over an uncountable website read.
+ * The frame is three bands on white: a **frozen header** (logo + "Guided setup"
+ * chip) separated by a hairline from a **step-tracker band** of its own, then
+ * the scrolling body. The whole thing is locked to the viewport (`h-screen` +
+ * `overflow-hidden`) so the header and tracker stay put while only the body
+ * scrolls.
  *
- * The shell owns the header (logo + "Guided setup" chip) and the rail; each
- * step renders its own body inside `StepColumn` (centred form) or, for the
- * chatbot, fills the frame itself.
+ * Each step's body is two columns: a looping illustration on the left
+ * (`StepArt`) and the step's own content on the right. The art panel is
+ * decoration — `aria-hidden`, and dropped below `lg` where the task needs the
+ * width. The chatbot passes `fill` so it can own the right column (its log
+ * scrolls, its composer pins to the bottom) instead of being centred.
  */
 
 export type StepId = 'company' | 'areas' | 'chat' | 'documents' | 'tools' | 'brain'
 
-/** The wizard's spine. Order is the flow; `index` is 1-based for display. */
+/** The wizard's spine. Order is the flow; the index is 1-based for display. */
 export const STEPS: { id: StepId; label: string }[] = [
   { id: 'company', label: 'Company' },
   { id: 'areas', label: 'Areas' },
@@ -40,9 +44,9 @@ function Stepper({ current }: { current: StepId }) {
   const activeIndex = stepIndex(current)
 
   return (
-    <nav aria-label="Setup progress" className="mx-auto mt-3 w-full max-w-2xl">
-      {/* The accessible, always-present statement of position. The visual rail
-          below is aria-hidden decoration over this. */}
+    <nav aria-label="Setup progress" className="mx-auto w-full max-w-4xl">
+      {/* The accessible, always-present statement of position. The rail below
+          is aria-hidden decoration over this. */}
       <p className="font-mono text-2xs uppercase tracking-[0.1em] text-ink-400">
         Step {activeIndex + 1} of {STEPS.length} — {STEPS[activeIndex].label}
       </p>
@@ -76,9 +80,7 @@ function Stepper({ current }: { current: StepId }) {
                 )}
               </span>
               {index < STEPS.length - 1 && (
-                <span
-                  className={`h-px flex-1 transition-colors ${done ? 'bg-ink' : 'bg-bone-300'}`}
-                />
+                <span className={`h-px flex-1 transition-colors ${done ? 'bg-ink' : 'bg-bone-300'}`} />
               )}
             </li>
           )
@@ -101,10 +103,9 @@ function Stepper({ current }: { current: StepId }) {
 }
 
 /**
- * The frame every step renders inside: the aura wash, the header, the stepper,
- * then the step body. `fill` lets the chatbot step take the whole frame (its
- * own scroll + sticky composer) while form steps get a centred, padded column
- * via `StepColumn`.
+ * The frame every step renders inside. `fill` hands the chatbot the whole right
+ * column; otherwise the step's content is centred in a readable measure with a
+ * calm `fadeUp` entrance, remounted per step.
  */
 export function StepperShell({
   current,
@@ -117,41 +118,48 @@ export function StepperShell({
   fill?: boolean
   children: ReactNode
 }) {
-  return (
-    <main id="main" tabIndex={-1} className="relative flex min-h-screen flex-col bg-bone-100">
-      <OnboardingAura state={aura} />
-      <header className="relative z-10 border-b border-bone-200 bg-white/80 px-6 py-4 backdrop-blur-sm">
-        <div className="mx-auto flex w-full max-w-2xl items-center justify-between gap-3">
-          <Logo />
-          <span className="rounded-full bg-steel-100 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.1em] text-steel-700">
-            Guided setup
-          </span>
-        </div>
-        <Stepper current={current} />
-      </header>
-      {fill ? (
-        <div className="relative z-10 flex flex-1 flex-col">{children}</div>
-      ) : (
-        <StepBody stepKey={current}>{children}</StepBody>
-      )}
-    </main>
-  )
-}
-
-/** Centred, padded column with the calm `fadeUp` entrance, remounted per step. */
-function StepBody({ stepKey, children }: { stepKey: string; children: ReactNode }) {
   const safe = useMotionSafe()
+
   return (
-    <div className="relative z-10 flex-1 overflow-y-auto">
-      <motion.div
-        key={stepKey}
-        variants={fadeUp(safe)}
-        initial="hidden"
-        animate="show"
-        className="mx-auto w-full max-w-read px-6 py-10 sm:py-14"
-      >
-        {children}
-      </motion.div>
-    </div>
+    <main id="main" tabIndex={-1} className="flex h-screen flex-col overflow-hidden bg-white">
+      {/* ── Frozen header, separated from the rest by a hairline ── */}
+      <header className="flex shrink-0 items-center justify-between border-b border-bone-200 bg-white px-6 py-4 sm:px-8">
+        <Logo />
+        <span className="rounded-full bg-steel-100 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.1em] text-steel-700">
+          Guided setup
+        </span>
+      </header>
+
+      {/* ── The step tracker, its own band below the header ── */}
+      <div className="shrink-0 border-b border-bone-200 bg-white px-6 py-4 sm:px-8">
+        <Stepper current={current} />
+      </div>
+
+      {/* ── Body: illustration left, step content right ── */}
+      <div className="flex min-h-0 flex-1">
+        <aside
+          aria-hidden
+          className="hidden items-center justify-center border-r border-bone-200 p-10 lg:flex lg:w-[42%]"
+        >
+          <StepArt key={current} step={current} active={aura === 'thinking'} />
+        </aside>
+
+        {fill ? (
+          <section className="flex min-h-0 flex-1 flex-col">{children}</section>
+        ) : (
+          <section className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+            <motion.div
+              key={current}
+              variants={fadeUp(safe)}
+              initial="hidden"
+              animate="show"
+              className="mx-auto flex min-h-full w-full max-w-2xl flex-col justify-center px-6 py-12 sm:px-10 lg:px-14"
+            >
+              {children}
+            </motion.div>
+          </section>
+        )}
+      </div>
+    </main>
   )
 }

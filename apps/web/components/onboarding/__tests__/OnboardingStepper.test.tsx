@@ -18,6 +18,8 @@ describe('StepperShell', () => {
 
     expect(screen.getByText(/step 3 of 6 — questions/i)).toBeInTheDocument()
     expect(screen.getByText('body')).toBeInTheDocument()
+    // The step's illustration panel renders for the current step (ADR 0074).
+    expect(screen.getByText('A short conversation')).toBeInTheDocument()
   })
 
   it('names all six steps and keeps them in flow order', () => {
