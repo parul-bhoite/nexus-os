@@ -149,6 +149,10 @@ export function ChatbotStep({
 
         {scanning && <ScanningCard label={slowLabel} domain={state.domain} pages={state.pages_read} />}
 
+        {state.brief.opening_line && !scanning && !unreadable && (
+          <BriefLine line={state.brief.opening_line} />
+        )}
+
         {transcriptMinusLiveQuestion(state.turns, question).map((turn, index) => (
           <Bubble key={index} turn={turn} />
         ))}
@@ -219,6 +223,23 @@ function Greeting({ viewer }: { viewer?: AgentState['viewer'] }) {
   const line = greetingFor(viewer)
   if (!line) return null
   return <AgentBubble>{line}</AgentBubble>
+}
+
+/**
+ * A single, compact acknowledgement of what the crawl read — the product owner
+ * asked for this instead of the old sectioned brief-confirmation card. It is
+ * read-only (the brief is auto-confirmed by the orchestrator; corrections happen
+ * as the conversation goes and on the final Brain step), so there are no
+ * keep-going / something-is-wrong buttons here. `opening_line` is the
+ * second-person one-liner `company-summary` writes.
+ */
+function BriefLine({ line }: { line: string }) {
+  return (
+    <AgentBubble>
+      <p>{line}</p>
+      <p className="mt-1.5 text-ink-500">If any of that is off, just tell me as we go — your version is the one every director works from.</p>
+    </AgentBubble>
+  )
 }
 
 function Bubble({ turn }: { turn: { role: string; text: string; target: string | null; scope: number | null } }) {
