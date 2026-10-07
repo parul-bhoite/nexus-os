@@ -45,12 +45,12 @@ function Stepper({ current }: { current: StepId }) {
 
   return (
     <nav aria-label="Setup progress" className="mx-auto w-full max-w-4xl">
-      {/* The accessible, always-present statement of position. The rail below
-          is aria-hidden decoration over this. */}
-      <p className="font-mono text-2xs uppercase tracking-[0.1em] text-ink-400">
+      {/* The accessible statement of position, kept for screen readers but not
+          shown — the numbered rail below carries it visually. */}
+      <p className="sr-only">
         Step {activeIndex + 1} of {STEPS.length} — {STEPS[activeIndex].label}
       </p>
-      <ol aria-hidden className="mt-2 flex items-center gap-1.5">
+      <ol aria-hidden className="flex items-center gap-1.5">
         {STEPS.map((step, index) => {
           const done = index < activeIndex
           const here = index === activeIndex
@@ -125,13 +125,25 @@ export function StepperShell({
       {/* ── Frozen header, separated from the rest by a hairline ── */}
       <header className="flex shrink-0 items-center justify-between border-b border-bone-200 bg-white px-6 py-4 sm:px-8">
         <Logo />
-        <span className="rounded-full bg-steel-100 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.1em] text-steel-700">
-          Guided setup
+        <span
+          role="img"
+          aria-label="Your account"
+          className="grid h-9 w-9 place-items-center rounded-full border border-bone-300 bg-white text-ink-600"
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden>
+            <circle cx="12" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.6" />
+            <path
+              d="M5 20c0-3.3 3.1-5.6 7-5.6s7 2.3 7 5.6"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+            />
+          </svg>
         </span>
       </header>
 
       {/* ── The step tracker, its own band below the header ── */}
-      <div className="shrink-0 border-b border-bone-200 bg-white px-6 py-4 sm:px-8">
+      <div className="shrink-0 bg-white px-6 py-4 sm:px-8">
         <Stepper current={current} />
       </div>
 
