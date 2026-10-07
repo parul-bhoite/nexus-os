@@ -153,9 +153,15 @@ export function ChatbotStep({
           <BriefLine line={state.brief.opening_line} />
         )}
 
-        {transcriptMinusLiveQuestion(state.turns, question).map((turn, index) => (
-          <Bubble key={index} turn={turn} />
-        ))}
+        {transcriptMinusLiveQuestion(state.turns, question)
+          // The engine appends `opening_line` verbatim as an agent turn
+          // (onboarding_agent.read). `BriefLine` already renders that line with
+          // its "correct me as we go" reassurance, so drop the raw duplicate
+          // rather than show the company summary twice.
+          .filter((turn) => !(turn.role !== 'user' && turn.text === state.brief.opening_line))
+          .map((turn, index) => (
+            <Bubble key={index} turn={turn} />
+          ))}
 
         {unreadable && (
           <Describe
