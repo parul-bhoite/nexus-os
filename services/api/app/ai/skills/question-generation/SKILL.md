@@ -159,9 +159,16 @@ close: much of the narrative is already in the brief the person just confirmed.
   "you", "your", or name the company.
 - Ask for the thing, not the category. "What do you promise customers as a lead
   time?" not "Tell us about your operations."
-- Where a short list of answers would genuinely cover it, offer `choices` — but
-  always leave free text possible. Do not offer choices for anything where the
-  person's own wording is the value.
+- **Always offer `choices`: two to four short example answers, on every
+  question.** The box never goes away, so these are a starting point the person
+  can tap and then edit — never a closed list. Keep each to a few words, and make
+  them genuine, likely answers to *this* question in *this* person's world, not
+  generic filler ("Yes / No / Not sure" is filler). For a specific field (a
+  threshold, a name, a cadence) they are the common values; for a narrative field
+  (`brain.goals`, `brain.competitors`, …) they are illustrative openings the
+  person will rewrite in their own words. Where the person's own wording is the
+  value, that is exactly why the choices stay short and editable rather than
+  being withheld — give them a way in, never a way to put words in their mouth.
 
 ## Why this one
 

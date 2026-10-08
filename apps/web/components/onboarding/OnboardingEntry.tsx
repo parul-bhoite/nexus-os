@@ -387,7 +387,7 @@ export function OnboardingEntry() {
 
   if (step === 'tools') {
     return (
-      <StepperShell current="tools" aura={aura}>
+      <StepperShell current="tools" aura={aura} wide>
         <ToolsStep
           disabled={busy}
           recommendedDepartments={departments}

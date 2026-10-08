@@ -31,7 +31,7 @@ export type StepId = 'company' | 'areas' | 'chat' | 'documents' | 'tools' | 'bra
 export const STEPS: { id: StepId; label: string }[] = [
   { id: 'company', label: 'Company' },
   { id: 'areas', label: 'Areas' },
-  { id: 'chat', label: 'Questions' },
+  { id: 'chat', label: 'Understanding' },
   { id: 'documents', label: 'Documents' },
   { id: 'tools', label: 'Tools' },
   { id: 'brain', label: 'Company Brain' },
@@ -44,61 +44,68 @@ export function stepIndex(id: StepId): number {
 
 function Stepper({ current }: { current: StepId }) {
   const activeIndex = stepIndex(current)
+  const safe = useMotionSafe()
 
   return (
-    <nav aria-label="Setup progress" className="mx-auto w-full max-w-4xl">
-      {/* The accessible statement of position, kept for screen readers but not
-          shown — the numbered rail below carries it visually. */}
+    <nav aria-label="Setup progress" className="mx-auto w-full max-w-5xl">
+      {/* The accessible statement of position, kept for screen readers; the
+          dotted rail carries it visually. */}
       <p className="sr-only">
         Step {activeIndex + 1} of {STEPS.length} — {STEPS[activeIndex].label}
       </p>
-      <ol aria-hidden className="flex items-center gap-1.5">
+      {/* One line: each step is a dot and its label side by side, the dots
+          joined by a track that fills as you advance. No numbers — the dot's
+          state (filled = done, gold = here, hollow = ahead) carries it, and the
+          label is right there to name it. */}
+      <ol aria-hidden className="flex items-center gap-2 overflow-x-auto pb-0.5">
         {STEPS.map((step, index) => {
           const done = index < activeIndex
           const here = index === activeIndex
           return (
-            <li key={step.id} className="flex flex-1 items-center gap-1.5">
-              <span
-                className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border text-[11px] font-medium transition-colors ${
-                  done
-                    ? 'border-ink bg-ink text-bone-50'
-                    : here
-                      ? 'border-gold-500 bg-white text-ink'
-                      : 'border-bone-300 bg-white text-ink-300'
-                }`}
-              >
-                {done ? (
-                  <svg viewBox="0 0 16 16" width="11" height="11" fill="none">
-                    <path
-                      d="M3 8.5l3 3 7-7"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+            <li key={step.id} className="flex min-w-0 flex-1 items-center gap-2 last:flex-none">
+              <span className="flex shrink-0 items-center gap-2">
+                <span className="relative grid h-3 w-3 shrink-0 place-items-center">
+                  {/* The current step breathes — a soft gold ring that reads as
+                      "you are here, and it is working" while the step loads. */}
+                  {here && safe && (
+                    <motion.span
+                      aria-hidden
+                      className="absolute inset-0 rounded-full bg-gold-500/30"
+                      animate={{ scale: [1, 2, 1], opacity: [0.55, 0, 0.55] }}
+                      transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
                     />
-                  </svg>
-                ) : (
-                  index + 1
-                )}
+                  )}
+                  <span
+                    className={`h-2.5 w-2.5 rounded-full transition-colors duration-300 ${
+                      done ? 'bg-ink' : here ? 'bg-gold-500' : 'border border-bone-300 bg-white'
+                    }`}
+                  />
+                </span>
+                <span
+                  className={`text-xs transition-colors duration-300 ${
+                    done ? 'text-ink' : here ? 'font-semibold text-ink' : 'text-ink-300'
+                  }`}
+                >
+                  {step.label}
+                </span>
               </span>
               {index < STEPS.length - 1 && (
-                <span className={`h-px flex-1 transition-colors ${done ? 'bg-ink' : 'bg-bone-300'}`} />
+                <span className="relative h-0.5 flex-1 overflow-hidden rounded-full bg-bone-300">
+                  {/* The fill grows into each connector as its step completes —
+                      on advance, framer animates this 0 → 100%, so moving on
+                      reads as progress loading toward the next step. */}
+                  <motion.span
+                    aria-hidden
+                    className="absolute inset-y-0 left-0 rounded-full bg-ink"
+                    initial={false}
+                    animate={{ width: done ? '100%' : '0%' }}
+                    transition={{ duration: safe ? 0.5 : 0, ease: 'easeInOut' }}
+                  />
+                </span>
               )}
             </li>
           )
         })}
-      </ol>
-      <ol aria-hidden className="mt-1.5 hidden grid-cols-7 gap-1.5 sm:grid">
-        {STEPS.map((step, index) => (
-          <li
-            key={step.id}
-            className={`text-[10px] leading-tight ${
-              index === activeIndex ? 'font-medium text-ink-600' : 'text-ink-300'
-            }`}
-          >
-            {step.label}
-          </li>
-        ))}
       </ol>
     </nav>
   )
@@ -148,7 +155,7 @@ export function StepperShell({
         {!wide && (
           <aside
             aria-hidden
-            className="hidden items-center justify-center p-10 lg:flex lg:w-[42%]"
+            className="hidden items-center justify-center p-10 lg:flex lg:w-[40%]"
           >
             <StepArt key={current} step={current} active={aura === 'thinking'} />
           </aside>

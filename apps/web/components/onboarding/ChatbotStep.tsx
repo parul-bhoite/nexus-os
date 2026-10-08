@@ -13,6 +13,7 @@ import {
   submitAnswer,
 } from '@/lib/agent-onboarding-client'
 import { AuthError } from '@/lib/auth-client'
+import { useDictation } from '@/lib/dictation'
 import { useSlowLabel } from '@/lib/slow'
 import { PresenceMark } from '@/components/onboarding/OnboardingAura'
 import { greetingFor, transcript as transcriptMinusLiveQuestion } from '@/components/onboarding/AgentOnboarding'
@@ -35,6 +36,10 @@ import { greetingFor, transcript as transcriptMinusLiveQuestion } from '@/compon
 
 const DISCOVERY_FIELD = 'persona.stated_purpose'
 
+/** The longest answer the composer accepts, and the height past which it scrolls. */
+const MAX_ANSWER_CHARS = 1000
+const MAX_INPUT_HEIGHT = 160
+
 export function ChatbotStep({
   state,
   onState,
@@ -49,6 +54,13 @@ export function ChatbotStep({
   const router = useRouter()
   const [question, setQuestion] = useState<NextQuestion | null>(null)
   const [draft, setDraft] = useState('')
+  // The answer just sent, shown as a user bubble straight away. The transcript
+  // is server-driven — `state.turns` only grows once the round trip returns —
+  // so without this the box stayed full and "Thinking…" appeared while what the
+  // person had typed was nowhere on screen. Cleared the moment the real turn
+  // lands in `state.turns`; left standing on error so the message is still
+  // visible above the retry.
+  const [pending, setPending] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [retry, setRetry] = useState<(() => void) | null>(null)
@@ -95,6 +107,31 @@ export function ChatbotStep({
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [state.turns.length, question, busy])
 
+  // Resume a reload mid-interview.
+  //
+  // The pending question lives only in the persisted turns (the last agent
+  // turn) — the state has no `question` field — but the composer renders from
+  // *this component's* `question`, which starts null on every mount. So after
+  // the opener is answered, a refresh left the person staring at the last
+  // question with no input and no way to answer: `ask` needs `question`, and
+  // nothing had rehydrated it. Re-fetch it once. `/next` is idempotent — it
+  // returns the question already pending rather than inventing a new one
+  // (verified against a live session), so this restores the interview exactly
+  // where it was instead of skipping a turn.
+  const resumedRef = useRef(false)
+  useEffect(() => {
+    if (resumedRef.current || question || busy) return
+    if (state.phase !== 'discovery') return
+    const openerAnswered = state.turns.some(
+      (turn) => turn.role === 'user' && turn.target === DISCOVERY_FIELD,
+    )
+    if (!openerAnswered) return
+    resumedRef.current = true
+    void run('Picking up where we left off…', async () => {
+      setQuestion(await nextQuestion())
+    })
+  }, [state.phase, state.turns, question, busy, run])
+
   const slowLabel = useSlowLabel(
     busy !== null,
     'Working…',
@@ -115,25 +152,42 @@ export function ChatbotStep({
     state.phase === 'discovery' && !discoveryAnswered && !question
       ? {
           question: 'What are you responsible for, day to day?',
-          onSubmit: (text) =>
+          // Starters, not a closed list. They give someone a way in on the one
+          // answer the Brain most wants in their own words — clicking one sends
+          // it as-is, but the invitation underneath stays "Or answer in your
+          // own words" so the expectation is still prose, not a pick.
+          choices: [
+            'Leading a team',
+            'Client delivery',
+            'Sales & growth',
+            'Product & strategy',
+            'Operations & finance',
+          ],
+          onSubmit: (text) => {
+            setDraft('')
+            setPending(text)
             void run('Thinking…', async () => {
               const turn = await openDiscovery(text)
               onState(turn.state)
-              setDraft('')
+              setPending(null)
               setQuestion(turn.question ?? (await nextQuestion()))
-            }),
+            })
+          },
         }
       : question && !question.done && question.question
         ? {
             question: question.question,
             choices: question.choices,
-            onSubmit: (text) =>
+            onSubmit: (text) => {
+              setDraft('')
+              setPending(text)
               void run('Thinking…', async () => {
                 const turn = await submitAnswer(text)
                 onState(turn.state)
-                setDraft('')
+                setPending(null)
                 setQuestion(turn.question ?? (await nextQuestion()))
-              }),
+              })
+            },
           }
         : null
 
@@ -143,8 +197,19 @@ export function ChatbotStep({
         role="log"
         aria-live="polite"
         aria-label="Conversation with your setup assistant"
-        className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 overflow-y-auto px-6 py-6"
+        // `min-h-0` is load-bearing: without it this flex child refuses to
+        // shrink below its content, so a conversation taller than the viewport
+        // grows the log instead of scrolling it — which pushes the sticky
+        // composer below the bottom edge and the input vanishes. With it, the
+        // log scrolls internally and the composer stays pinned.
+        className="min-h-0 flex-1 overflow-y-auto"
       >
+        {/* `min-h-full` + `justify-end` keep the conversation anchored to the
+            bottom, just above the composer — a short transcript no longer
+            floats at the top of a tall screen with the input stranded a
+            viewport away. When the thread grows past the height it scrolls
+            normally and the newest turn stays in view. */}
+        <div className="mx-auto flex min-h-full w-full max-w-2xl flex-col justify-end gap-4 px-6 py-6">
         <Greeting viewer={state.viewer} />
 
         {scanning && <ScanningCard label={slowLabel} domain={state.domain} pages={state.pages_read} />}
@@ -178,6 +243,14 @@ export function ChatbotStep({
 
         {ask && <Ask question={ask.question} choices={ask.choices} onSubmit={ask.onSubmit} disabled={busy !== null} />}
 
+        {pending !== null && (
+          <div className="flex animate-rise justify-end">
+            <div className="max-w-[34rem] rounded-2xl rounded-br-md bg-ink px-4 py-3 text-sm text-bone-50">
+              {pending}
+            </div>
+          </div>
+        )}
+
         {busy && !scanning && <TypingBubble label={busy} />}
 
         {error && (
@@ -198,6 +271,7 @@ export function ChatbotStep({
           </div>
         )}
         <div ref={endRef} />
+        </div>
       </div>
 
       {ask && (
@@ -386,15 +460,18 @@ function Ask({
     <div className="flex flex-col gap-2">
       <AgentBubble>{question}</AgentBubble>
       {choices.length > 0 && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5">
           {choices.map((choice) => (
             <button
               key={choice}
               type="button"
               disabled={disabled}
               onClick={() => onSubmit(choice)}
-              className="min-h-[2.75rem] rounded-full border border-bone-300 bg-white/70 px-4 text-sm text-ink-600 hover:border-steel-400 disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-md border border-dashed border-bone-300 bg-transparent px-2 py-1 text-xs text-ink-400 transition-colors hover:border-steel-400 hover:bg-steel-100 hover:text-steel-600 disabled:opacity-50"
             >
+              <span aria-hidden className="text-ink-300">
+                +
+              </span>
               {choice}
             </button>
           ))}
@@ -417,18 +494,72 @@ function Composer({
   onSubmit: (text: string) => void
   disabled: boolean
 }) {
+  // The draft as of this render, read when a phrase is transcribed rather than
+  // closed over — `useDictation` holds its callback in a ref, so a closure over
+  // `value` would append every phrase to whatever the box held when the mic was
+  // switched on and the second sentence would delete the first.
+  const latest = useRef(value)
+  latest.current = value
+
+  const dictation = useDictation((phrase) => {
+    if (!phrase) return
+    const current = latest.current
+    const next = current.trim() ? `${current.trim()} ${phrase}` : phrase
+    latest.current = next
+    onChange(next)
+  })
+
+  // A disabled composer is a request in flight; leaving the mic open across it
+  // would transcribe into a box that is about to be cleared.
+  const { listening, stop } = dictation
+  useEffect(() => {
+    if (disabled && listening) stop()
+  }, [disabled, listening, stop])
+
+  // One line to start, growing upward as the answer does. The band is pinned to
+  // the floor (`sticky bottom-0`), so a taller textarea extends toward the
+  // conversation rather than off-screen. Capped at MAX_LINES; past that it
+  // scrolls inside the box instead of swallowing the page.
+  const taRef = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    const el = taRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, MAX_INPUT_HEIGHT)}px`
+  }, [value])
+
+  const nearLimit = value.length >= MAX_ANSWER_CHARS * 0.9
+
   return (
-    <div className="sticky bottom-0 z-10 w-full border-t border-bone-200 bg-bone-50/95 pb-5 pt-4 backdrop-blur">
+    <div className="sticky bottom-0 z-10 w-full pb-3 pt-2">
       <div className="mx-auto w-full max-w-2xl px-6">
-        <label htmlFor="answer" className="text-xs font-medium text-ink-600">
-          {label}
-        </label>
-        <div className="mt-1 flex items-end gap-2">
+        <div className="flex items-baseline justify-between">
+          <label htmlFor="answer" className="text-xs font-medium text-ink-600">
+            {label}
+          </label>
+          {nearLimit && (
+            <span aria-live="polite" className="text-[11px] tabular-nums text-ink-400">
+              {value.length}/{MAX_ANSWER_CHARS}
+            </span>
+          )}
+        </div>
+        {/* One rounded container holds the field, the mic and Send — a modern
+            composer rather than three separate controls. The border lives on
+            the shell and lifts on focus; the textarea inside is borderless and
+            transparent so the whole thing reads as a single surface. */}
+        <div
+          className={`mt-1.5 flex items-end gap-1.5 rounded-2xl border bg-white px-2 py-1.5 shadow-e1 transition-colors focus-within:ring-2 focus-within:ring-steel-200 ${
+            listening ? 'border-clay-400' : 'border-bone-300 focus-within:border-steel-400'
+          }`}
+        >
           <textarea
             id="answer"
-            rows={2}
+            ref={taRef}
+            rows={1}
             value={value}
             disabled={disabled}
+            maxLength={MAX_ANSWER_CHARS}
+            placeholder="Type your answer, or tap the mic to speak…"
             onChange={(event) => onChange(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && !event.shiftKey) {
@@ -436,19 +567,93 @@ function Composer({
                 if (value.trim()) onSubmit(value)
               }
             }}
-            className="w-full flex-1 rounded-xl border border-bone-300 bg-white px-3 py-2 text-sm text-ink"
+            className="block max-h-40 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm leading-relaxed text-ink placeholder:text-ink-300 focus:outline-none"
           />
+          {dictation.supported && (
+            <button
+              type="button"
+              onClick={dictation.toggle}
+              disabled={disabled}
+              aria-pressed={listening}
+              aria-label={listening ? 'Stop recording' : 'Answer by voice'}
+              title={listening ? 'Stop recording' : 'Answer by voice'}
+              className={`relative grid h-9 w-9 shrink-0 place-items-center rounded-full transition-colors disabled:opacity-40 ${
+                listening
+                  ? 'bg-clay-100 text-clay-600'
+                  : 'text-ink-400 hover:bg-bone-100 hover:text-steel-600'
+              }`}
+            >
+              <MicIcon />
+              {listening && (
+                <span
+                  aria-hidden
+                  className="absolute inset-0 animate-pulse-ring rounded-full border border-clay-400"
+                />
+              )}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onSubmit(value)}
             disabled={disabled || !value.trim()}
-            className="h-11 min-w-[2.75rem] rounded-full bg-ink px-4 text-sm text-bone-50 disabled:opacity-40"
+            aria-label="Send"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-ink text-bone-50 transition-opacity hover:opacity-90 disabled:opacity-30"
           >
-            Send
+            <SendIcon />
           </button>
         </div>
+
+        {/* Interim words are shown beside the box, never spliced into it: the
+            recogniser rewrites them in place and writing that into a controlled
+            textarea makes the caret jump. Only finalised phrases reach the draft. */}
+        {listening && (
+          <p role="status" aria-live="polite" className="mt-1 text-xs text-clay-600">
+            Listening{dictation.interim ? ` — “${dictation.interim}”` : '… speak when ready.'}
+          </p>
+        )}
+        {dictation.error && (
+          <p role="alert" className="mt-1 text-xs text-clay-600">
+            {dictation.error}
+          </p>
+        )}
       </div>
     </div>
+  )
+}
+
+function MicIcon() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      className="h-4 w-4"
+    >
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0" />
+      <path d="M12 18v3" />
+    </svg>
+  )
+}
+
+function SendIcon() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      <path d="M12 19V5" />
+      <path d="M6 11l6-6 6 6" />
+    </svg>
   )
 }
 

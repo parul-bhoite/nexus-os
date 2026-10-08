@@ -22,7 +22,7 @@ import type { StepId } from '@/components/onboarding/OnboardingStepper'
 const CAPTION: Record<StepId, { title: string; body: string }> = {
   company: { title: 'Your company', body: 'The starting point everything else is built around.' },
   areas: { title: 'Your areas', body: 'The parts of the business NEXUS pays attention to.' },
-  chat: { title: 'A short conversation', body: 'NEXUS learns what it could not read for itself.' },
+  chat: { title: 'Understanding', body: 'Help NEXUS to understand you.' },
   documents: { title: 'Your documents', body: 'Real figures and wording, straight from your files.' },
   tools: { title: 'Your stack', body: 'Where your numbers already live.' },
   brain: { title: 'Your Company Brain', body: 'Everything above, assembled with its source.' },
