@@ -57,6 +57,7 @@ from app.domain.dashboards import (
 from app.domain.department_answers import BINDING_ONLY_SQL
 from app.domain.departments import label_for, runs_department, selected_departments
 from app.domain.director_rows import compose as compose_rows
+from app.domain.insights import StoredInsight
 from app.domain.narration import StoredNarration, describes, sentence_for
 from app.domain.open_questions import compose as compose_questions
 
@@ -107,6 +108,7 @@ from app.retrieval.deals import (
     DealSnapshot,
     both_populations,
 )
+from app.retrieval.insights import current_insights
 from app.retrieval.narration import current_narrations
 from app.retrieval.ops import OpsSnapshot, current_ops
 from app.retrieval.scoped import apply_workspace_scope, scoped_connection
@@ -191,6 +193,13 @@ class Observed:
     quietly dropped rows it judged stale would make the rule invisible to
     anybody reading either half.
     """
+
+    insights: tuple[StoredInsight, ...] = ()
+    """Measured connector insights stored for this workspace (ADR 0081/0085).
+
+    Defaulted for the hermetic permission tests, as the other reads are. The
+    newest row per `(source, metric_key)`; the dashboard renders them as their
+    own region rather than as calculator tiles."""
 
     declared_providers: tuple[str, ...] = ()
     """The tools this workspace said it runs, in catalogue order (ADR 0083).
@@ -289,6 +298,9 @@ async def observed_sources(scope: CurrentScope) -> Observed:
             declared_providers=tuple(
                 await declared_connections(db, workspace_id=scope.workspace_id)
             ),
+            # Measured connector insights (ADR 0081/0085). Same scoped
+            # transaction; the newest row per (source, metric_key).
+            insights=tuple(await current_insights(db, scope)),
         )
 
 
@@ -1194,6 +1206,26 @@ class DirectorRowOut(BaseModel):
     """Server-authored, never empty — the same rule `unlock` follows."""
 
 
+class InsightOut(BaseModel):
+    """One measured insight, as a surface renders it (ADR 0085).
+
+    A persisted figure from a connector (`workspace_insight`), not a live
+    calculator figure — so it is its own region, not a `BlockOut`. Every field
+    the honesty rules require travels with it: the number, its unit, how it was
+    produced (`provenance`), and when it was captured (`captured_at`), because a
+    figure whose date is unknown reads as one we invented."""
+
+    source: str
+    metric_key: str
+    value_numeric: float | None
+    unit: str | None
+    value_text: str | None
+    provenance: str
+    department: str | None
+    captured_at: str
+    """ISO 8601 — the moment the insight was read from its source."""
+
+
 class SurfaceOut(BaseModel):
     """Everything the common surface needs, in one response.
 
@@ -1211,6 +1243,27 @@ class SurfaceOut(BaseModel):
     """The tiles that carry a figure, served exactly as the director page serves
     them — same `figure_out`, same `narration_out`, same stored sentence. The
     surface changes where a founder reads a number, never what it says."""
+
+    insights: list[InsightOut] = []
+    """Measured connector insights (`workspace_insight`), their own region —
+    distinct from `measured`, which is live-computed calculator figures. Empty
+    until a connector (PageSpeed, …) has stored one."""
+
+
+def _insight_out(insight: StoredInsight) -> InsightOut:
+    """One stored insight as the wire shape. `value_numeric` is widened to float
+    for JSON — the `Numeric` keeps full precision in the store; a score or a
+    rate loses nothing crossing as a float here."""
+    return InsightOut(
+        source=insight.source,
+        metric_key=insight.metric_key,
+        value_numeric=float(insight.value_numeric) if insight.value_numeric is not None else None,
+        unit=insight.unit,
+        value_text=insight.value_text,
+        provenance=insight.provenance,
+        department=insight.department,
+        captured_at=insight.captured_at.isoformat(),
+    )
 
 
 def figure_out(capability: Capability, snapshot: CrawlSnapshot | None) -> ScoreFigureOut | None:
@@ -1602,6 +1655,7 @@ async def command_surface(
 
     return SurfaceOut(
         measured=blocks,
+        insights=[_insight_out(insight) for insight in observed.insights],
         directors=[
             DirectorRowOut(
                 department=row.department.value,

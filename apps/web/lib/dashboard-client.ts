@@ -791,6 +791,25 @@ export type DirectorRow = {
 }
 
 /** Everything the common surface needs, in one response. */
+/**
+ * A measured connector insight (`workspace_insight`, ADR 0081/0085) — a
+ * persisted figure from a tool like PageSpeed, not a live calculator figure, so
+ * it is its own region rather than a `DirectorBlock`. Carries its provenance and
+ * the date it was captured, because a figure whose date is unknown reads as one
+ * that was invented.
+ */
+export type Insight = {
+  source: string
+  metric_key: string
+  value_numeric: number | null
+  unit: string | null
+  value_text: string | null
+  provenance: string
+  department: string | null
+  /** ISO 8601 — when the insight was read from its source. */
+  captured_at: string
+}
+
 export type Surface = {
   brief: Brief
   coverage: Coverage
@@ -800,6 +819,9 @@ export type Surface = {
    *  them. The surface changes where a founder reads a number, never what it
    *  says — asserted end to end in `test_surface_tiles.py`. */
   measured: DirectorBlock[]
+  /** Measured connector insights, their own region (distinct from `measured`,
+   *  which is live-computed). Empty until a connector has stored one. */
+  insights: Insight[]
 }
 
 /**
@@ -837,6 +859,15 @@ export async function fetchSetup(department: string): Promise<DirectorSetup> {
 
 export async function fetchSurface(): Promise<Surface> {
   return (await get('/api/dashboards/surface')) as Surface
+}
+
+/**
+ * The workspace's measured insights, from the ungated `/insights` endpoint (ADR
+ * 0085). The Brain page reads this before payment, where the entitlement-gated
+ * surface is out of reach.
+ */
+export async function fetchInsights(): Promise<Insight[]> {
+  return (await get('/api/insights')) as Insight[]
 }
 
 export async function fetchDirector(department: string): Promise<Director> {

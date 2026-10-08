@@ -16,7 +16,7 @@ import { Failed } from '@/components/ui/States'
 import { AuthError } from '@/lib/auth-client'
 import { readState } from '@/lib/agent-onboarding-client'
 import { fetchEntitlement } from '@/lib/billing-client'
-import { fetchSurface, type DirectorBlock, type Surface } from '@/lib/dashboard-client'
+import { fetchSurface, type DirectorBlock, type Insight, type Surface } from '@/lib/dashboard-client'
 
 /**
  * Today — the common surface, and where signing in now lands.
@@ -162,6 +162,7 @@ export function DashboardLanding() {
 
       <MorningBrief brief={state.surface.brief} />
       <Measured blocks={state.surface.measured} />
+      <Insights insights={state.surface.insights} />
       {/* Still immediately above the questions — the "not built yet" band is
           what makes "23 more are waiting on us" legible a moment later — but
           now below the figures rather than above them. */}
@@ -236,6 +237,64 @@ function Measured({ blocks }: { blocks: DirectorBlock[] }) {
       <ul className="grid items-start gap-4 lg:grid-cols-2">
         {blocks.map((block) => (
           <BlockCard key={block.key} block={block} department={block.key.split('.')[0]} />
+        ))}
+      </ul>
+    </Section>
+  )
+}
+
+/** Source + metric as a plain heading. No invented prose — the words are the
+ *  source name and the metric key made readable. */
+function insightTitle(insight: Insight): string {
+  const source = insight.source.replace(/_/g, ' ')
+  const metric = insight.metric_key.replace(/_/g, ' ')
+  return `${source} · ${metric}`
+}
+
+/** The figure as read: a number with its unit, or the text value. The store's
+ *  constraint guarantees one of them is present. */
+function insightValue(insight: Insight): string {
+  if (insight.value_numeric !== null) {
+    return insight.unit ? `${insight.value_numeric} ${insight.unit}` : `${insight.value_numeric}`
+  }
+  return insight.value_text ?? ''
+}
+
+/**
+ * Measured connector insights, their own region (ADR 0085).
+ *
+ * Distinct from `Measured`, which is live-computed calculator figures: an
+ * insight is a persisted number a connector read, so it is shown with the two
+ * facts that make it checkable — where it came from and when it was captured —
+ * and never without them. Renders nothing until a connector has stored one, so
+ * a workspace with no connected tools sees no empty frame.
+ */
+function Insights({ insights }: { insights: Insight[] }) {
+  if (insights.length === 0) return null
+
+  return (
+    <Section
+      title="Insights"
+      lede="Measured from the tools you've connected — with where and when each was read."
+    >
+      <ul className="grid items-start gap-4 lg:grid-cols-2">
+        {insights.map((insight) => (
+          <li
+            key={`${insight.source}:${insight.metric_key}`}
+            className="rounded-data border border-ink-100 bg-white px-5 py-5 shadow-e1"
+          >
+            <div className="flex items-baseline justify-between gap-4">
+              <h3 className="font-display text-base capitalize text-ink-900">
+                {insightTitle(insight)}
+              </h3>
+              <span className="shrink-0 font-mono text-sm text-ink-900">
+                {insightValue(insight)}
+              </span>
+            </div>
+            <p className="mt-2 font-mono text-2xs text-ink-400">
+              {insight.provenance} · {new Date(insight.captured_at).toLocaleDateString()}
+            </p>
+          </li>
         ))}
       </ul>
     </Section>
