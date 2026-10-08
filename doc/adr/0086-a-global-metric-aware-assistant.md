@@ -76,10 +76,17 @@ citations) is a human gate, and a phase that flipped the flag would bypass it.
 - Two assistants, one surface vocabulary: documents cite chunks
   (`/dashboards/{department}/ask`); figures narrate with a trace
   (`/assistant/ask`). They never blend a computed number into a document citation.
-- The global assistant answers from insights + Brain facts + crawl-audit figures
-  today. **Deals/ops figures are not yet in the bundle** — the assembly in
-  `qa.py` is where they are added, each as a labelled figure with its value; the
-  guard and the flow do not change when they are.
+- The global assistant answers from insights + Brain facts + **every computed
+  figure the caller may reach**: the crawl audit, the CRM pipeline
+  (`compute_from_deals`) and the operations counts and rates
+  (`compute_from_ops`, `compute_rate_from_ops`). `qa._assemble` unifies them
+  through each computation's `(computed, label)` pair, and **filters by
+  `scope.may_reach_department`** — the same filter the dashboard applies to its
+  tiles, so the assistant never grounds on a figure the reader's own dashboard
+  would not show. Compositions (`score_drivers`, `todays_priorities`) are
+  excluded: they rank or explain other figures rather than carrying a headline
+  number for the guard to permit. A refused rate (nothing priced, not confirmed)
+  is skipped rather than grounded on a percentage that is not shown.
 - The feature is **code complete, dark**. Live answer quality is the A12 eval's
   concern; what is proven now (with a `ScriptedProvider`, no real model) is the
   guard and the flow: a supplied figure may be stated, an invented one is refused

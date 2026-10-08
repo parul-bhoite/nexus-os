@@ -22,6 +22,7 @@ bundle *does* read `calculators/` and the insight store.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, date, datetime
 from typing import Any, Final
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,8 +31,17 @@ from app.ai.contracts import LlmTransientError, LlmUnavailableError, Message
 from app.ai.runtime.runner import SkillFailedError, SkillRunner
 from app.domain import company_brain
 from app.domain.insights import StoredInsight
+from app.domain.registry import BY_ID
 from app.domain.session import ScopedSession
-from app.grounding.compute import MEASURABLE, compute_from_crawl
+from app.grounding.compute import (
+    COMPOSITIONS,
+    MEASURABLE,
+    compute_from_crawl,
+    compute_from_deals,
+    compute_from_ops,
+    compute_rate_from_ops,
+    computes,
+)
 from app.grounding.ledger import budgets_for, record
 from app.grounding.pipeline import (
     Answer,
@@ -43,7 +53,9 @@ from app.grounding.pipeline import (
 )
 from app.logging import get_logger
 from app.retrieval.crawl import current_page_signals
+from app.retrieval.deals import DealSnapshot, both_populations
 from app.retrieval.insights import current_insights
+from app.retrieval.ops import current_ops
 
 SKILL: Final = "assistant-global"
 MODULE: Final = "grounding.qa"
@@ -120,14 +132,72 @@ def _insight_line(insight: StoredInsight) -> tuple[str, float | None, str]:
     return label, value, line
 
 
+def _figure_for(
+    capability_id: str,
+    *,
+    crawl: Any,
+    synced: DealSnapshot | None,
+    typed: DealSnapshot | None,
+    ops: Any,
+    today: date,
+) -> Any | None:
+    """The one computation for a capability, whatever its kind — or `None`.
+
+    Tries each `grounding/compute` dispatch and takes the first that answers, the
+    same `or` chain the surface's tile uses. Every kind it returns carries the
+    same `(computed, label)` pair, so the bundle folds them identically. The
+    compute functions are keyed by their own registries and return `None` for a
+    capability that is not theirs, so trying all of them is safe.
+
+    Compositions (`operations.score_drivers`, `executive.todays_priorities`) are
+    excluded by the caller: they explain or rank other figures rather than
+    carrying a headline number, so there is nothing for the guard to permit."""
+    if crawl is not None:
+        crawl_figure = compute_from_crawl(capability_id, crawl)
+        if crawl_figure is not None:
+            return crawl_figure
+
+    # `sales.deals_lite` reads the deals somebody typed; every other deal figure
+    # reads what a provider synced. The partition is ADR 0038's and must not blur.
+    population = typed if capability_id == "sales.deals_lite" else synced
+    if population is not None:
+        amount = compute_from_deals(
+            capability_id,
+            population.deals,
+            today=today,
+            source=population.provider,
+            fetched_at=population.fetched_at,
+        )
+        if amount is not None:
+            return amount
+
+    if ops is not None:
+        count = compute_from_ops(capability_id, ops, today=today)
+        if count is not None:
+            return count
+        rate = compute_rate_from_ops(capability_id, ops, today=today)
+        # A refused rate has no percentage to state (nothing priced, not
+        # confirmed) — skip it rather than ground on a number that is not shown.
+        if rate is not None and rate.refused is None:
+            return rate
+
+    return None
+
+
 def _assemble(
+    scope: ScopedSession,
     insights: tuple[StoredInsight, ...],
     brain: Any,
     crawl: Any,
+    synced: DealSnapshot | None,
+    typed: DealSnapshot | None,
+    ops: Any,
+    *,
+    today: date,
 ) -> tuple[Computed, list[str], list[str]]:
     """Build the permitted figure set, the readable grounding lines, and the
     labels of everything assembled. No model, no numbers of our own — every value
-    came from the insight store or a calculator."""
+    came from the insight store or a calculator (I1)."""
     values: dict[str, float] = {}
     lines: list[str] = []
     labels: list[str] = []
@@ -139,20 +209,28 @@ def _assemble(
         if value is not None:
             values[label] = value
 
-    # Crawl-audit figures: computed, never stored. The website is L1, so the audit
-    # summary is company-wide — the same scope the brief composes it at.
-    if crawl is not None:
-        for capability_id in sorted(MEASURABLE):
-            computation = compute_from_crawl(capability_id, crawl)
-            if computation is None:
-                continue
-            labels.append(capability_id)
-            values[f"{capability_id}.score"] = float(computation.score.score)
-            values[f"{capability_id}.max"] = float(computation.score.max_score)
-            lines.append(
-                f"- {computation.label}: {computation.score.score} of "
-                f"{computation.score.max_score} points"
-            )
+    # Computed figures — crawl audit, CRM pipeline, operations counts and rates.
+    # Scoped to the departments this caller may reach, the same filter the
+    # dashboard applies to its tiles, so the assistant never grounds on a figure
+    # the reader could not see on their own dashboard.
+    for capability_id in sorted(MEASURABLE):
+        if not computes(capability_id) or capability_id in COMPOSITIONS:
+            continue
+        capability = BY_ID.get(capability_id)
+        if capability is None or not scope.may_reach_department(capability.department):
+            continue
+        figure = _figure_for(
+            capability_id, crawl=crawl, synced=synced, typed=typed, ops=ops, today=today
+        )
+        if figure is None or not figure.computed.values:
+            continue
+        labels.append(capability_id)
+        for key, value in figure.computed.values.items():
+            values[f"{capability_id}.{key}"] = value
+        rendered = ", ".join(
+            f"{key.replace('_', ' ')} {amount:g}" for key, amount in figure.computed.values.items()
+        )
+        lines.append(f"- {figure.label}: {rendered}")
 
     if brain is not None:
         for name, field in (
@@ -191,8 +269,13 @@ async def answer(
     insights = tuple(await current_insights(db, scope))
     brain = await company_brain.current(db, workspace_id=scope.workspace_id)
     crawl = await current_page_signals(db, scope)
+    synced, typed = await both_populations(db, scope)
+    ops = await current_ops(db, scope)
+    today = datetime.now(UTC).date()
 
-    computed, lines, labels = _assemble(insights, brain, crawl)
+    computed, lines, labels = _assemble(
+        scope, insights, brain, crawl, synced, typed, ops, today=today
+    )
 
     if not lines:
         # Nothing to ground on. Refuse before a model is called — an answer
