@@ -106,7 +106,13 @@ function CompanyArt() {
         cy="36"
         r="5"
         className="fill-gold-500"
-        animate={safe ? { opacity: [0.7, 1, 0.7], r: [5, 6.5, 5] } : { opacity: 1 }}
+        // Pulse via `scale`, not the `r` attribute: framer-motion writes an
+        // animated attribute as `r="undefined"` for a few frames while the
+        // element exits (an AnimatePresence step change), which the browser
+        // rejects. A transform scale is identical to the eye (5 → ~6.5) and
+        // framer renders it cleanly. `fill-box`/`center` pivots it on itself.
+        style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+        animate={safe ? { opacity: [0.7, 1, 0.7], scale: [1, 1.3, 1] } : { opacity: 1 }}
         transition={safe ? { duration: 2, repeat: Infinity, ease: 'easeInOut' } : undefined}
       />
     </svg>
@@ -259,7 +265,10 @@ function ToolsArt() {
         cy="100"
         r="20"
         className="fill-ink-900"
-        animate={safe ? { r: [20, 22, 20] } : undefined}
+        // Scale, not `r` — see the antenna dot above: an animated `r` attribute
+        // is written as "undefined" on exit. Scale 1 → ~1.1 matches r 20 → 22.
+        style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+        animate={safe ? { scale: [1, 1.1, 1] } : undefined}
         transition={safe ? { duration: 2, repeat: Infinity, ease: 'easeInOut' } : undefined}
       />
       <circle cx="100" cy="100" r="7" className="fill-gold-500" />
