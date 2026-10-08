@@ -973,6 +973,12 @@ class DashboardsOut(BaseModel):
     and counting those here would imply the page has something on it that it
     does not."""
 
+    assistant_enabled: bool = False
+    """Whether the global assistant (ADR 0086) is switched on for this deployment.
+    The shell renders its floating widget only when true, so while the feature is
+    dark (the A12 flag off) nothing appears — the same signal the per-department
+    panel reads, surfaced once for the always-available widget."""
+
 
 def _path(department: Department) -> str:
     return f"/dashboard/{department.value}"
@@ -1727,7 +1733,10 @@ async def command_surface(
 
 @router.get("", response_model=DashboardsOut)
 async def list_dashboards(
-    scope: CurrentScope, chosen: RunningDepartments, answered: AnsweredQuestions
+    scope: CurrentScope,
+    chosen: RunningDepartments,
+    answered: AnsweredQuestions,
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> DashboardsOut:
     """The directors this caller may open, and where to land them.
 
@@ -1778,6 +1787,7 @@ async def list_dashboards(
         ],
         landing=_path(landing) if landing else None,
         delivered_count=openable_count(),
+        assistant_enabled=settings.assistant_enabled,
     )
 
 

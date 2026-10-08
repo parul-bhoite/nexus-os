@@ -582,6 +582,46 @@ export async function askDirector(
   }
 }
 
+/**
+ * Ask the global, metric-aware assistant (ADR 0086). Answers from the
+ * workspace's own figures, insights and facts — no document citations.
+ *
+ * A 404 means the feature is dark (the A12 flag is off); the caller decides what
+ * to do with that (the shell only shows the widget when `assistant_enabled`, so
+ * this is belt-and-braces). The token is read here, not threaded through props,
+ * matching `askDirector`.
+ */
+export async function askGlobal(question: string): Promise<GlobalAnswer> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  const token = csrfToken()
+  if (token) headers['X-CSRF-Token'] = token
+
+  const response = await fetch('/api/assistant/ask', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ question }),
+    credentials: 'same-origin',
+    cache: 'no-store',
+  })
+
+  if (!response.ok) {
+    throw new Error('Cannot reach the assistant right now.')
+  }
+
+  const wire = (await response.json()) as {
+    answered?: boolean
+    prose?: string
+    sentence?: string | null
+    grounded_on?: string[]
+  }
+  return {
+    answered: Boolean(wire.answered),
+    prose: wire.prose ?? '',
+    sentence: wire.sentence ?? null,
+    grounded_on: wire.grounded_on ?? [],
+  }
+}
+
 export type Offering = {
   /** Doc 05's own numbering — `3.4` is the Growth Plan. What the tile shows as
    * its traceability label, because it points at the paragraph that specified it. */
@@ -635,6 +675,22 @@ export type Dashboards = {
 
   landing: string | null
   delivered_count: number
+  /** Whether the global assistant (ADR 0086) is switched on. The shell renders
+   *  its floating widget only when true; optional so an older API reads as off,
+   *  never as a broken widget. */
+  assistant_enabled?: boolean
+}
+
+/** One answer or refusal from the global assistant (ADR 0086). `answered` false
+ *  carries the refusal `sentence` we wrote — the model never words its own
+ *  refusal. `grounded_on` names what the answer was built from (figures,
+ *  insights, facts); there are no document citations, because a computed figure
+ *  is not a document. */
+export type GlobalAnswer = {
+  answered: boolean
+  prose: string
+  sentence: string | null
+  grounded_on: string[]
 }
 
 export type Director = {

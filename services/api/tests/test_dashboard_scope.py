@@ -179,6 +179,11 @@ def test_the_list_carries_no_count_of_what_was_removed(client: TestClient) -> No
     for key, value in payload.items():
         if key == "directors":
             continue
+        # `bool` is a subclass of `int`, but a feature flag (e.g.
+        # `assistant_enabled`) cannot encode how many directors were filtered —
+        # only a genuine count can, which is what this rule forbids.
+        if isinstance(value, bool):
+            continue
         assert not isinstance(value, int) or key == "delivered_count", (
             f"{key} could disclose how many directors were filtered out"
         )

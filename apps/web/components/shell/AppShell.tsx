@@ -9,6 +9,7 @@ import { AccountMenu } from '@/components/shell/AccountMenu'
 import { Logo } from '@/components/ui/Logo'
 import { Sheet } from '@/components/ui/Overlay'
 import { ToastProvider } from '@/components/ui/Toast'
+import { AssistantWidget } from '@/components/shell/AssistantWidget'
 import { AuthError } from '@/lib/auth-client'
 import { fetchDashboards, type Dashboards } from '@/lib/dashboard-client'
 import { fetchWorkspaces, type WorkspaceChoice } from '@/lib/settings-client'
@@ -233,6 +234,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <WorkspaceMenu workspaces={workspaces} />
               </div>
             </Sheet>
+
+            {/* The global assistant, on every signed-in page — but only when the
+                deployment has switched it on (ADR 0086). While the feature is
+                dark the flag is false and nothing renders. */}
+            {all?.assistant_enabled ? <AssistantWidget /> : null}
           </div>
         </WorkspacesContext.Provider>
       </DashboardsContext.Provider>
