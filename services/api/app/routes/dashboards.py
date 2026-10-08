@@ -37,6 +37,7 @@ from app.auth.csrf import require_csrf
 from app.config import Settings, get_settings
 from app.db import _unscoped_session
 from app.deps import CurrentScope
+from app.deps_entitlement import require_entitled
 from app.deps_scope import enforce_department
 from app.domain.brief import BriefNudge, compose
 from app.domain.connections import declared as declared_connections
@@ -112,7 +113,15 @@ from app.retrieval.scoped import apply_workspace_scope, scoped_connection
 
 log = get_logger(__name__)
 
-router = APIRouter(prefix="/dashboards", tags=["dashboards"])
+router = APIRouter(
+    prefix="/dashboards",
+    tags=["dashboards"],
+    # The entitlement gate (ADR 0084): every product surface under /dashboards
+    # refuses an unentitled workspace with 402. RLS secures the data regardless;
+    # this governs use. Applied at the router so a new dashboard route cannot be
+    # added outside the paywall by forgetting a per-route dependency.
+    dependencies=[Depends(require_entitled)],
+)
 
 
 @dataclass(frozen=True, slots=True)

@@ -33,6 +33,7 @@ CSRF = "a-csrf-token"
 
 
 def _override_departments(app: FastAPI) -> None:
+    from app.deps_entitlement import require_entitled
     from app.routes.dashboards import (
         Observed,
         answered_questions,
@@ -40,6 +41,9 @@ def _override_departments(app: FastAPI) -> None:
         running_departments,
     )
 
+    # Hermetic (conftest pins the DB URL empty); the entitlement gate (ADR 0084)
+    # reads a database, so it is a no-op here. This file tests scope, not billing.
+    app.dependency_overrides[require_entitled] = lambda: None
     app.dependency_overrides[running_departments] = lambda: frozenset(Department)  # type: ignore[attr-defined]
     app.dependency_overrides[answered_questions] = lambda: frozenset()  # type: ignore[attr-defined]
     # No crawl, so nothing here reaches a model or a ledger. Every refusal

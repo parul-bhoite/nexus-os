@@ -48,6 +48,7 @@ def client() -> Iterator[TestClient]:
 
 
 def _no_database(app: FastAPI) -> None:
+    from app.deps_entitlement import require_entitled
     from app.routes.dashboards import (
         Observed,
         answered_questions,
@@ -55,6 +56,9 @@ def _no_database(app: FastAPI) -> None:
         running_departments,
     )
 
+    # No database here, so the entitlement gate (ADR 0084) — which reads one —
+    # must be a no-op. This file tests scope, not the paywall.
+    app.dependency_overrides[require_entitled] = lambda: None
     app.dependency_overrides[running_departments] = lambda: frozenset(Department)
     # `GET /dashboards` is called by the agreement test below and depends on
     # this; without the override it reaches for a database `conftest`

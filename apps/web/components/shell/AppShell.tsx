@@ -102,10 +102,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let live = true
 
-    function expired(caught: unknown): boolean {
+    function redirectedAway(caught: unknown): boolean {
       if (caught instanceof AuthError && caught.status === 401) {
         const wanted = `${window.location.pathname}${window.location.search}`
         router.replace(`/login?next=${encodeURIComponent(wanted)}`)
+        return true
+      }
+      if (caught instanceof AuthError && caught.status === 402) {
+        // Not entitled — no plan or a lapsed trial (ADR 0084). The dashboard is
+        // not theirs to use yet, so send them to finish payment. The API is the
+        // authority here; the shell only reacts to its 402. A server-side gate
+        // in the dashboard layout redirects before render too, so this is the
+        // belt to that braces.
+        router.replace('/onboarding/agent')
         return true
       }
       return false
@@ -116,7 +125,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         if (live) setAll(dashboards)
       })
       .catch((caught: unknown) => {
-        if (!live || expired(caught)) return
+        if (!live || redirectedAway(caught)) return
         // Anything else is left to the page. The shell drawing an error over a
         // surface that may have loaded perfectly well would hide working
         // content behind a failure to draw a sidebar.
@@ -127,7 +136,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         if (live) setWorkspaces(page.workspaces)
       })
       .catch((caught: unknown) => {
-        if (!live || expired(caught)) return
+        if (!live || redirectedAway(caught)) return
         // An empty array is *known to be empty*, which is wrong here — the
         // request failed, so we do not know. `WorkspaceMenu` renders the
         // unknown case as a quiet fallback rather than as "no companies".
