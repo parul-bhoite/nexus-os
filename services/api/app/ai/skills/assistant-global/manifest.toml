@@ -1,0 +1,26 @@
+name = "assistant-global"
+version = "1"
+description = "Answer a question from a bundle of already-computed figures, measured insights and stated facts. Produces no numbers of its own."
+model = "claude-sonnet-5"
+effort = "low"
+
+# A short answer, not an essay. A ceiling this low is a design constraint, not a
+# saving: the question is specific and the grounding is a handful of figures, so
+# a good answer is one or two sentences. Room for a paragraph invites a model to
+# fill it with context nobody asked for and nothing supplied.
+max_output_tokens = 512
+cache_system = true
+
+# The question itself. The figures/insights/facts travel in the message rather
+# than here — the provider renders grounding values through repr(), which is
+# right for a scalar and wrong for a multi-line bundle (it collapses it onto one
+# escaped line). The empty-bundle case is refused in `grounding/qa.py` before a
+# model is ever called, which is the real "we have something to ground on" guard.
+requires_grounding = ["question"]
+
+# Writes nothing. Like narrate-metric, it phrases; it never decides anything that
+# outlives the request. Its provenance is the generation row's trace, not a value
+# it returns.
+writes = []
+
+tags = ["assistant", "dashboard"]

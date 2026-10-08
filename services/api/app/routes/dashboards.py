@@ -37,8 +37,11 @@ from app.auth.csrf import require_csrf
 from app.config import Settings, get_settings
 from app.db import _unscoped_session
 from app.deps import CurrentScope
+from app.deps_entitlement import require_entitled
 from app.deps_scope import enforce_department
-from app.domain.brief import compose
+from app.domain.brief import BriefNudge, compose
+from app.domain.connections import declared as declared_connections
+from app.domain.connections import gaps_for
 from app.domain.dashboards import (
     BY_DEPARTMENT,
     DIRECTORS,
@@ -54,6 +57,7 @@ from app.domain.dashboards import (
 from app.domain.department_answers import BINDING_ONLY_SQL
 from app.domain.departments import label_for, runs_department, selected_departments
 from app.domain.director_rows import compose as compose_rows
+from app.domain.insights import StoredInsight
 from app.domain.narration import StoredNarration, describes, sentence_for
 from app.domain.open_questions import compose as compose_questions
 
@@ -104,13 +108,22 @@ from app.retrieval.deals import (
     DealSnapshot,
     both_populations,
 )
+from app.retrieval.insights import current_insights
 from app.retrieval.narration import current_narrations
 from app.retrieval.ops import OpsSnapshot, current_ops
 from app.retrieval.scoped import apply_workspace_scope, scoped_connection
 
 log = get_logger(__name__)
 
-router = APIRouter(prefix="/dashboards", tags=["dashboards"])
+router = APIRouter(
+    prefix="/dashboards",
+    tags=["dashboards"],
+    # The entitlement gate (ADR 0084): every product surface under /dashboards
+    # refuses an unentitled workspace with 402. RLS secures the data regardless;
+    # this governs use. Applied at the router so a new dashboard route cannot be
+    # added outside the paywall by forgetting a per-route dependency.
+    dependencies=[Depends(require_entitled)],
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,6 +192,22 @@ class Observed:
     that decision is made per tile in `block_out`, not here. A read that
     quietly dropped rows it judged stale would make the rule invisible to
     anybody reading either half.
+    """
+
+    insights: tuple[StoredInsight, ...] = ()
+    """Measured connector insights stored for this workspace (ADR 0081/0085).
+
+    Defaulted for the hermetic permission tests, as the other reads are. The
+    newest row per `(source, metric_key)`; the dashboard renders them as their
+    own region rather than as calculator tiles."""
+
+    declared_providers: tuple[str, ...] = ()
+    """The tools this workspace said it runs, in catalogue order (ADR 0083).
+
+    Defaulted for the hermetic permission tests that build an `Observed` with no
+    database, exactly as `deals` and `narrations` are. Feeds the brief's
+    finish-your-setup nudges — a declared-but-unconnected tool is an actionable
+    gap, and `connections.gaps_for` turns only the declared ones into prompts.
     """
 
     @property
@@ -263,6 +292,15 @@ async def observed_sources(scope: CurrentScope) -> Observed:
             typed_deals=typed,
             ops=await current_ops(db, scope),
             narrations=await current_narrations(db, scope),
+            # One more small read for the brief's setup nudges. Declared providers
+            # are a short list and this is the same scoped transaction, so it is a
+            # `WHERE` clause on this link, not a new page-load cost worth avoiding.
+            declared_providers=tuple(
+                await declared_connections(db, workspace_id=scope.workspace_id)
+            ),
+            # Measured connector insights (ADR 0081/0085). Same scoped
+            # transaction; the newest row per (source, metric_key).
+            insights=tuple(await current_insights(db, scope)),
         )
 
 
@@ -935,6 +973,12 @@ class DashboardsOut(BaseModel):
     and counting those here would imply the page has something on it that it
     does not."""
 
+    assistant_enabled: bool = False
+    """Whether the global assistant (ADR 0086) is switched on for this deployment.
+    The shell renders its floating widget only when true, so while the feature is
+    dark (the A12 flag off) nothing appears — the same signal the per-department
+    panel reads, surfaced once for the always-available widget."""
+
 
 def _path(department: Department) -> str:
     return f"/dashboard/{department.value}"
@@ -1052,6 +1096,16 @@ class BriefItemOut(BaseModel):
     method: str
 
 
+class BriefNudgeOut(BaseModel):
+    """A finish-your-setup prompt. An action, kept apart from the findings — ADR
+    0029/0083: the ranking stays pure, this carries the one honest call to
+    action, grounded in a declared tool and the capability it unlocks."""
+
+    headline: str
+    unlocks: str
+    href: str
+
+
 class BriefOut(BaseModel):
     """The morning brief, computed in code and costing nothing to render."""
 
@@ -1071,6 +1125,9 @@ class BriefOut(BaseModel):
     checks_total: int
     measured_on: str
     """Empty only when nothing was measured."""
+
+    nudges: list[BriefNudgeOut] = []
+    """Declared-but-unconnected tools, independent of `state` and `items`."""
 
 
 class CoverageOut(BaseModel):
@@ -1155,6 +1212,26 @@ class DirectorRowOut(BaseModel):
     """Server-authored, never empty — the same rule `unlock` follows."""
 
 
+class InsightOut(BaseModel):
+    """One measured insight, as a surface renders it (ADR 0085).
+
+    A persisted figure from a connector (`workspace_insight`), not a live
+    calculator figure — so it is its own region, not a `BlockOut`. Every field
+    the honesty rules require travels with it: the number, its unit, how it was
+    produced (`provenance`), and when it was captured (`captured_at`), because a
+    figure whose date is unknown reads as one we invented."""
+
+    source: str
+    metric_key: str
+    value_numeric: float | None
+    unit: str | None
+    value_text: str | None
+    provenance: str
+    department: str | None
+    captured_at: str
+    """ISO 8601 — the moment the insight was read from its source."""
+
+
 class SurfaceOut(BaseModel):
     """Everything the common surface needs, in one response.
 
@@ -1172,6 +1249,27 @@ class SurfaceOut(BaseModel):
     """The tiles that carry a figure, served exactly as the director page serves
     them — same `figure_out`, same `narration_out`, same stored sentence. The
     surface changes where a founder reads a number, never what it says."""
+
+    insights: list[InsightOut] = []
+    """Measured connector insights (`workspace_insight`), their own region —
+    distinct from `measured`, which is live-computed calculator figures. Empty
+    until a connector (PageSpeed, …) has stored one."""
+
+
+def _insight_out(insight: StoredInsight) -> InsightOut:
+    """One stored insight as the wire shape. `value_numeric` is widened to float
+    for JSON — the `Numeric` keeps full precision in the store; a score or a
+    rate loses nothing crossing as a float here."""
+    return InsightOut(
+        source=insight.source,
+        metric_key=insight.metric_key,
+        value_numeric=float(insight.value_numeric) if insight.value_numeric is not None else None,
+        unit=insight.unit,
+        value_text=insight.value_text,
+        provenance=insight.provenance,
+        department=insight.department,
+        captured_at=insight.captured_at.isoformat(),
+    )
 
 
 def figure_out(capability: Capability, snapshot: CrawlSnapshot | None) -> ScoreFigureOut | None:
@@ -1528,11 +1626,19 @@ async def command_surface(
     ]
 
     bands = coverage(MEASURABLE, departments)
+    # Finish-your-setup nudges: a declared tool that is not connected yet, with the
+    # capability its connection unlocks named from the catalogue. `gaps_for`
+    # returns only the declared ones — a gap for a tool nobody runs is noise.
+    nudges = tuple(
+        BriefNudge(headline=gap["unlocked_by"], unlocks=gap["topic"])
+        for gap in gaps_for(observed.declared_providers)
+    )
     brief = compose(
         computations,
         expected=mine,
         unobserved=bands.not_built,
         also_measured=frozenset(block.key for block in blocks),
+        nudges=nudges,
     )
     # `mine` rather than every capability with a calculator: a question is only
     # in the first tier if its consumer produces a figure **this reader can
@@ -1555,6 +1661,7 @@ async def command_surface(
 
     return SurfaceOut(
         measured=blocks,
+        insights=[_insight_out(insight) for insight in observed.insights],
         directors=[
             DirectorRowOut(
                 department=row.department.value,
@@ -1616,13 +1723,20 @@ async def command_surface(
             checks_passed=brief.checks_passed,
             checks_total=brief.checks_total,
             measured_on=brief.measured_on,
+            nudges=[
+                BriefNudgeOut(headline=nudge.headline, unlocks=nudge.unlocks, href=nudge.href)
+                for nudge in brief.nudges
+            ],
         ),
     )
 
 
 @router.get("", response_model=DashboardsOut)
 async def list_dashboards(
-    scope: CurrentScope, chosen: RunningDepartments, answered: AnsweredQuestions
+    scope: CurrentScope,
+    chosen: RunningDepartments,
+    answered: AnsweredQuestions,
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> DashboardsOut:
     """The directors this caller may open, and where to land them.
 
@@ -1673,6 +1787,7 @@ async def list_dashboards(
         ],
         landing=_path(landing) if landing else None,
         delivered_count=openable_count(),
+        assistant_enabled=settings.assistant_enabled,
     )
 
 

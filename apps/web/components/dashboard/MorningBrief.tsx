@@ -2,7 +2,7 @@
 
 import { Section } from '@/components/ui/Page'
 import { Empty } from '@/components/ui/States'
-import type { Brief, BriefItem } from '@/lib/dashboard-client'
+import type { Brief, BriefItem, BriefNudge } from '@/lib/dashboard-client'
 
 /**
  * The first region of the common surface: what was found, ranked by what it cost.
@@ -79,6 +79,40 @@ function Finding({ item }: { item: BriefItem }) {
   )
 }
 
+/**
+ * Finish-your-setup prompts. An action, drawn apart from the findings ranking
+ * (ADR 0029/0083): a declared tool that is not connected yet, with the capability
+ * its connection unlocks named by the server from the tool catalogue. Renders
+ * nothing when there is nothing to connect.
+ */
+function Nudges({ nudges }: { nudges: BriefNudge[] }) {
+  if (nudges.length === 0) return null
+  return (
+    <div className="mt-4 rounded-data border border-ink-100 bg-bone-50 px-5 py-4">
+      <h4 className="font-display text-sm text-ink-900">Finish setting up</h4>
+      <ul className="mt-3 flex flex-col gap-2">
+        {nudges.map((nudge) => (
+          <li
+            key={nudge.headline}
+            className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1"
+          >
+            <span className="text-sm text-ink-700">
+              <span className="font-semibold text-ink-900">{nudge.headline}</span> unlocks{' '}
+              {nudge.unlocks}
+            </span>
+            <a
+              href={nudge.href}
+              className="shrink-0 font-mono text-2xs uppercase tracking-[0.06em] text-clay-600 hover:text-clay-700"
+            >
+              Connect in settings →
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 export function MorningBrief({ brief }: { brief: Brief }) {
   const failures = brief.items.filter((item) => item.kind === 'check_failed')
   const heaviest = failures.length > 0 ? failures[0].cost : 0
@@ -103,6 +137,7 @@ export function MorningBrief({ brief }: { brief: Brief }) {
         >
           {brief.message}
         </Empty>
+        <Nudges nudges={brief.nudges} />
       </Section>
     )
   }
@@ -193,6 +228,7 @@ export function MorningBrief({ brief }: { brief: Brief }) {
           </>
         )}
       </div>
+      <Nudges nudges={brief.nudges} />
     </Section>
   )
 }

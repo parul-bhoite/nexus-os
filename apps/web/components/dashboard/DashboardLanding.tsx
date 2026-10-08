@@ -14,7 +14,9 @@ import { PageBody, PageHeader, Section } from '@/components/ui/Page'
 import { BlockGridSkeleton, Bone, Loading, PageHeadSkeleton } from '@/components/ui/Skeleton'
 import { Failed } from '@/components/ui/States'
 import { AuthError } from '@/lib/auth-client'
-import { fetchSurface, type DirectorBlock, type Surface } from '@/lib/dashboard-client'
+import { readState } from '@/lib/agent-onboarding-client'
+import { fetchEntitlement } from '@/lib/billing-client'
+import { fetchSurface, type DirectorBlock, type Insight, type Surface } from '@/lib/dashboard-client'
 
 /**
  * Today — the common surface, and where signing in now lands.
@@ -75,8 +77,29 @@ export function DashboardLanding() {
     let live = true
     setState({ status: 'loading' })
 
-    fetchSurface()
-      .then((surface) => {
+    // The onboarding gate (ADR 0075, extended by ADR 0076). The dashboard is
+    // where login lands, so it is also where an unfinished setup is sent back to
+    // finish: `readState` reports whether the Brain is assembled, and
+    // entitlement reports whether the workspace has paid or has an active trial.
+    // Anything short of both forwards to `/onboarding/agent`, which resumes at
+    // the last incomplete step (the interview, or Payment). A 403 means no
+    // workspace yet. Only an assembled **and** entitled session fetches the
+    // surface. `OnboardingEntry` makes the opposite calls (completed+entitled →
+    // `/dashboard`), so the two cannot loop.
+    readState()
+      .then(async (agent) => {
+        if (!live) return
+        if (!agent.completed) {
+          router.replace('/onboarding/agent')
+          return
+        }
+        const { entitled } = await fetchEntitlement()
+        if (!live) return
+        if (!entitled) {
+          router.replace('/onboarding/agent')
+          return
+        }
+        const surface = await fetchSurface()
         if (live) setState({ status: 'ready', surface })
       })
       .catch((caught: unknown) => {
@@ -85,8 +108,15 @@ export function DashboardLanding() {
         // `"Not authenticated"` rendered verbatim in a box with nothing
         // clickable in it. The refusal was right; leaving somebody on a dead
         // page was not, and session expiry is the ordinary way into this state.
-        if (caught instanceof AuthError && (caught.status === 401 || caught.status === 403)) {
+        if (caught instanceof AuthError && caught.status === 401) {
           router.replace('/login?next=/dashboard')
+          return
+        }
+        // 403 is "no workspace selected" — a signed-in person who has not begun
+        // setup. Send them to onboarding rather than to a login they have
+        // already passed.
+        if (caught instanceof AuthError && caught.status === 403) {
+          router.replace('/onboarding/agent')
           return
         }
         setState({
@@ -132,6 +162,7 @@ export function DashboardLanding() {
 
       <MorningBrief brief={state.surface.brief} />
       <Measured blocks={state.surface.measured} />
+      <Insights insights={state.surface.insights} />
       {/* Still immediately above the questions — the "not built yet" band is
           what makes "23 more are waiting on us" legible a moment later — but
           now below the figures rather than above them. */}
@@ -206,6 +237,64 @@ function Measured({ blocks }: { blocks: DirectorBlock[] }) {
       <ul className="grid items-start gap-4 lg:grid-cols-2">
         {blocks.map((block) => (
           <BlockCard key={block.key} block={block} department={block.key.split('.')[0]} />
+        ))}
+      </ul>
+    </Section>
+  )
+}
+
+/** Source + metric as a plain heading. No invented prose — the words are the
+ *  source name and the metric key made readable. */
+function insightTitle(insight: Insight): string {
+  const source = insight.source.replace(/_/g, ' ')
+  const metric = insight.metric_key.replace(/_/g, ' ')
+  return `${source} · ${metric}`
+}
+
+/** The figure as read: a number with its unit, or the text value. The store's
+ *  constraint guarantees one of them is present. */
+function insightValue(insight: Insight): string {
+  if (insight.value_numeric !== null) {
+    return insight.unit ? `${insight.value_numeric} ${insight.unit}` : `${insight.value_numeric}`
+  }
+  return insight.value_text ?? ''
+}
+
+/**
+ * Measured connector insights, their own region (ADR 0085).
+ *
+ * Distinct from `Measured`, which is live-computed calculator figures: an
+ * insight is a persisted number a connector read, so it is shown with the two
+ * facts that make it checkable — where it came from and when it was captured —
+ * and never without them. Renders nothing until a connector has stored one, so
+ * a workspace with no connected tools sees no empty frame.
+ */
+function Insights({ insights }: { insights: Insight[] }) {
+  if (insights.length === 0) return null
+
+  return (
+    <Section
+      title="Insights"
+      lede="Measured from the tools you've connected — with where and when each was read."
+    >
+      <ul className="grid items-start gap-4 lg:grid-cols-2">
+        {insights.map((insight) => (
+          <li
+            key={`${insight.source}:${insight.metric_key}`}
+            className="rounded-data border border-ink-100 bg-white px-5 py-5 shadow-e1"
+          >
+            <div className="flex items-baseline justify-between gap-4">
+              <h3 className="font-display text-base capitalize text-ink-900">
+                {insightTitle(insight)}
+              </h3>
+              <span className="shrink-0 font-mono text-sm text-ink-900">
+                {insightValue(insight)}
+              </span>
+            </div>
+            <p className="mt-2 font-mono text-2xs text-ink-400">
+              {insight.provenance} · {new Date(insight.captured_at).toLocaleDateString()}
+            </p>
+          </li>
         ))}
       </ul>
     </Section>

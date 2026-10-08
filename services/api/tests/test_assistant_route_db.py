@@ -49,10 +49,14 @@ ASYNC_DB_URL = async_database_url()
 
 
 def _override_departments(app: FastAPI) -> None:
+    from app.deps_entitlement import require_entitled
     from app.routes.dashboards import answered_questions, running_departments
 
     app.dependency_overrides[running_departments] = lambda: frozenset(Department)
     app.dependency_overrides[answered_questions] = lambda: frozenset()
+    # The assistant lives under /dashboards, so the entitlement gate (ADR 0084)
+    # now covers it. This file tests the assistant, not the paywall — bypass it.
+    app.dependency_overrides[require_entitled] = lambda: None
 
 
 @pytest.fixture

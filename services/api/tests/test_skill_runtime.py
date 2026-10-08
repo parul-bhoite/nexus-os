@@ -260,12 +260,17 @@ def test_every_skill_has_a_caller(registry: SkillRegistry) -> None:
     narrator, but `app/assistant/ask.py`, reached from
     `POST /dashboards/{department}/ask`. It is imported for the same reason —
     and the guard caught it on the full run, which is what it is for.
+
+    `assistant-global` is the fourth: `app/grounding/qa.py`, reached from
+    `POST /assistant/ask` — the metric-aware assistant that phrases computed
+    figures rather than quoting documents (ADR 0086).
     """
     from app.ai.runtime.commands import get_commands
     from app.assistant.ask import SKILL as ASSISTANT
     from app.grounding.answer import NARRATOR
+    from app.grounding.qa import SKILL as GLOBAL_ASSISTANT
 
-    reachable = get_commands().skills_used() | {NARRATOR, ASSISTANT}
+    reachable = get_commands().skills_used() | {NARRATOR, ASSISTANT, GLOBAL_ASSISTANT}
     orphans = sorted(set(registry.names()) - reachable)
     assert not orphans, f"skills on disk that nothing invokes: {orphans}"
 

@@ -4,6 +4,7 @@ import { CompanyBrainPage } from '@/components/brain/CompanyBrainPage'
 import { fetchBrain, type Brain } from '@/lib/settings-client'
 import { fetchQuestions, type Question, type Questions } from '@/lib/onboarding-client'
 import { readState, type AgentState, type Turn } from '@/lib/agent-onboarding-client'
+import { fetchInsights, type Insight } from '@/lib/dashboard-client'
 
 vi.mock('@/lib/settings-client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/settings-client')>()
@@ -20,9 +21,15 @@ vi.mock('@/lib/agent-onboarding-client', async (importOriginal) => {
   return { ...actual, readState: vi.fn() }
 })
 
+vi.mock('@/lib/dashboard-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/dashboard-client')>()
+  return { ...actual, fetchInsights: vi.fn() }
+})
+
 const mockedFetchBrain = vi.mocked(fetchBrain)
 const mockedFetchQuestions = vi.mocked(fetchQuestions)
 const mockedReadState = vi.mocked(readState)
+const mockedFetchInsights = vi.mocked(fetchInsights)
 
 function agentState(turns: Turn[] = [], pagesRead: string[] = []): AgentState {
   return {
@@ -82,6 +89,8 @@ beforeEach(() => {
   mockedFetchQuestions.mockReset()
   mockedReadState.mockReset()
   mockedReadState.mockResolvedValue(agentState())
+  mockedFetchInsights.mockReset()
+  mockedFetchInsights.mockResolvedValue([])
 })
 
 describe('CompanyBrainPage', () => {
@@ -133,6 +142,40 @@ describe('CompanyBrainPage', () => {
 
     expect(await screen.findByText('Fiscal year starts in April.')).toBeVisible()
     expect(screen.getByText('assumption · unconfirmed')).toBeVisible()
+  })
+
+  it('shows measured connector insights, with where and when each was read', async () => {
+    mockedFetchBrain.mockResolvedValue(brain())
+    mockedFetchQuestions.mockResolvedValue(questionsResponse([]))
+    const insight: Insight = {
+      source: 'pagespeed',
+      metric_key: 'performance_score',
+      value_numeric: 88,
+      unit: 'score',
+      value_text: null,
+      provenance: 'PageSpeed Insights, https://acme.om/',
+      department: 'marketing',
+      captured_at: '2026-10-08T09:00:00+00:00',
+    }
+    mockedFetchInsights.mockResolvedValue([insight])
+
+    render(<CompanyBrainPage />)
+
+    expect(await screen.findByText(/Insights measured from your tools/i)).toBeVisible()
+    expect(screen.getByText('88 score')).toBeVisible()
+    // Provenance is shown — the measured figure is traceable, never bare.
+    expect(screen.getByText(/PageSpeed Insights, https:\/\/acme\.om\//)).toBeVisible()
+  })
+
+  it('shows no insights section when nothing has been measured', async () => {
+    mockedFetchBrain.mockResolvedValue(brain())
+    mockedFetchQuestions.mockResolvedValue(questionsResponse([]))
+    mockedFetchInsights.mockResolvedValue([])
+
+    render(<CompanyBrainPage />)
+
+    await screen.findByText('Fiscal year starts in April.')
+    expect(screen.queryByText(/Insights measured from your tools/i)).not.toBeInTheDocument()
   })
 
   it('filters the table by search text, client-side', async () => {

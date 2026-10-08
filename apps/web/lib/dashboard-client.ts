@@ -582,6 +582,46 @@ export async function askDirector(
   }
 }
 
+/**
+ * Ask the global, metric-aware assistant (ADR 0086). Answers from the
+ * workspace's own figures, insights and facts — no document citations.
+ *
+ * A 404 means the feature is dark (the A12 flag is off); the caller decides what
+ * to do with that (the shell only shows the widget when `assistant_enabled`, so
+ * this is belt-and-braces). The token is read here, not threaded through props,
+ * matching `askDirector`.
+ */
+export async function askGlobal(question: string): Promise<GlobalAnswer> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  const token = csrfToken()
+  if (token) headers['X-CSRF-Token'] = token
+
+  const response = await fetch('/api/assistant/ask', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ question }),
+    credentials: 'same-origin',
+    cache: 'no-store',
+  })
+
+  if (!response.ok) {
+    throw new Error('Cannot reach the assistant right now.')
+  }
+
+  const wire = (await response.json()) as {
+    answered?: boolean
+    prose?: string
+    sentence?: string | null
+    grounded_on?: string[]
+  }
+  return {
+    answered: Boolean(wire.answered),
+    prose: wire.prose ?? '',
+    sentence: wire.sentence ?? null,
+    grounded_on: wire.grounded_on ?? [],
+  }
+}
+
 export type Offering = {
   /** Doc 05's own numbering — `3.4` is the Growth Plan. What the tile shows as
    * its traceability label, because it points at the paragraph that specified it. */
@@ -635,6 +675,22 @@ export type Dashboards = {
 
   landing: string | null
   delivered_count: number
+  /** Whether the global assistant (ADR 0086) is switched on. The shell renders
+   *  its floating widget only when true; optional so an older API reads as off,
+   *  never as a broken widget. */
+  assistant_enabled?: boolean
+}
+
+/** One answer or refusal from the global assistant (ADR 0086). `answered` false
+ *  carries the refusal `sentence` we wrote — the model never words its own
+ *  refusal. `grounded_on` names what the answer was built from (figures,
+ *  insights, facts); there are no document citations, because a computed figure
+ *  is not a document. */
+export type GlobalAnswer = {
+  answered: boolean
+  prose: string
+  sentence: string | null
+  grounded_on: string[]
 }
 
 export type Director = {
@@ -688,6 +744,15 @@ export type BriefItem = {
  * with no API key configured. Ranked by points lost; it reports what was
  * **found** and never what changed, because nothing re-crawls yet.
  */
+export type BriefNudge = {
+  /** What to do, from the tool catalogue — e.g. "Connecting HubSpot". */
+  headline: string
+  /** The capability its connection unlocks — the catalogue's own sentence. */
+  unlocks: string
+  /** Where the action happens (the settings portal). */
+  href: string
+}
+
 export type Brief = {
   /**
    * `not_measured` is not `all_held` with zeroes in it. An audit that never ran
@@ -704,6 +769,12 @@ export type Brief = {
   checks_total: number
   /** Empty only when nothing was measured. */
   measured_on: string
+  /**
+   * Finish-your-setup prompts — a declared tool not yet connected, with the
+   * capability it unlocks. An action, kept apart from the findings ranking (ADR
+   * 0029/0083); present in every state and defaulting to empty.
+   */
+  nudges: BriefNudge[]
 }
 
 /**
@@ -776,6 +847,25 @@ export type DirectorRow = {
 }
 
 /** Everything the common surface needs, in one response. */
+/**
+ * A measured connector insight (`workspace_insight`, ADR 0081/0085) — a
+ * persisted figure from a tool like PageSpeed, not a live calculator figure, so
+ * it is its own region rather than a `DirectorBlock`. Carries its provenance and
+ * the date it was captured, because a figure whose date is unknown reads as one
+ * that was invented.
+ */
+export type Insight = {
+  source: string
+  metric_key: string
+  value_numeric: number | null
+  unit: string | null
+  value_text: string | null
+  provenance: string
+  department: string | null
+  /** ISO 8601 — when the insight was read from its source. */
+  captured_at: string
+}
+
 export type Surface = {
   brief: Brief
   coverage: Coverage
@@ -785,6 +875,9 @@ export type Surface = {
    *  them. The surface changes where a founder reads a number, never what it
    *  says — asserted end to end in `test_surface_tiles.py`. */
   measured: DirectorBlock[]
+  /** Measured connector insights, their own region (distinct from `measured`,
+   *  which is live-computed). Empty until a connector has stored one. */
+  insights: Insight[]
 }
 
 /**
@@ -822,6 +915,15 @@ export async function fetchSetup(department: string): Promise<DirectorSetup> {
 
 export async function fetchSurface(): Promise<Surface> {
   return (await get('/api/dashboards/surface')) as Surface
+}
+
+/**
+ * The workspace's measured insights, from the ungated `/insights` endpoint (ADR
+ * 0085). The Brain page reads this before payment, where the entitlement-gated
+ * surface is out of reach.
+ */
+export async function fetchInsights(): Promise<Insight[]> {
+  return (await get('/api/insights')) as Insight[]
 }
 
 export async function fetchDirector(department: string): Promise<Director> {

@@ -17,8 +17,9 @@ that could name the target could choose the sensitivity its answer is stored at.
 
 from __future__ import annotations
 
+import asyncio
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Coroutine, Mapping, Sequence
 from typing import Any
 
 import sqlalchemy as sa
@@ -36,8 +37,10 @@ from app.ai.runtime.fields import (
 from app.ai.runtime.hooks import get_hooks
 from app.ai.runtime.runner import SkillFailedError, SkillRunner
 from app.auth.csrf import require_csrf
+from app.config import get_settings
+from app.connectors.pagespeed import get_pagespeed_client
 from app.deps import CurrentScope
-from app.domain import connections
+from app.domain import connections, pagespeed
 from app.domain import onboarding_sessions as store
 from app.domain.connections import UnknownProviderError
 from app.domain.departments import label_for, selected_departments
@@ -73,6 +76,38 @@ because each fetch is a couple of seconds and they are sequential.
 """
 
 log = get_logger(__name__)
+
+
+# ── PageSpeed capture, off the request path (ADR 0082) ─────────
+#
+# A completed onboarding should light up the Marketing performance tile without a
+# Connect step. PSI runs a live audit (10-20s), so it must not block the finish
+# response or hold its transaction — it runs as a detached task in its own scoped
+# transaction. The task is created **only when a platform key is configured**, so
+# with no key (every environment today) nothing is scheduled and completion is
+# untouched; `capture` itself swallows provider and shape failures.
+
+_BACKGROUND: set[asyncio.Task[None]] = set()
+"""A strong reference to each detached task — without it the event loop may
+garbage-collect a task mid-flight. Discarded on completion."""
+
+
+def _schedule(coro: Coroutine[Any, Any, None]) -> None:
+    task = asyncio.create_task(coro)
+    _BACKGROUND.add(task)
+    task.add_done_callback(_BACKGROUND.discard)
+
+
+async def _capture_pagespeed(scope: ScopedSession, url: str) -> None:
+    """Fetch and store a PageSpeed score in a fresh scoped transaction."""
+    client = get_pagespeed_client(get_settings())
+    try:
+        async with scoped_connection(scope) as task_db:
+            await pagespeed.capture(
+                task_db, workspace_id=scope.workspace_id, url=url, client=client
+            )
+    except Exception:
+        log.warning("pagespeed.task_failed", workspace_id=str(scope.workspace_id))
 
 
 # ── Wire ──────────────────────────────────────────────────────
@@ -1643,6 +1678,15 @@ async def finish(scope: CurrentScope) -> StateOut:
                     facts=promoted.facts,
                     persona_fields=promoted.persona_fields,
                 )
+
+                # Light up the Marketing performance tile from the company's own
+                # site, off the request path. Scheduled only when a platform key
+                # is configured, so with no key nothing runs and completion is
+                # untouched (ADR 0082). `_workspace_identity` guards that the URL
+                # is the verified workspace domain, never a caller-supplied one.
+                if get_pagespeed_client(get_settings()).available:
+                    domain, _ = await _workspace_identity(db, scope)
+                    _schedule(_capture_pagespeed(scope, f"https://{domain}/"))
             else:
                 await agent.build_persona(state)
         except SkillFailedError as exc:

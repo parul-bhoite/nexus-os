@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["answered", "answer"],
+  "properties": {
+    "answered": {
+      "type": "boolean",
+      "description": "False when the figures, insights and facts provided do not answer the question. A refusal is a valid, complete response."
+    },
+    "answer": {
+      "type": "string",
+      "description": "The answer, in one or two sentences, stating only numerals that appear in the grounding. Empty when answered is false."
+    }
+  }
+}

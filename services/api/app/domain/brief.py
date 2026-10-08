@@ -95,6 +95,32 @@ class BriefItem:
 
 
 @dataclass(frozen=True, slots=True)
+class BriefNudge:
+    """A finish-your-setup prompt: a declared tool that is not connected yet.
+
+    **Not a `BriefItem`, and the separation is the point.** The findings ranking
+    is "a ranking, not a recommendation" (ADR 0029) — it says what was observed
+    and never what to do. A nudge is the opposite by design: an action. Keeping
+    the two in different fields is what lets the ranking stay pure while the brief
+    region still carries the one call to action the product has always made
+    honestly — a *declared* tool, with the capability its connection unlocks named
+    from the catalogue (doc/09 §3). It is grounded in a fact the customer gave us
+    ("we run HubSpot"), not in advice nobody computed, which is why it does not
+    cross the line ADR 0029 draws.
+    """
+
+    headline: str
+    """What to do, from the tool catalogue — e.g. "Connecting HubSpot"."""
+
+    unlocks: str
+    """The capability the connection turns on — the catalogue's own sentence,
+    never invented here."""
+
+    href: str = "/settings"
+    """Where the action happens. One place, so a route rename is one edit."""
+
+
+@dataclass(frozen=True, slots=True)
 class Brief:
     state: BriefState
     items: tuple[BriefItem, ...]
@@ -114,6 +140,11 @@ class Brief:
     comes from the API so one wording change reaches every surface, and so a
     screen cannot ship with the space drawn and the copy forgotten.
     """
+
+    nudges: tuple[BriefNudge, ...] = ()
+    """Finish-your-setup prompts, independent of the findings `items` and of the
+    brief `state` — a workspace with no crawl (`NOT_MEASURED`) still has declared
+    tools worth connecting, so these are set in every state."""
 
     @property
     def points_lost(self) -> int:
@@ -162,6 +193,7 @@ def compose(
     expected: frozenset[str],
     unobserved: int,
     also_measured: frozenset[str] = frozenset(),
+    nudges: tuple[BriefNudge, ...] = (),
 ) -> Brief:
     """Assemble the brief from what was computed for this reader.
 
@@ -230,6 +262,7 @@ def compose(
             checks_total=0,
             measured_on="",
             message=_ABSENT,
+            nudges=nudges,
         )
 
     measured_on = min(c.measured_at for c in computations).date().isoformat()
@@ -244,6 +277,7 @@ def compose(
             checks_total=checks_total,
             measured_on=measured_on,
             message=_HELD.format(date=measured_on, unobserved=unobserved),
+            nudges=nudges,
         )
 
     return Brief(
@@ -261,4 +295,5 @@ def compose(
             lost=points_total - points_held,
             points=points_total,
         ),
+        nudges=nudges,
     )

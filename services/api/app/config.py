@@ -368,6 +368,16 @@ class Settings(BaseSettings):
     # reports `unconfigured` and the product runs without AI features.
     anthropic_api_key: SecretStr = Field(default=SecretStr(""))
 
+    # ── PageSpeed Insights (ADR 0082) ─────────────────────────
+    # A platform-held API key, not a per-workspace connection: PSI analyses any
+    # public URL, so one key lets us score a company's own site the moment
+    # onboarding completes, with no Connect step. Optional, and absent is a
+    # supported state — the `anthropic_api_key` shape (ADR 0011): no key means no
+    # PageSpeed insight, never a fabricated score. Not passed through `require()`.
+    # Wired ahead of its doc/12 Phase-18 slot because, unlike GA4/Search Console,
+    # it needs no OAuth and so does not wait on D3.
+    pagespeed_api_key: SecretStr = Field(default=SecretStr(""))
+
     anthropic_model: str = "claude-sonnet-5"
     """The fallback tier, for any call that does not pin one.
 
@@ -417,6 +427,24 @@ class Settings(BaseSettings):
     crawl_max_bytes: int = 5_000_000
     crawl_timeout_seconds: int = 15
     crawl_max_redirects: int = 5
+
+    # ── Platform admin, interim (billing's rate card) ─────────
+    # An email allowlist rather than a role or a DB column, deliberately. The
+    # admin surface here is exactly two endpoints — read and edit `price` — and
+    # a proper platform-admin role (a grant independent of any workspace
+    # membership) is a follow-up rather than something this feature should
+    # invent on its own. Same optional-setting shape as `anthropic_api_key`:
+    # absent means no admins, and the admin endpoints 403 for everyone rather
+    # than the process refusing to boot.
+    platform_admin_emails: str = ""
+
+    @property
+    def platform_admin_email_set(self) -> frozenset[str]:
+        return frozenset(
+            email.strip().lower()
+            for email in self.platform_admin_emails.split(",")
+            if email.strip()
+        )
 
     # ── Trusted proxies (ADR 0046, `doc/18` G6) ───────────────
     # Restored — the anonymous scanner is an anonymous crawl again, and needs

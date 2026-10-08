@@ -34,7 +34,7 @@ from app.main import create_app
 from tests.dburl import async_database_url, database_url
 
 APP_DIR = Path(__file__).resolve().parents[1] / "app"
-PASSWORD = "correct-horse-battery-staple"
+PASSWORD = "Correct-horse-battery-staple1"
 SIGNING_SECRET = "test-signing-secret-not-a-real-one"
 
 DB_URL = database_url()

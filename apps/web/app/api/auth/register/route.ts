@@ -26,5 +26,8 @@ export async function POST(request: Request) {
       phone: body.phone ?? null,
     },
     unavailable: 'Accounts are unavailable right now.',
+    // Above the client's 40s ceiling (see `SLOW_DB_TIMEOUT_MS`): the browser
+    // owns the deadline, so this leg must not abort a cold-start write first.
+    timeoutMs: 45_000,
   })
 }
