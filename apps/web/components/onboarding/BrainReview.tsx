@@ -68,8 +68,14 @@ export function BrainReview({
                 <span className="ml-1.5 font-normal text-ink-400">· {group.subtitle}</span>
               </p>
               <ul className="mt-2 flex flex-col gap-2.5">
-                {group.items.map((item) => (
-                  <li key={item.id} className="rounded-xl border border-bone-200 bg-white/90 p-3">
+                {group.items.map((item, index) => (
+                  // `item.id` is the field key, and one field (e.g.
+                  // `persona.priority_topics`) legitimately yields several items,
+                  // so the id alone is not unique — the index disambiguates.
+                  <li
+                    key={`${group.key}-${item.id}-${index}`}
+                    className="rounded-xl border border-bone-200 bg-white/90 p-3"
+                  >
                     <p className="text-[11px] font-medium text-ink-500">{item.label}</p>
                     <p className="mt-0.5 text-sm leading-snug text-ink-800">{item.value}</p>
                     <span
