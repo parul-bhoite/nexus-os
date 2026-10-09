@@ -16,6 +16,7 @@ import {
   type FactSourceKind,
 } from '@/lib/brain-facts'
 import { linkFactToTurns, summariseSources, type Source } from '@/lib/brain-sources'
+import { fetchInsights, type Insight } from '@/lib/dashboard-client'
 import { fetchQuestions } from '@/lib/onboarding-client'
 import { fetchBrain, type Brain } from '@/lib/settings-client'
 import { readState, type Turn } from '@/lib/agent-onboarding-client'
@@ -77,6 +78,10 @@ type LoadState =
        *  state could not be read. Never an error on its own; see `load`. */
       turns: Turn[]
       sources: Source[]
+      /** Measured connector insights (ADR 0085). Read from the ungated
+       *  `/insights`, so the Brain shows them even before payment. Empty until a
+       *  connector has stored one. */
+      insights: Insight[]
     }
 
 function SearchIcon() {
@@ -108,8 +113,12 @@ export function CompanyBrainPage() {
       // `readState`'s own type for why an inactive state is not an error
       // either.
       readState().catch(() => null),
+      // Like the agent state, insights never fail this page — a connector read
+      // that broke, or none stored yet, resolves to an empty section, not a
+      // page-level error.
+      fetchInsights().catch(() => []),
     ])
-      .then(([brain, questions, agentState]) => {
+      .then(([brain, questions, agentState, insights]) => {
         const turns = agentState?.turns ?? []
         const facts = buildFacts(brain, questions.questions)
         setState({
@@ -119,6 +128,7 @@ export function CompanyBrainPage() {
           assumptions: assumptionFacts(brain),
           turns,
           sources: summariseSources(brain, questions.questions, turns, agentState?.pages_read ?? []),
+          insights,
         })
         // Land on the view that actually has content. Every agent-onboarded
         // workspace has a conversation before it has assembled facts (the agent
@@ -151,7 +161,7 @@ export function CompanyBrainPage() {
     return <Failed retry={load}>{state.message}</Failed>
   }
 
-  const { brain, facts, assumptions, turns, sources } = state
+  const { brain, facts, assumptions, turns, sources, insights } = state
 
   const brainIsEmpty =
     !brain || Boolean(brain.unavailable_reason) || (facts.length === 0 && assumptions.length === 0)
@@ -215,6 +225,43 @@ export function CompanyBrainPage() {
           setView('conversation')
         }}
       />
+
+      {insights.length > 0 ? (
+        <section
+          aria-labelledby="insights-heading"
+          className="rounded-data border border-ink-100 bg-white px-5 py-4 shadow-e1"
+        >
+          <p id="insights-heading" className="text-meta font-medium text-ink-700">
+            Insights measured from your tools
+          </p>
+          <p className="mt-1 max-w-prose text-meta leading-relaxed text-ink-600">
+            Figures read from the tools you have connected — not stated by you and not
+            computed from the website. Each carries where and when it was measured.
+          </p>
+          <ul className="mt-3 flex flex-col gap-2.5">
+            {insights.map((insight) => (
+              <li
+                key={`${insight.source}:${insight.metric_key}`}
+                className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1"
+              >
+                <span className="text-body text-ink-800">
+                  <span className="capitalize">{insight.metric_key.replace(/_/g, ' ')}</span>
+                  <span className="ml-2 font-mono text-ink-900">
+                    {insight.value_numeric !== null
+                      ? insight.unit
+                        ? `${insight.value_numeric} ${insight.unit}`
+                        : `${insight.value_numeric}`
+                      : (insight.value_text ?? '')}
+                  </span>
+                </span>
+                <span className="font-mono text-2xs text-ink-400">
+                  {insight.provenance} · {new Date(insight.captured_at).toLocaleDateString()}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {assumptions.length > 0 ? (
         <section

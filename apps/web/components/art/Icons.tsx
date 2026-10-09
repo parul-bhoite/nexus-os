@@ -64,6 +64,21 @@ export const IconNothing = wrap(
 
 export const IconCheck = wrap(<path d="m4.5 12.5 4.8 4.8L19.5 7" />)
 
+export const IconEye = wrap(
+  <>
+    <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
+    <circle cx="12" cy="12" r="3" />
+  </>,
+)
+
+export const IconEyeOff = wrap(
+  <>
+    <path d="M9.9 5.1A9.6 9.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16.2 16.2 0 0 1-2.9 3.5M6.2 6.7A15.6 15.6 0 0 0 2.5 12S6 18.5 12 18.5a9.1 9.1 0 0 0 4-.9" />
+    <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+    <path d="M3 3l18 18" />
+  </>,
+)
+
 export const IconMinus = wrap(<path d="M6 12h12" />)
 
 export const IconPlus = wrap(<path d="M12 6v12M6 12h12" />)

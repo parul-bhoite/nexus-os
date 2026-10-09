@@ -168,6 +168,7 @@ def workspace(engine: Engine) -> Iterator[tuple[UUID, UUID]]:
 @pytest.fixture
 def client(app_db: None, workspace: tuple[UUID, UUID]) -> Iterator[TestClient]:
     from app.deps import current_scope
+    from app.deps_entitlement import require_entitled
     from app.routes.dashboards import answered_questions, running_departments
 
     user, ws = workspace
@@ -181,6 +182,9 @@ def client(app_db: None, workspace: tuple[UUID, UUID]) -> Iterator[TestClient]:
     )
     app.dependency_overrides[running_departments] = lambda: frozenset(Department)
     app.dependency_overrides[answered_questions] = lambda: frozenset()
+    # This file is not about the paywall (ADR 0084) — the seeded workspace has no
+    # subscription, so let every dashboard call through.
+    app.dependency_overrides[require_entitled] = lambda: None
     with TestClient(app) as made:
         yield made
     app.dependency_overrides.clear()

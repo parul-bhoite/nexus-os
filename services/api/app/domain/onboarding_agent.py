@@ -49,26 +49,29 @@ from app.logging import get_logger
 
 log = get_logger(__name__)
 
-MAX_QUESTIONS = 5
+MAX_QUESTIONS = 8
 """A hard ceiling on the interview, independent of what the model wants.
 
 Primarily a termination guarantee. Without it a skill that never returns `done`
-walks a person through the entire catalogue — roughly twenty-three askable
-fields — and the failure looks like the product being tedious rather than like a
-bug.
+walks a person through the entire catalogue — roughly a dozen askable fields for
+a department, more when none was given — and the failure looks like the product
+being tedious rather than like a bug.
 
-It was 14, which was a ceiling nobody expected to reach and which the model
-therefore reached: `question-generation` is asked "what should we ask next" and
-there is always a defensible next field, so the ceiling became the *length*. A
-person signing up met fifteen prose questions before seeing the product, which
-is the point at which onboarding stops collecting better answers and starts
-collecting shorter ones.
+The number is a product dial, moved twice. It was 14 — a ceiling nobody expected
+to reach, which the model therefore reached, because `question-generation` is
+asked "what should we ask next" and there is always a defensible next field, so
+the ceiling became the *length*. It was then cut to 5, which went too far the
+other way: with only five picks from a dozen fields the model took the same
+highest-value few every run, and the interview read as a fixed form rather than
+a conversation — the same questions, in the same order, for everyone.
 
-Five, plus the opening free-text turn, is the interview. Everything else is a
-question the workspace can ask later, in context, when it has a reason to —
-which is a better question anyway, because by then the person has seen what the
-answer is for. Nothing is lost by not asking now: an unanswered field is a
-`known_gap` with its own unlock, and that is what the gap list is for.
+Eight, plus the opening free-text turn, is the interview. It is enough coverage
+that two runs genuinely diverge and that a thread the person opens can be
+followed a step, while still well short of the catalogue. Everything beyond it
+is a question the workspace can ask later, in context, when it has a reason to —
+a better question anyway, because by then the person has seen what the answer is
+for. Nothing is lost by not asking now: an unanswered field is a `known_gap`
+with its own unlock, and that is what the gap list is for.
 """
 
 MAX_REJECTIONS = 4

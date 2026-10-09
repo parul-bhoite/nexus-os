@@ -262,7 +262,10 @@ FUTURE: dict[str, str] = {
     "NEXUS_DATAFORSEO_PASSWORD": "P11/P16 — keyword volumes, never estimated (D2)",
     "NEXUS_GOOGLE_CLIENT_ID": "P18 — GA4 and Search Console OAuth (D3)",
     "NEXUS_GOOGLE_CLIENT_SECRET": "P18 — GA4 and Search Console OAuth (D3)",
-    "NEXUS_PAGESPEED_API_KEY": "P18 — PageSpeed Insights (D3)",
+    # NEXUS_PAGESPEED_API_KEY was here, deferred to P18/D3. It is now a real
+    # `Settings` field (ADR 0082): PageSpeed needs only a platform API key, not
+    # OAuth, so it does not wait on D3 and is wired as its own source. The two
+    # tests below now check it like any other optional setting.
     # doc/14 step 9 has emptied this section. `NEXUS_CONNECTOR_SECRET_KEY` and
     # the three `NEXUS_HUBSPOT_*` variables are all real `Settings` fields now,
     # so they are checked by the two tests above rather than excused here. What

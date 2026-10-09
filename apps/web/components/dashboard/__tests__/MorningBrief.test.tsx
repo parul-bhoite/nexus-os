@@ -48,6 +48,7 @@ function brief(overrides: Partial<Brief> = {}): Brief {
     checks_passed: 10,
     checks_total: 18,
     measured_on: '2026-09-16',
+    nudges: [],
     ...overrides,
   }
 }
@@ -59,6 +60,29 @@ describe('the three states all render something', () => {
     expect(screen.getByText(/8 of 18 checks did not hold/)).toBeTruthy()
     expect(screen.getByText(/50 of 135 points not held/)).toBeTruthy()
     expect(screen.getByText('Served over HTTPS')).toBeTruthy()
+  })
+
+  it('shows finish-your-setup nudges with a link to settings, in any state', () => {
+    render(
+      <MorningBrief
+        brief={brief({
+          state: 'not_measured',
+          items: [],
+          message: 'No page has been fetched.',
+          measured_on: '',
+          nudges: [{ headline: 'Connecting HubSpot', unlocks: 'pipeline answers', href: '/settings' }],
+        })}
+      />,
+    )
+    expect(screen.getByText('Finish setting up')).toBeTruthy()
+    expect(screen.getByText('Connecting HubSpot')).toBeTruthy()
+    const links = screen.getAllByRole('link', { name: /connect in settings/i })
+    expect(links.some((a) => a.getAttribute('href') === '/settings')).toBe(true)
+  })
+
+  it('renders no nudge block when there is nothing to connect', () => {
+    render(<MorningBrief brief={brief({ nudges: [] })} />)
+    expect(screen.queryByText('Finish setting up')).toBeNull()
   })
 
   it('states full marks and the server’s limits sentence in the same card', () => {

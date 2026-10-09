@@ -12,5 +12,8 @@ export async function POST(request: Request) {
     method: 'POST',
     body: { email: body.email, password: body.password },
     unavailable: 'Sign-in is unavailable right now.',
+    // Above the client's 40s ceiling (see `SLOW_DB_TIMEOUT_MS`): the browser
+    // owns the deadline, so this leg must not abort a cold-start login first.
+    timeoutMs: 45_000,
   })
 }

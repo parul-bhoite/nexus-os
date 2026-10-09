@@ -378,8 +378,32 @@ export function submitAnswer(text: string): Promise<AnswerTurn> {
  * session row. This function deliberately sends nothing: a client that could
  * name the stage could skip one.
  */
+/**
+ * Single-flighted: a second caller that arrives while a `finish` is already in
+ * flight is handed the *same* promise rather than issuing a second POST.
+ *
+ * The assembly loop awaits each `finish` before the next, so a well-behaved
+ * single loop never overlaps itself — this coalescing is a no-op for it and only
+ * bites when two loops run at once. That happened: React re-invokes an effect,
+ * or the resumed entry drives assembly while this component also does, and the
+ * extra `finish` lands after the first loop already reached `ready`. Earlier
+ * calls returned 200, the component sat awaiting that spurious one, and a blip
+ * on the shared database left it pending for ever — the build hung on a screen
+ * that said "Building…" with nothing left to build.
+ *
+ * `.finally` clears the latch whichever way the request settles, so a failed
+ * `finish` (a Retry, a dropped connection) does not wedge every call after it.
+ */
+let finishInFlight: Promise<AgentState> | null = null
+
 export function finish(): Promise<AgentState> {
-  return call<AgentState>('/api/onboarding/agent/finish', { method: 'POST' })
+  if (finishInFlight) return finishInFlight
+  finishInFlight = call<AgentState>('/api/onboarding/agent/finish', { method: 'POST' }).finally(
+    () => {
+      finishInFlight = null
+    },
+  )
+  return finishInFlight
 }
 
 /** What the next `finish()` call will be doing, keyed by the phase it starts from. */

@@ -9,7 +9,25 @@ import { HttpError, httpJson } from '@/lib/http'
  */
 
 /** Mirrors the API's `MIN_PASSWORD_LENGTH`. Checked there too; this is only so the form can say so first. */
-export const MIN_PASSWORD_LENGTH = 12
+export const MIN_PASSWORD_LENGTH = 8
+
+/** One sentence the form can show for the new password's rules, kept in step
+ *  with the API's `validate_password`. */
+export const PASSWORD_HINT = `At least ${MIN_PASSWORD_LENGTH} characters, with a capital letter and a number.`
+
+/**
+ * The first rule a password breaks, as a sentence to show — or `undefined` when
+ * it passes. Mirrors the API's `validate_password` so the form can say so
+ * before the round trip; the server is still the authority.
+ */
+export function passwordProblem(password: string): string | undefined {
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return `Your password needs at least ${MIN_PASSWORD_LENGTH} characters.`
+  }
+  if (!/[A-Z]/.test(password)) return 'Add a capital letter.'
+  if (!/[0-9]/.test(password)) return 'Add a number.'
+  return undefined
+}
 
 export type WorkspaceSummary = {
   workspace_id: string
@@ -122,21 +140,36 @@ async function post(path: string, body?: unknown, timeoutMs?: number): Promise<u
  * "founder" is not a name, and greeting somebody by their inbox is worse than
  * not greeting them.
  */
+/**
+ * Register and sign-in run against the dev database (Neon serverless, us-east-2),
+ * which suspends when idle and cold-starts in ~30s on the first request, and is
+ * several seconds even warm because every statement round-trips to the region.
+ * The default 20s client ceiling aborts a cold-start attempt mid-flight — which
+ * looks like "registration failed" while the account was in fact created — so
+ * these two give the request room to finish. Kept here, not in `http.ts`, so it
+ * is only the credential path that waits this long.
+ */
+const SLOW_DB_TIMEOUT_MS = 40_000
+
 export async function register(
   email: string,
   password: string,
   { displayName, phone }: { displayName?: string; phone?: string } = {},
 ): Promise<void> {
-  await post('/api/auth/register', {
-    email,
-    password,
-    display_name: displayName?.trim() || null,
-    phone: phone?.trim() || null,
-  })
+  await post(
+    '/api/auth/register',
+    {
+      email,
+      password,
+      display_name: displayName?.trim() || null,
+      phone: phone?.trim() || null,
+    },
+    SLOW_DB_TIMEOUT_MS,
+  )
 }
 
 export async function login(email: string, password: string): Promise<SessionState> {
-  return (await post('/api/auth/login', { email, password })) as SessionState
+  return (await post('/api/auth/login', { email, password }, SLOW_DB_TIMEOUT_MS)) as SessionState
 }
 
 export async function logout(): Promise<void> {

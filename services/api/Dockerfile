@@ -41,6 +41,13 @@ COPY migrations ./migrations
 COPY alembic.ini ./
 RUN pip install -e . --no-deps
 
+# The optional Anthropic SDK (the `[ai]` extra). Base deps above install with
+# `--no-deps`, so the vendor package is pulled here explicitly. It is imported
+# lazily in `app/ai/anthropic_provider.py`; `NEXUS_ANTHROPIC_API_KEY` activates
+# it at runtime (ADR 0011). Installed in a separate, non-hashed invocation on
+# purpose — the lockfile above deliberately omits it.
+RUN pip install "anthropic>=0.40"
+
 # Non-root, and the directory is owned rather than merely writable: the app
 # writes uploads and mail under /app when the filesystem drivers are in use.
 RUN useradd --create-home --uid 10001 nexus \

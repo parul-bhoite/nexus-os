@@ -1,114 +1,163 @@
 'use client'
 
 import { motion, useReducedMotion } from 'framer-motion'
-import { PaperLandscape } from '@/components/art/PaperLandscape'
 import { Button, ArrowRight } from '@/components/ui/Button'
 import { RevealWords } from '@/components/motion/Reveal'
 import { IconSparkle, IconCheck } from '@/components/art/Icons'
 import { hero } from '@/lib/content'
-import { usePointerParallax } from '@/lib/hooks'
 
 /* Entrance animations here are CSS classes (`animate-rise`, `animate-rise-scale`,
    `animate-fade-in` in globals.css), not framer-motion.
- 
+
    Everything in this section is above the fold. A JS-driven entrance writes its
    hidden state into the server HTML, so the hero renders at `opacity: 0` and
    stays there until React hydrates — a blank first paint on a slow connection,
    and a permanently blank one if the bundle fails. CSS keyframes run at first
    paint with no bundle and no hydration, and the global reduced-motion rule
    collapses their duration instead of leaving anything hidden.
- 
+
    framer-motion is still the right tool below the fold, where reveals need
-   viewport detection and the bundle has long since arrived. */
+   viewport detection and the bundle has long since arrived. The one in-view-
+   independent exception here is the sparkline/bar growth, which is above the
+   fold and short — it is cheap and never gates a click. */
 
 /**
  * The `Illustrative` marker every product mock must carry.
  *
  * CLAUDE.md's content rule is not decoration: the product sells on never
- * inventing a number, and these cards show numbers that were invented for the
- * page. Same wording as `LoopMock`'s frame so the label reads as one convention
- * rather than two.
- *
- * A footnote at the bottom of the page is not sufficient — these cards are
- * screenshot-shaped, and the screenshot travels without the footnote.
+ * inventing a number, and these cards show numbers invented for the page. The
+ * label travels with the card because the card is screenshot-shaped — a footnote
+ * at the foot of the page does not.
  */
 function IllustrativeTag() {
   return (
-    <span className="ml-auto shrink-0 rounded-md bg-bone-200 px-1.5 py-0.5 font-mono text-2xs uppercase tracking-[0.14em] text-ink-500">
+    <span className="ml-auto shrink-0 rounded-md bg-bone-100 px-1.5 py-0.5 font-mono text-2xs uppercase tracking-[0.14em] text-ink-500">
       Illustrative
     </span>
   )
 }
 
-/** A product fragment that floats over the illustration — shape, not real data. */
-function FloatingBrief() {
+/** A cited source chip — the shape of the product's central promise. */
+function Source({ name }: { name: string }) {
   return (
-    <div
-      style={{ animationDelay: '0.85s' }}
-      className="animate-rise-scale absolute -left-2 top-[22%] w-[17.5rem] rounded-2xl border border-bone-300/80 bg-white/90 p-4 shadow-paper-lg backdrop-blur-md sm:-left-8"
-    >
+    <span className="rounded-md bg-bone-100 px-1.5 py-0.5 font-mono text-2xs text-ink-500">
+      {name}
+    </span>
+  )
+}
+
+/**
+ * The hero's proof, as one stacked cluster of product fragments rather than a
+ * decorative illustration (ADR 0072). Each card says something true about what
+ * NEXUS is: a single brain grounded in cited sources, a number that carries its
+ * origin, and one team across every department. Shape, not real data.
+ */
+
+/** 1 — the Company Brain, grounded in connected sources. */
+function BrainCard() {
+  return (
+    <div className="surface relative z-20 w-full rounded-card p-5 shadow-e2">
       <div className="flex items-center gap-2">
         <span className="relative flex h-2 w-2">
           <span className="absolute inline-flex h-full w-full rounded-full bg-gold-400 opacity-75 motion-safe:animate-pulse-ring" />
           <span className="relative inline-flex h-2 w-2 rounded-full bg-gold-500" />
         </span>
-        <span className="font-mono text-2xs uppercase tracking-[0.18em] text-ink-400">
-          Morning Brief
+        <span className="font-mono text-2xs uppercase tracking-[0.18em] text-ink-500">
+          Company Brain
         </span>
         <IllustrativeTag />
       </div>
-      <p className="mt-2.5 text-[0.92rem] font-medium leading-snug text-ink-800">
-        Pipeline value rose while three deals went quiet for 11 days.
+      <p className="mt-3 font-display text-card font-semibold text-ink-900">
+        Grounded in 6 connected sources
       </p>
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {['CRM', 'GA4'].map((s) => (
-          <span
-            key={s}
-            className="rounded-md bg-bone-100 px-1.5 py-0.5 font-mono text-2xs text-ink-500"
-          >
-            source: {s}
-          </span>
+      <p className="mt-1.5 text-meta text-ink-500">
+        Every answer cites where it came from — nothing is invented.
+      </p>
+      <div className="mt-3.5 flex flex-wrap gap-1.5">
+        {['Website', 'CRM', 'GA4', 'Docs', 'Xero'].map((s) => (
+          <Source key={s} name={s} />
         ))}
       </div>
     </div>
   )
 }
 
-function FloatingScore() {
+/** 2 — a number that carries its source and its direction. */
+function MetricCard() {
+  const reduced = useReducedMotion()
+  // A monochrome sparkline; the only colour is the amber endpoint — the spark.
+  const pts = [4, 9, 7, 14, 12, 20, 17, 27, 31]
+  const max = 34
+  const path = pts
+    .map((v, i) => `${(i / (pts.length - 1)) * 200},${48 - (v / max) * 40}`)
+    .join(' ')
+  const last = { x: 200, y: 48 - (pts[pts.length - 1] / max) * 40 }
+
   return (
-    <div
-      style={{ animationDelay: '1.05s' }}
-      className="animate-rise-scale absolute -right-1 bottom-[16%] w-[14.5rem] rounded-2xl border border-bone-300/80 bg-white/90 p-4 shadow-paper-lg backdrop-blur-md sm:-right-6"
-    >
+    <div className="surface relative z-10 w-[17rem] max-w-full -rotate-1 rounded-card p-5 shadow-e2">
       <div className="flex items-center gap-2">
-        <span className="font-mono text-2xs uppercase tracking-[0.18em] text-ink-400">
-          Health Score
+        <span className="font-mono text-2xs uppercase tracking-[0.18em] text-ink-500">
+          Cash on hand
         </span>
         <IllustrativeTag />
       </div>
-      <div className="mt-1 flex items-baseline justify-end">
-        <span className="font-mono text-2xs text-clay-500">+4 wk</span>
+      <div className="mt-2 flex items-baseline gap-2">
+        <span className="font-display text-figure-sm font-extrabold tabular-nums text-ink-950">
+          OMR 48,200
+        </span>
+        <span className="font-mono text-2xs font-medium text-ink-700">▲ 12.4%</span>
       </div>
-      <div className="mt-2 flex items-end gap-1.5">
-        <span className="font-display text-4xl leading-none text-ink-800">72</span>
-        <span className="pb-1 text-xs text-ink-400">/ 100</span>
+      <svg
+        viewBox="0 0 200 56"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+        className="mt-3 h-12 w-full overflow-visible"
+      >
+        <motion.polyline
+          points={path}
+          fill="none"
+          className="stroke-ink-800"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          initial={reduced ? false : { pathLength: 0 }}
+          animate={reduced ? undefined : { pathLength: 1 }}
+          transition={{ duration: 1.1, delay: 1.1, ease: [0.16, 1, 0.3, 1] }}
+        />
+        <circle cx={last.x} cy={last.y} r="3.5" className="fill-gold-500" />
+      </svg>
+      <div className="mt-2.5">
+        <Source name="source: Xero" />
       </div>
-      <div className="mt-3 space-y-1.5">
-        {[
-          { label: 'Sales', v: 84 },
-          { label: 'Marketing', v: 61 },
-          { label: 'Finance', v: 77 },
-        ].map((d, i) => (
-          <div key={d.label} className="flex items-center gap-2">
-            <span className="w-16 shrink-0 text-2xs text-ink-500">{d.label}</span>
-            <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-bone-200">
-              <motion.span
-                initial={{ width: 0 }}
-                animate={{ width: `${d.v}%` }}
-                transition={{ duration: 1.1, delay: 1.3 + i * 0.12, ease: [0.16, 1, 0.3, 1] }}
-                className="block h-full rounded-full bg-steel-500"
-              />
+    </div>
+  )
+}
+
+/** 3 — one brain, every department. */
+function DepartmentsCard() {
+  const depts = [
+    { k: 'S', name: 'Sales' },
+    { k: 'M', name: 'Marketing' },
+    { k: 'O', name: 'Ops' },
+    { k: 'P', name: 'People' },
+    { k: 'F', name: 'Finance' },
+    { k: '◆', name: 'Chief of Staff' },
+  ]
+  return (
+    <div className="surface relative z-20 ml-auto w-[16rem] max-w-full rotate-1 rounded-card p-5 shadow-e2">
+      <span className="font-mono text-2xs uppercase tracking-[0.18em] text-ink-500">
+        Every department, one brain
+      </span>
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        {depts.map((d) => (
+          <div
+            key={d.name}
+            className="flex flex-col items-center gap-1 rounded-data bg-bone-50 py-2.5"
+          >
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-ink-950 font-display text-xs font-bold text-bone-50">
+              {d.k}
             </span>
+            <span className="text-2xs text-ink-500">{d.name}</span>
           </div>
         ))}
       </div>
@@ -116,26 +165,38 @@ function FloatingScore() {
   )
 }
 
-export function Hero() {
-  const reduced = useReducedMotion()
-  const parallax = usePointerParallax(!!reduced)
+/** The brand X, ghosted large behind the cluster. */
+function XWatermark() {
+  return (
+    <svg
+      viewBox="0 0 100 100"
+      aria-hidden="true"
+      className="pointer-events-none absolute -right-10 -top-12 -z-0 h-[26rem] w-[26rem] opacity-70"
+      fill="none"
+    >
+      <line x1="26" y1="26" x2="74" y2="74" className="stroke-ink-100" strokeWidth="11" strokeLinecap="round" />
+      <line x1="26" y1="74" x2="50" y2="50" className="stroke-ink-100" strokeWidth="11" strokeLinecap="round" />
+      <line x1="50" y1="50" x2="74" y2="26" className="stroke-gold-200" strokeWidth="11" strokeLinecap="round" />
+    </svg>
+  )
+}
 
+export function Hero() {
   return (
     <section id="top" className="relative overflow-hidden pt-32 lg:pt-36">
-      {/* Ambient wash — very light, keeps the page white while adding depth. */}
+      {/* Ambient wash — a faint neutral lift plus one breath of amber, keeping the
+          page white (ADR 0072). */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-[46rem] bg-[radial-gradient(60rem_36rem_at_72%_18%,rgba(55,114,156,0.10),transparent_65%),radial-gradient(38rem_26rem_at_12%_8%,rgba(239,191,106,0.14),transparent_70%)]"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[46rem] bg-[radial-gradient(60rem_36rem_at_72%_16%,rgba(11,12,14,0.05),transparent_64%),radial-gradient(34rem_24rem_at_10%_6%,rgba(226,136,31,0.10),transparent_70%)]"
       />
 
       <div className="shell relative">
-        <div className="grid items-center gap-14 lg:grid-cols-[1.05fr_1fr] lg:gap-10">
+        <div className="grid items-center gap-14 lg:grid-cols-[1.05fr_1fr] lg:gap-12">
           {/* ── Copy ─────────────────────────────────────────── */}
           <div className="relative z-10 max-w-2xl">
-            <div
-              className="animate-rise inline-flex items-center gap-2 rounded-full border border-bone-300 bg-white/70 py-1.5 pl-2 pr-4 shadow-paper backdrop-blur"
-            >
-              <span className="grid h-6 w-6 place-items-center rounded-full bg-gold-200 text-gold-600">
+            <div className="animate-rise inline-flex items-center gap-2 rounded-full border border-bone-300 bg-white/70 py-1.5 pl-2 pr-4 shadow-paper backdrop-blur">
+              <span className="grid h-6 w-6 place-items-center rounded-full bg-gold-100 text-gold-700">
                 <IconSparkle className="h-3.5 w-3.5" />
               </span>
               <span className="font-mono text-2xs uppercase tracking-[0.18em] text-ink-600">
@@ -147,7 +208,7 @@ export function Hero() {
               <RevealWords text={hero.headlineTop} delay={0.15} />{' '}
               <span className="relative inline-block">
                 <RevealWords text={hero.headlineAccent} delay={0.28} />
-                {/* Hand-drawn underline, drawn on after the words land. */}
+                {/* Hand-drawn underline, drawn on after the words land — the spark. */}
                 <motion.svg
                   viewBox="0 0 340 18"
                   preserveAspectRatio="none"
@@ -167,11 +228,7 @@ export function Hero() {
                 </motion.svg>
               </span>
               <br />
-              <RevealWords
-                text={hero.headlineBottom}
-                delay={0.42}
-                wordClassName="text-ink-500"
-              />
+              <RevealWords text={hero.headlineBottom} delay={0.42} wordClassName="text-ink-500" />
             </h1>
 
             <p
@@ -181,12 +238,7 @@ export function Hero() {
               {hero.sub}
             </p>
 
-            {/* `doc/11` Q1 (D18): one action, and it is sign up. This was a URL
-                field feeding the unauthenticated Preview audit, which Phase 2
-                retired — a stranger could type a competitor's address and be
-                handed an analysis of a company they do not own. The website is
-                asked for at stage 2 instead, once there is an account to attach
-                it to, and the crawl starts there. */}
+            {/* `doc/11` Q1 (D18): one action, and it is sign up. */}
             <div
               style={{ animationDelay: '0.84s' }}
               className="animate-rise mt-9 flex flex-col items-start gap-3 sm:flex-row sm:items-center"
@@ -203,17 +255,11 @@ export function Hero() {
               style={{ animationDelay: '1s' }}
               className="animate-fade-in mt-6 flex items-start gap-2 text-sm text-ink-400"
             >
-              <IconCheck className="mt-0.5 h-4 w-4 shrink-0 text-steel-500" />
+              <IconCheck className="mt-0.5 h-4 w-4 shrink-0 text-ink-500" />
               {hero.note}
             </p>
 
-            {/* G10, ADR 0046. Deliberately `quiet` — sign-up stays the one
-                primary action per Q1/D18's own reasoning above; this is a
-                second door for a visitor not ready to create an account yet,
-                not a second competing call to action. Not the retired hero
-                URL form: that fed the unauthenticated Preview audit directly
-                on this page; this is a link to `/scan`, its own screen with
-                its own narrow, rate-limited, robots-respecting crawl. */}
+            {/* G10, ADR 0046. A second, quiet door — not a competing CTA. */}
             <div style={{ animationDelay: '1.1s' }} className="animate-fade-in mt-3">
               <Button href="/scan" variant="quiet" size="sm">
                 Or see 3 real gaps on your own site first
@@ -221,15 +267,18 @@ export function Hero() {
             </div>
           </div>
 
-          {/* ── Illustration ─────────────────────────────────── */}
+          {/* ── Product proof cluster ────────────────────────── */}
           <div
             style={{ animationDelay: '0.25s' }}
-            className="animate-rise-scale relative mx-auto w-full max-w-[34rem] lg:max-w-none"
+            className="animate-rise-scale relative mx-auto w-full max-w-[32rem] lg:max-w-none"
           >
-            <div className="relative">
-              <PaperLandscape parallax={parallax} className="w-full drop-shadow-[0_40px_80px_rgba(9,31,70,0.16)]" />
-              <FloatingBrief />
-              <FloatingScore />
+            <XWatermark />
+            <div className="relative flex flex-col gap-4">
+              <BrainCard />
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                <MetricCard />
+                <DepartmentsCard />
+              </div>
             </div>
           </div>
         </div>

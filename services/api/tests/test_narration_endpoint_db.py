@@ -189,6 +189,7 @@ def client(
     from app.config import get_settings
     from app.db import get_engine, get_sessionmaker
     from app.deps import current_scope
+    from app.deps_entitlement import require_entitled
     from app.domain.scopes import Department
     from app.routes.dashboards import running_departments
 
@@ -201,6 +202,8 @@ def client(
     user, ws = user_and_workspace
     app = create_app()
     app.dependency_overrides[current_scope] = lambda: _scope(user, ws)
+    # Not the paywall's test (ADR 0084): the seeded workspace has no subscription.
+    app.dependency_overrides[require_entitled] = lambda: None
     app.dependency_overrides[running_departments] = lambda: frozenset(Department)
     # **Monkeypatched, not dependency-overridden.** `narrate_block` calls
     # `get_provider()` directly rather than through `Depends`, matching the one

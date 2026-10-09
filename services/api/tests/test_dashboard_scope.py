@@ -56,6 +56,7 @@ def _override_departments(app: object) -> None:
     runs at all. Overriding it keeps these tests about the one thing they were
     written for; `tests/test_onboarding_spine.py` covers the other.
     """
+    from app.deps_entitlement import require_entitled
     from app.domain.scopes import Department
     from app.routes.dashboards import (
         Observed,
@@ -64,6 +65,10 @@ def _override_departments(app: object) -> None:
         running_departments,
     )
 
+    # The entitlement gate (ADR 0084) reads the database too; hermetic here, and
+    # these tests are about the permission lattice, not the paywall — overridden
+    # for the same reason as the three below.
+    app.dependency_overrides[require_entitled] = lambda: None  # type: ignore[attr-defined]
     app.dependency_overrides[running_departments] = lambda: frozenset(Department)  # type: ignore[attr-defined]
     # Q27's counter reads the database too. Overridden for the same reason: these
     # tests are about the permission lattice, and `test_question_bank.py` covers
@@ -173,6 +178,11 @@ def test_the_list_carries_no_count_of_what_was_removed(client: TestClient) -> No
 
     for key, value in payload.items():
         if key == "directors":
+            continue
+        # `bool` is a subclass of `int`, but a feature flag (e.g.
+        # `assistant_enabled`) cannot encode how many directors were filtered —
+        # only a genuine count can, which is what this rule forbids.
+        if isinstance(value, bool):
             continue
         assert not isinstance(value, int) or key == "delivered_count", (
             f"{key} could disclose how many directors were filtered out"

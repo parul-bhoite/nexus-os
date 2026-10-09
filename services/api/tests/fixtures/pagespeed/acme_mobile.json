@@ -1,0 +1,16 @@
+{
+  "captchaResult": "CAPTCHA_NOT_NEEDED",
+  "id": "https://acme.test/",
+  "lighthouseResult": {
+    "requestedUrl": "https://acme.test/",
+    "finalUrl": "https://acme.test/",
+    "categories": {
+      "performance": {
+        "id": "performance",
+        "title": "Performance",
+        "score": 0.88
+      }
+    }
+  },
+  "analysisUTCTimestamp": "2026-10-08T09:00:00.000Z"
+}

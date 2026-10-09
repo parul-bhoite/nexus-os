@@ -5,11 +5,11 @@ import { Reveal, RevealGroup, RevealItem } from '@/components/motion/Reveal'
 import { directors } from '@/lib/content'
 
 const accents: Record<string, { bg: string; fg: string; mark: string }> = {
-  gold: { bg: 'bg-gold-200', fg: 'text-gold-700', mark: '#EFBF6A' },
-  steel: { bg: 'bg-steel-100', fg: 'text-steel-600', mark: '#37729C' },
-  clay: { bg: 'bg-clay-100', fg: 'text-clay-600', mark: '#A55D35' },
-  ink: { bg: 'bg-ink-100', fg: 'text-ink-700', mark: '#091F46' },
-  slate: { bg: 'bg-slate-100', fg: 'text-slate-600', mark: '#7699AE' },
+  gold: { bg: 'bg-gold-200', fg: 'text-gold-700', mark: 'var(--accent)' },
+  steel: { bg: 'bg-steel-100', fg: 'text-steel-600', mark: 'var(--c-grey-600)' },
+  clay: { bg: 'bg-clay-100', fg: 'text-clay-600', mark: 'var(--c-grey-600)' },
+  ink: { bg: 'bg-ink-100', fg: 'text-ink-700', mark: 'var(--c-ink)' },
+  slate: { bg: 'bg-slate-100', fg: 'text-slate-600', mark: 'var(--c-grey-500)' },
 }
 
 /**
@@ -20,14 +20,14 @@ function DirectorMark({ seed, colour }: { seed: number; colour: string }) {
   const rot = (seed * 37) % 40 - 20
   return (
     <svg viewBox="0 0 64 64" className="h-14 w-14" aria-hidden="true">
-      <circle cx="32" cy="32" r="30" fill="#FFFFFF" />
+      <circle cx="32" cy="32" r="30" fill="var(--c-white)" />
       <g transform={`rotate(${rot} 32 32)`}>
         <path d="M32 8a24 24 0 0 1 24 24H32z" fill={colour} opacity="0.9" />
         <path d="M32 32h24a24 24 0 0 1-24 24z" fill={colour} opacity="0.45" />
         <path d="M8 32a24 24 0 0 1 24-24v24z" fill={colour} opacity="0.22" />
       </g>
-      <circle cx="32" cy="32" r="7" fill="#FFFFFF" />
-      <circle cx="32" cy="32" r="30" fill="none" stroke="#D8D0C7" strokeWidth="1.5" />
+      <circle cx="32" cy="32" r="7" fill="var(--c-white)" />
+      <circle cx="32" cy="32" r="30" fill="none" stroke="var(--c-line)" strokeWidth="1.5" />
     </svg>
   )
 }

@@ -72,7 +72,12 @@ export function LoginForm() {
       await login(email.trim(), password)
       // Replace rather than push: the sign-in page should not sit in history
       // behind an authenticated page, where Back would show a stale form.
-      router.replace(next ?? '/account')
+      //
+      // Default to the dashboard, which is the workspace landing and also the
+      // onboarding gate: if setup is unfinished it forwards to
+      // `/onboarding/agent`, which resumes at the last incomplete step (ADR
+      // 0075). A `next` is still honoured first for deep links.
+      router.replace(next ?? '/dashboard')
     } catch (error) {
       const message =
         error instanceof AuthError

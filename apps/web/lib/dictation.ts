@@ -142,10 +142,28 @@ export function useDictation(onTranscript: (text: string) => void): Dictation {
     }
   }, [])
 
-  const start = useCallback(() => {
+  const start = useCallback(async () => {
     const engine = recognition.current
     if (!engine) return
     setError(null)
+
+    // Ask for the microphone explicitly before starting the recogniser.
+    // Chrome's `SpeechRecognition` does not reliably raise the permission
+    // prompt on its own — on a page that has never asked it often fails
+    // straight to `not-allowed`, which is the "microphone is blocked" line
+    // people were seeing without ever being offered the choice. A short
+    // `getUserMedia` call surfaces the real dialog; its stream is released at
+    // once because the recogniser opens its own once permission is granted.
+    try {
+      if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        stream.getTracks().forEach((track) => track.stop())
+      }
+    } catch {
+      setError('The microphone is blocked. Allow it in your browser, or just type.')
+      return
+    }
+
     try {
       engine.start()
       setListening(true)

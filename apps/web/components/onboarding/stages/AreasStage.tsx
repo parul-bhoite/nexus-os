@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/Button'
 import { AuthError } from '@/lib/auth-client'
 import { fetchDepartments, saveDepartments, type DepartmentState } from '@/lib/settings-client'
+import { fetchRateCard, formatMinor, type RateCardDepartment } from '@/lib/billing-client'
 import { duration, easing, staggerGroup, useMotionSafe } from '@/lib/motion'
 
 /**
@@ -144,6 +145,9 @@ export function AreasStage({
 }) {
   const [stage, setStage] = useState<Stage>({ status: 'loading' })
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [rate, setRate] = useState<{ currency: string; byKey: Record<string, RateCardDepartment> } | null>(
+    null,
+  )
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const safe = useMotionSafe()
@@ -152,6 +156,19 @@ export function AreasStage({
     let alive = true
     async function load() {
       setStage({ status: 'loading' })
+      // The price list is supplementary: a billing hiccup must not stop the
+      // founder choosing areas, so it loads in parallel and its failure only
+      // drops the price/tool detail from the cards.
+      void fetchRateCard()
+        .then((card) => {
+          if (!alive) return
+          const byKey: Record<string, RateCardDepartment> = {}
+          for (const dept of card.departments) byKey[dept.key] = dept
+          setRate({ currency: card.currency, byKey })
+        })
+        .catch(() => {
+          if (alive) setRate(null)
+        })
       try {
         const { departments } = await fetchDepartments()
         if (!alive) return
@@ -207,11 +224,11 @@ export function AreasStage({
       </p>
 
       {stage.status === 'loading' ? (
-        <div aria-hidden className="mt-2 grid grid-cols-2 gap-4">
+        <div aria-hidden className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <div
               key={i}
-              className="h-32 animate-breathe rounded-card bg-bone-200"
+              className="h-44 animate-breathe rounded-card bg-bone-200"
               style={{ animationDelay: `${i * 0.08}s` }}
             />
           ))}
@@ -240,14 +257,19 @@ export function AreasStage({
             variants={staggerGroup(safe)}
             initial="hidden"
             animate="show"
-            className="mt-2 grid grid-cols-2 gap-4"
+            className="mt-2 grid grid-cols-1 gap-4 sm:auto-rows-fr sm:grid-cols-2 xl:grid-cols-3"
           >
             {stage.departments.map((department) => {
               const accent = ACCENT[department.value] ?? ACCENT.marketing
               const checked = selected.has(department.value)
+              const rateInfo = rate?.byKey[department.value]
+              const price =
+                rateInfo && rateInfo.amount_minor != null && rate
+                  ? formatMinor(rateInfo.amount_minor, rate.currency)
+                  : null
               return (
-                <motion.li key={department.value}>
-                  <label className="group relative block cursor-pointer">
+                <motion.li key={department.value} className="h-full">
+                  <label className="group relative block h-full cursor-pointer">
                     <input
                       type="checkbox"
                       checked={checked}
@@ -257,7 +279,7 @@ export function AreasStage({
                     <motion.span
                       whileTap={safe ? { scale: 0.97 } : undefined}
                       transition={{ duration: duration.micro, ease: easing.out }}
-                      className={`relative flex min-h-[8rem] flex-col rounded-card border-[1.5px] bg-white p-5 shadow-e1 transition-[border-color,box-shadow] duration-base ease-out peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-steel-500 sm:hover:shadow-e2 ${
+                      className={`relative flex h-full min-h-[11rem] flex-col rounded-card border-[1.5px] bg-white p-5 shadow-e1 transition-[border-color,box-shadow] duration-base ease-out peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-steel-500 sm:hover:shadow-e2 ${
                         checked ? 'border-ink-800 shadow-e2' : 'border-bone-300'
                       }`}
                     >
@@ -269,7 +291,35 @@ export function AreasStage({
                         </svg>
                       </span>
                       <h3 className="text-card font-semibold text-ink-800">{department.label}</h3>
+                      {price ? (
+                        <p className="mt-1 text-card font-semibold tabular-nums text-ink-900">
+                          {price} <span className="text-meta font-normal text-ink-400">/ mo</span>
+                        </p>
+                      ) : null}
                       <p className="mt-1 text-meta text-ink-500">{DESCRIPTIONS[department.value] ?? ''}</p>
+                      {rateInfo ? (
+                        <div className="mt-auto border-t border-bone-200 pt-3">
+                          {rateInfo.tools.length > 0 ? (
+                            <>
+                              <p className="font-mono text-2xs uppercase tracking-[0.12em] text-ink-400">
+                                Tools included
+                              </p>
+                              <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                                {rateInfo.tools.map((tool) => (
+                                  <li
+                                    key={tool.key}
+                                    className="rounded-full bg-bone-100 px-2 py-0.5 text-2xs text-ink-600"
+                                  >
+                                    {tool.label}
+                                  </li>
+                                ))}
+                              </ul>
+                            </>
+                          ) : (
+                            <p className="text-2xs text-ink-400">No connected tools yet</p>
+                          )}
+                        </div>
+                      ) : null}
                       <span
                         aria-hidden
                         className={`absolute right-4 top-4 flex h-6 w-6 items-center justify-center rounded-full border-[1.5px] transition-colors duration-micro ease-out ${

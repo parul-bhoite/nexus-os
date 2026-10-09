@@ -38,7 +38,7 @@ from app.db import get_engine, get_sessionmaker
 from app.main import create_app
 from tests.dburl import async_database_url, database_url
 
-PASSWORD = "correct-horse-battery-staple"
+PASSWORD = "Correct-horse-battery-staple1"
 WRONG = "not-the-right-password-at-all"
 SIGNING_SECRET = "test-signing-secret-not-a-real-one"
 

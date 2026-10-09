@@ -20,7 +20,7 @@ export default function LoginPage() {
           No account yet?{' '}
           <Link
             href="/register"
-            className="font-medium text-steel-600 underline decoration-steel-300 underline-offset-2 hover:text-steel-700"
+            className="font-medium text-ink-900 underline decoration-gold-400 underline-offset-2 hover:decoration-gold-500"
           >
             Create one
           </Link>
