@@ -2,7 +2,7 @@
   "name": "nexus-os-web",
   "version": "0.1.0",
   "private": true,
-  "description": "NEXUS OS \u2014 marketing site. Next.js (React + Node).",
+  "description": "NEXUS OS — marketing site. Next.js (React + Node).",
   "scripts": {
     "dev": "next dev -p 3001",
     "build": "next build",
@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "framer-motion": "^11.11.17",
-    "next": "14.2.18",
+    "next": "^14.2.35",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
