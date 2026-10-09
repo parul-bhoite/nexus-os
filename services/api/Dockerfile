@@ -48,6 +48,17 @@ RUN pip install -e . --no-deps
 # purpose — the lockfile above deliberately omits it.
 RUN pip install "anthropic>=0.40"
 
+# Declared runtime deps that are missing from requirements-dev.lock (finding #16
+# lock drift): the image installs the lock with `--no-deps`, so anything the lock
+# omits never lands. `cryptography` (connector credential sealing) and
+# `defusedxml` (document XML parsing) are imported at startup, so their absence
+# crash-loops the container. Their own transitive deps (cffi, pycparser) are
+# already in the lock, so no core version is disturbed. `mcp` is also missing but
+# is imported lazily (CRM connector sessions only), so it is left out here rather
+# than force a pydantic/starlette bump into the image. The real fix is to
+# regenerate requirements-dev.lock from pyproject; this unblocks the deploy.
+RUN pip install "cryptography>=44.0" "defusedxml>=0.7"
+
 # Non-root, and the directory is owned rather than merely writable: the app
 # writes uploads and mail under /app when the filesystem drivers are in use.
 RUN useradd --create-home --uid 10001 nexus \
