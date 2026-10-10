@@ -31,7 +31,7 @@ paper-cut landscape:
 | `steel` | `#37729C` | Secondary accents, data marks            |
 | `slate` | `#7699AE` | Muted text on dark, illustration masses  |
 | `bone`  | `#E9E4DE` | Alternating section surfaces, paper edge |
-| `gold`  | `#EFBF6A` | The "insight" accent — sparingly         |
+| `gold`  | `#1E6FFF` | The accent (logo blue) — sparingly       |
 | `clay`  | `#A55D35` | Warm human accent, gaps and warnings     |
 
 Each is expanded into a tint/shade scale in `tailwind.config.ts` so nothing

@@ -25,7 +25,7 @@
        landscape, the Brain diagram, the Directors dials, the onboarding aura).
        These components paint with SVG fill/stroke, which Tailwind cannot reach,
        so they reference these variables instead of hard-coded hex. Every value
-       is a token — the monochrome ladder plus the amber accent — so the art
+       is a token — the monochrome ladder plus the blue accent — so the art
        stays in step with the rest of the system (ADR 0072). */
     --c-white: theme('colors.white');
     --c-surface: theme('colors.bone.50');
@@ -67,7 +67,7 @@
     @apply bg-gold-200 text-ink-900;
   }
 
-  /* One focus style for the whole product — the amber accent, the single spark.
+  /* One focus style for the whole product — the blue accent, the single spark.
      The audit found three: a `ring-2` here, an `outline` with a different
      offset there, and several controls with nothing at all. A keyboard user
      cannot learn an interface whose focus indicator changes shape between two

@@ -184,11 +184,11 @@ function XWatermark() {
 export function Hero() {
   return (
     <section id="top" className="relative overflow-hidden pt-32 lg:pt-36">
-      {/* Ambient wash — a faint neutral lift plus one breath of amber, keeping the
-          page white (ADR 0072). */}
+      {/* Ambient wash — a faint neutral lift plus one breath of the accent
+          (the logo blue, via --accent), keeping the page white (ADR 0072). */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-[46rem] bg-[radial-gradient(60rem_36rem_at_72%_16%,rgba(11,12,14,0.05),transparent_64%),radial-gradient(34rem_24rem_at_10%_6%,rgba(226,136,31,0.10),transparent_70%)]"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[46rem] bg-[radial-gradient(60rem_36rem_at_72%_16%,rgba(11,12,14,0.05),transparent_64%),radial-gradient(34rem_24rem_at_10%_6%,color-mix(in_srgb,var(--accent)_12%,transparent),transparent_70%)]"
       />
 
       <div className="shell relative">
