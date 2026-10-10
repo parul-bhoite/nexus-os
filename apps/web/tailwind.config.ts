@@ -59,7 +59,7 @@ const config: Config = {
       colors: {
         /* ── Monochrome system (ADR 0072) ──────────────────────────────────
          * The palette was navy/bone/gold "cut paper". It is now a cool-biased
-         * neutral ladder with a single amber accent. The token *names* are
+         * neutral ladder with a single blue accent (the logo blue). The token *names* are
          * unchanged on purpose — redefining the values in place reskins every
          * component that composes these names, so the diff stays in this file
          * and the logo rather than spreading across the app. A later cleanup
@@ -92,7 +92,7 @@ const config: Config = {
 
         // Was the blue "chrome" tone (links, focus, UI). Now neutral grey, so
         // anything still reaching for steel renders monochrome. The focus ring
-        // and links move to the amber accent in globals.css.
+        // and links move to the blue accent in globals.css.
         steel: {
           DEFAULT: '#5E646E',
           100: '#E7E9EC',
@@ -128,20 +128,26 @@ const config: Config = {
           400: '#AEB4BD',
         },
 
-        // The one accent — warm amber, the complement of the cool neutrals.
-        // The single spark: active state, focus ring, key-metric highlight, the
-        // logo arm. It never fills a button (black does), so 500 need not carry
-        // white text; gold-700 is the step for amber *text* on white (5.0:1).
+        // The one accent — the logo blue, a vivid azure against the cool
+        // neutrals. The single spark: active state, focus ring, key-metric
+        // highlight, the logo arm (components/ui/Logo.tsx, which paints the
+        // upper-right stroke with var(--accent) → this 500). It never fills a
+        // button (black does); gold-700 is the step for accent *text* on white
+        // (9.2:1) and on gold-100 pills (7.2:1), gold-400 carries ink-900 text
+        // on the one dark-surface filled control (5.7:1). The token name stays
+        // `gold` on purpose — redefining the values in place reskins every
+        // component that composes these names, so the diff stays in this file,
+        // the preview mirror and the logo rather than spreading across the app.
         gold: {
-          DEFAULT: '#E2881F',
-          50: '#FDF3E6',
-          100: '#FBE8CE',
-          200: '#F6D09B',
-          300: '#EFB264',
-          400: '#E89A3C',
-          500: '#E2881F',
-          600: '#C4710F',
-          700: '#9A560A',
+          DEFAULT: '#1E6FFF',
+          50: '#EBF2FF',
+          100: '#D6E4FF',
+          200: '#AEC9FF',
+          300: '#7DA8FF',
+          400: '#4E8BFF',
+          500: '#1E6FFF',
+          600: '#0E57DB',
+          700: '#0B429E',
         },
 
         // Restrained semantic warning — genuine error state only, never
@@ -248,8 +254,8 @@ const config: Config = {
         lift: '0 2px 6px -2px rgba(11,12,14,0.06), 0 16px 32px -16px rgba(11,12,14,0.16)',
         inset: 'inset 0 1px 0 rgba(255,255,255,0.75)',
         // The focus ring, as a shadow, for controls that cannot spare an outline.
-        // White gap, then the amber accent.
-        focus: '0 0 0 2px #FFFFFF, 0 0 0 4px #E2881F',
+        // White gap, then the accent (gold-500, the logo blue).
+        focus: '0 0 0 2px #FFFFFF, 0 0 0 4px #1E6FFF',
       },
 
       spacing: {

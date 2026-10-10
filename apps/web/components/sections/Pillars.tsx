@@ -59,7 +59,8 @@ const TONE_ALIAS: Record<string, string> = {
 /** A cursor-following highlight — cheap, and it makes a static grid feel alive. */
 function Spotlight({ active, tone }: { active: { x: number; y: number } | null; tone: string }) {
   if (!active) return null
-  const colour = tone === 'ink' ? 'rgba(226,136,31,0.16)' : 'rgba(11,12,14,0.05)'
+  const colour =
+    tone === 'ink' ? 'color-mix(in srgb, var(--accent) 16%, transparent)' : 'rgba(11,12,14,0.05)'
   return (
     <div
       aria-hidden="true"

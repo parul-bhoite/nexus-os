@@ -38,9 +38,13 @@ const TONE: Record<AuraState, { core: string; ring: string; wash: string }> = {
   // else is one somebody forgets is open.
   listening: { core: 'var(--c-warn)', ring: 'var(--c-warn-soft)', wash: 'rgba(177,74,56,0.18)' },
   idle: { core: 'var(--c-grey-400)', ring: 'var(--c-grey-300)', wash: 'rgba(138,144,154,0.12)' },
-  // The amber accent, used once, for the only moment in the journey that is an
-  // arrival — the single spark.
-  ready: { core: 'var(--accent-strong)', ring: 'var(--accent)', wash: 'rgba(226,136,31,0.20)' },
+  // The accent (logo blue), used once, for the only moment in the journey that
+  // is an arrival — the single spark.
+  ready: {
+    core: 'var(--accent-strong)',
+    ring: 'var(--accent)',
+    wash: 'color-mix(in srgb, var(--accent) 20%, transparent)',
+  },
 }
 
 /**

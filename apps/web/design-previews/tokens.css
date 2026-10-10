@@ -35,8 +35,9 @@
 
   --bone-50:#FBFAF8; --bone-100:#F5F2EF; --bone-200:#E9E4DE; --bone-300:#D8D0C7; --bone-400:#BFB4A7;
 
-  --gold-100:#FDF6E8; --gold-200:#FAE9C7; --gold-300:#F5D89B; --gold-400:#EFBF6A;
-  --gold-500:#DFA542; --gold-600:#B9822B; --gold-700:#8A5F1C;
+  /* The one accent — the logo blue (mirrors tailwind.config.ts `gold`). */
+  --gold-100:#D6E4FF; --gold-200:#AEC9FF; --gold-300:#7DA8FF; --gold-400:#4E8BFF;
+  --gold-500:#1E6FFF; --gold-600:#0E57DB; --gold-700:#0B429E;
 
   --clay-100:#F8EDE6; --clay-200:#EED7C7; --clay-300:#DCB098; --clay-400:#C5825A;
   --clay-500:#A55D35; --clay-600:#84492A;
